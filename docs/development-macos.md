@@ -1,5 +1,7 @@
 # macOS 开发与接入指南
 
+2026-10-09 文档导航：首次使用见[快速开始](quickstart.md)，当前操作见[数据库手册](database-operations.md)，可执行协议示例见[完整工作流](runnable-memory-workflow.md)。实现基线三平台验证与 Windows native / wrapper 区别见[当前状态](project-status.md)；下方分阶段追加记录不代表新的发布批准。
+
 这份文档面向当前在 macOS 上开发、验证和接入 `agent_llm_mm` 的协作者。
 
 ## 1. 环境前提

@@ -1,26 +1,20 @@
-# Example snippet for .codex/config.toml
-#
-# First create a local config with `./scripts/agent-llm-mm.sh bootstrap-local`.
-# If you pass a target path from another working directory, prefer an absolute path;
-# relative bootstrap-local targets are repository-root relative.
-# or by manually copying an example profile, then point AGENT_LLM_MM_CONFIG at it.
-# For OpenRouter, copy examples/agent-llm-mm.openrouter.example.toml to a local
-# config file, set AGENT_LLM_MM_OPENROUTER_API_KEY in your shell or Codex env,
-# and point AGENT_LLM_MM_CONFIG below at that local OpenRouter config.
-# This MCP config snippet is not live evidence; run
-# ./scripts/provider-live-certification-run.sh --live [config_path] [evidence_root]
-# when you need bounded provider preflight evidence.
-
-# macOS native shell entrypoint:
-[mcp_servers.agent-llm-mm]
-command = "/absolute/path/agent-llm-mm/scripts/agent-llm-mm.sh"
+# Current source-build stdio example; replace every absolute path.
+# First build agent_llm_mm, prepare an explicit mock/local configuration,
+# then run init (new DB only) and doctor --read-only with that same config.
+# See docs/quickstart.md and docs/local-mcp-integration-2026-03-26.md.
+[mcp_servers.memory-ledger]
+command = "/absolute/path/mcp-memory-ledger/target/debug/agent_llm_mm"
 args = ["serve"]
-env = { AGENT_LLM_MM_CONFIG = "/absolute/path/agent-llm-mm/agent-llm-mm.local.toml" }
-transport = "stdio"
+env = { AGENT_LLM_MM_CONFIG = "/absolute/path/ledger-demo.toml" }
 
-# If you prefer no wrapper script, use:
-# [mcp_servers.agent-llm-mm-cargo]
-# command = "cargo"
-# args = ["run", "--quiet", "--bin", "agent_llm_mm", "--", "serve"]
-# transport = "stdio"
-# env = { AGENT_LLM_MM_CONFIG = "/absolute/path/agent-llm-mm/agent-llm-mm.local.toml" }
+# Windows: command = "C:/code/mcp-memory-ledger/target/debug/agent_llm_mm.exe"
+# Release build: use target/release/agent_llm_mm (or .exe) instead.
+# database_url inside the TOML must also use an explicit absolute path.
+# Do not put provider secrets in this tracked example.
+
+# Alternative macOS wrapper, in a separately named server entry:
+# [mcp_servers.memory-ledger-wrapper]
+# command = "/absolute/path/mcp-memory-ledger/scripts/agent-llm-mm.sh"
+# args = ["serve"]
+# env = { AGENT_LLM_MM_CONFIG = "/absolute/path/ledger-demo.toml" }
+# Enable only the entry you intend to use.

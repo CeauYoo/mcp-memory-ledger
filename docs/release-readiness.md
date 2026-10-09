@@ -2,7 +2,7 @@
 
 ## 结论
 
-仓库已经公开。当前分支下一候选版本仍只能按以下口径评估：
+更新：2026-10-09。当前能力与精确提交证据统一见[实现状态](project-status.md)，本页只评估发布边界。仓库已经公开。当前分支下一候选版本仍只能按以下口径评估：
 
 - 技术 demo
 - research-oriented MVP
@@ -58,7 +58,7 @@
 
 ### 3. 自动化验证已经存在
 
-当前可确认的验证基线：
+以下是早期门禁建立记录；当前数量与精确提交 CI 以状态页为准：
 
 - `2026-07-10` 已建立 `fast` / `core` / `full` 三级验证；发布前使用 `./scripts/test-tier.sh full`
 - `./scripts/status-sync-check.sh` 通过，active plan 与 reality gate 一致且根目录 SQLite fixture 未回流
@@ -72,7 +72,7 @@
 
 - `openai-compatible` provider 已接入
 - provider 配置走本地 TOML 文件
-- richer memory semantics 还在后续阶段
+- 丰富 Episode 与语义/流程候选已有有界运行时；它们不执行步骤或授予权限
 - 默认数据库作用域已明确为“本机用户共享默认库，隔离靠显式 `database_url`”
 
 只要这些边界在 README 和说明文档里写清楚，这个仓库就适合发布为协作型 demo。
@@ -92,10 +92,10 @@
 
 当前已完成四类 scoped search/lookup、跨类型 union、Claim-linked reflection history、scoped identity/commitment audit、evidence-relation runtime 与 scoped Claim supersede 首片，但仍没有完整实现：
 
-- current-schema structural readback 与真实 MCP 客户端 recall/correction 退出证据
-- versioned identity/commitment ledger 与 record-only Reflection history
-- Event/Episode/Reflection correction，以及 richer identity / episode lifecycle
-- procedural memory
+- 真实用户 MCP 客户端 recall/correction 与 fresh-machine 发布证据（structural readback 已实现）
+- 完整 versioned identity/commitment ledger 与 rollback（安全归属 record-only Reflection history 已实现）
+- Event/Episode/Reflection 通用纠错与破坏性生命周期政策
+- 流程自动执行/授权；当前 procedural candidate 只是可审核、可版本化、可召回文本
 
 ### 3. 数据隔离策略已有最小可发布结论
 

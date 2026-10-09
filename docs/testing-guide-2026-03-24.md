@@ -1,5 +1,7 @@
 # Self-Agent MCP 测试指南（2026-03-24，按 2026-07-15 fresh 验证更新）
 
+2026-10-09 文档导航：首次使用见[快速开始](quickstart.md)，当前操作见[数据库手册](database-operations.md)，可执行协议示例见[完整工作流](runnable-memory-workflow.md)。实现基线三平台验证与 Windows native / wrapper 区别见[当前状态](project-status.md)；下方分阶段追加记录不代表新的发布批准。
+
 ## 1. 目标
 
 这份文档说明当前仓库应如何测试，覆盖：
@@ -28,7 +30,7 @@
 
 ## 2. 当前测试分层
 
-测试数量不再作为文档状态源。固定入口按反馈成本分为三级：
+测试数量不作为独立的文档状态源；[当前状态](project-status.md)只保留绑定精确提交的已验证数量，不让历史数字代替新 head 检查。固定入口按反馈成本分为三级：
 
 | 层级 | 命令 | 使用场景 | feature 边界 |
 | --- | --- | --- | --- |
@@ -38,7 +40,7 @@
 
 `release-tools` 包含 Local Alpha evidence、release decision、product readiness、
 provider certification 和 packaging 相关模块、二进制与测试；这些资产没有删除，
-只是退出默认开发循环。测试文件增长时不再把精确总数复制到 README / 状态文档。
+只是退出默认开发循环。测试文件增长时不要机械更新多份“当前总数”；将带提交的证据集中到状态页。
 
 所有 13 个 bin target 都没有内部单元测试，因此关闭了 Cargo 的空 bin test harness；
 需要真实进程的 E2E 仍通过 `CARGO_BIN_EXE_*` 启动实际二进制并保留在对应集成测试中。

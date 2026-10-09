@@ -2,6 +2,12 @@
 
 状态：`current index`
 
+## 当前可直接阅读的历史
+
+- [2026-10-09 整理前实现状态](project-status-history-2026-10-09.md)完整保留各阶段事实与当时未完成项。
+- [v4 可用性基线](local-memory-usability.md)保留历史合同；当前教程见[快速开始](quickstart.md)。
+- 阶段证据入口见[文档导航](document-map.md)；所有历史数字都绑定原提交，不代表当前 head。
+
 ## 归档位置
 
 整理前完整仓库快照保存在本地 Git 分支：

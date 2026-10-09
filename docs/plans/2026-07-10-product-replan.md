@@ -1,10 +1,14 @@
+## 2026-10-09 当前执行状态（文档整理后）
+
+本文件仍是唯一 active plan。下方同日“续建”段落保留任务展开时的历史语境：schema6、M01–M03 模块拆分、D09–D10 上下文/诊断与 C09 caller budget 均已实现；不要再次领取已完成代码任务。实现基线 `9ba0050` 的三平台精确 CI 已通过，见[最终核对](2026-10-09-original-plan-final-reconciliation.md)与[当前状态](../project-status.md)。当前剩余是 M1 真实用户客户端、M2 fresh-machine/打包/发布与真实模型效果等明确外部门；本次文档整理不将其标为完成。原有 checkbox/reality-gate 配对继续保留。
+
 ## 2026-10-09 数据模型续建（schema v6）
 
 全部原文 ID 的最新收口状态与停止条件见[最终核对](2026-10-09-original-plan-final-reconciliation.md)。
 
 原文 S01/S02/S06 是可实施要求，不是需要再次授权的研究项。本阶段交付记录时间/观察时间区分、未知历史 nullable、无损纳秒排序键与索引、独立 Reflection origin/affected scope、source-scoped targetless history 及只读有界 structured export。历史混合/未知归属保持隔离，不从 affected scope 推导读取权限。非破坏性 export 是 interchange；数据库备份仍承担恢复，retain-all 不启用自动删除。既有 keyed receipts 与 Claim fingerprintv1 保持兼容。
 
-接着独立执行原文 M01–M03 的 crate 内模块拆分、D09 的有界丰富 Episode 证据、D10 的可观察状态诊断及 C09 的 caller-owned 次数/停止合同；不引入新框架、控制器或全局变更权限。每阶段独立测试、提交和用户更新。v5 的性能/评测文件保持原始来源绑定；v6 与后续 refactor 需要各自新证据，不复用历史“通过”。
+该阶段之后已独立完成原文 M01–M03 的 crate 内模块拆分、D09 的有界丰富 Episode 证据、D10 的可观察状态诊断及 C09 的 caller-owned 次数/停止合同；不引入新框架、控制器或全局变更权限。每阶段独立测试、提交和用户更新。v5 的性能/评测文件保持原始来源绑定；v6 与后续 refactor 需要各自新证据，不复用历史“通过”。
 
 ---
 
@@ -16,7 +20,7 @@
 
 本轮有限交付顺序为：A 固定反馈/状态合同和离线 A/B/C + 消融样本；B 延续原子审计与幂等，并增加内容指纹 stale-version 校验；C 外部反馈→候选→确定性支持合同→原子提交→召回；D SQLite FTS 可重建派生索引、短中文精确 fallback、类型预算/解释及 10k/100k 测量；E 持久化有界 Episode 与可检查、拒绝、版本化、回滚的语义/流程候选。新层必须随 schema 显式迁移、恢复测试和同提交文档交付。候选激活仅影响记忆可见性，不改变行为权限。
 
-依赖调整：已完成的生命周期和有界本地安装闭环允许提前实现这组本地检索/经验运行时切片，以验证原方案的反馈闭环；M2 的真实 fresh-machine、正式打包、完整 Windows shell-wrapper 门，以及 M3 的广泛真实模型收益门仍保持开放。不得将这次前移解释成正式 Local Alpha/生产认证。原路线中的数据模型进一步规范化、大模块重构等要求必须在追踪矩阵保持 partial，不能因本批次范围有限而消失。
+依赖调整：已完成的生命周期和有界本地安装闭环允许提前实现这组本地检索/经验运行时切片，以验证原方案的反馈闭环；M2 的真实 fresh-machine、正式打包、完整 Windows shell-wrapper 门，以及 M3 的广泛真实模型收益门仍保持开放。不得将这次前移解释成正式 Local Alpha/生产认证。当时仍 partial 的数据模型规范化和大模块拆分，后续结果已由最终核对逐项更新；冻结 baseline 不回写，避免改变历史判断。
 
 验证分两层：无外部模型调用的固定离线代理指标、10k/100k 容量与事务行为可在本轮运行；同模型同任务的真实成功率/token 成本仅提供记录协议，未获模型服务与费用授权前不调用或声称通过。embedding、远程团队平台、强化学习、自治控制器仍按原文研究边界后移。
 
