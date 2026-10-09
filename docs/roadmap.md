@@ -90,14 +90,14 @@ M0 未通过前，不开始新 provider、daemon 写能力、remote/team 或正�
 
 计划能力：
 
-- M1.0 前置门、四类 scoped search、evidence-relation runtime、跨类型 union、四类 lookup、identity/commitment revision audit 与 scoped Claim audited supersede 已通过；下一步完成 current-schema structural readback；
-- 已完成 scoped Episode / Reflection provenance search、evidence-relation runtime、跨类型 union、Episode / Reflection lookup、self-model history 与 Claim supersede 首片；下一步完成 current-schema structural readback；
+- M1.0 前置门、四类 scoped search、evidence-relation runtime、跨类型 union、四类 lookup、identity/commitment revision audit 与 scoped Claim audited supersede 已通过；current-schema structural readback 与 exclusive lifecycle 已完成；下一步可靠更正/重试；
+- 已完成 scoped Episode / Reflection provenance search、evidence-relation runtime、跨类型 union、Episode / Reflection lookup、self-model history 与 Claim supersede 首片；current-schema structural readback 与 exclusive lifecycle 已完成；下一步可靠更正/重试；
 - `search_memory`；
 - `get_memory`：当前 Event / Claim / Episode / scoped Reflection；record-only Reflection 仍不可见；
 - `get_reflection_history`：已完成 Claim-linked 首片；record-only history 仍开放；
 - `get_self_model_history`：已完成 scoped identity/commitment revision audit 首片；不是 versioned ledger 或 rollback；
 - `supersede_memory`：已完成 scoped Claim audited supersede 首片；复用 `run_reflection`，默认不 hard delete；
-- current-schema structural readback gate；同版本但约束被削弱的数据库不能报告 `current`；
+- 已完成 current-schema structural readback gate；同版本但约束被削弱的数据库不能报告 `current`；
 - 保留 ID、scope、时间、status、mode 和 provenance 的返回结构；
 - provider 离线时仍可用的 deterministic read path。
 
@@ -113,7 +113,7 @@ M0 未通过前，不开始新 provider、daemon 写能力、remote/team 或正�
 
 计划能力：
 
-- exclusive init/migration lifecycle gate；并发执行必须排他或明确拒绝，失败清理不得删除其他操作创建的数据；
+- 已完成 exclusive init/migration lifecycle gate；并发初始化原子争用路径，迁移持有 write reservation；失败初始化保留文件供诊断，不删除他人数据；
 - 版本化 macOS binary archive 与 checksum；
 - 无需 Rust toolchain 的 first-run；
 - fresh-machine 核心用户闭环；

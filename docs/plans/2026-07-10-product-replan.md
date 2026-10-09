@@ -386,7 +386,9 @@ M0 已收口，当前只能从 M1 领取一个独立最小切片。新 provider�
 
 ### M1.3 用户闭环
 
-- [ ] **M1.3.0 Current-Schema Structural Readback Gate** — 在任何 schema-changing M1 slice 和真实客户端退出门前，使用 `table_info`、`foreign_key_list`、index/DDL fingerprint 等验证关键结构；同版本但约束被削弱的数据库不得报告 `current`。无 schema/index 的纯只读 slice 不由此单独阻塞。
+2026-10-09：M1.3.0 / M2.0.1 已实现。只读检查在一致 SQLite read transaction 中对照 canonical schema 的 DDL、columns、FK 与 indexes；结构弱化返回 `schema_structure_invalid`。init 使用原子 `create_new`，失败不删除库/sidecar；migrate 在 backup/rehearsal/write 全程持有 SQLite write reservation。异常 init 文件保留供诊断，需要人工确认后处理，不自动重试覆盖。
+
+- [x] **M1.3.0 Current-Schema Structural Readback Gate** — 在任何 schema-changing M1 slice 和真实客户端退出门前，使用 `table_info`、`foreign_key_list`、index/DDL fingerprint 等验证关键结构；同版本但约束被削弱的数据库不得报告 `current`。无 schema/index 的纯只读 slice 不由此单独阻塞。
 - [ ] **M1.3.1 Real Client Recall and Correction Closure** — 仅在 scope/data-integrity、read/history/correction 与 current-schema structural readback 合同完成后执行真实 MCP 客户端故事，并保存 transcript、SQLite readback 与零 scope 泄漏证据。
 
 标准验收故事：
@@ -402,7 +404,7 @@ M1 退出门：该故事由真实本地客户端完成，并保存 MCP transcrip
 
 ## 8. M2 — Local Product Alpha
 
-- [ ] **M2.0.1 Exclusive Init-and-Migration Lifecycle Gate** — init 清理只处理本次操作确定创建的文件；init/migrate 需排他执行或明确拒绝并发，moving-target 检测不能只比较版本与行数。若任何 M1 任务提前引入 migration，则相应排他性门禁同步前移。
+- [x] **M2.0.1 Exclusive Init-and-Migration Lifecycle Gate** — init 清理只处理本次操作确定创建的文件；init/migrate 需排他执行或明确拒绝并发，moving-target 检测不能只比较版本与行数。若任何 M1 任务提前引入 migration，则相应排他性门禁同步前移。
 - 建立版本化 macOS binary archive 和 checksum；Local Alpha 不要求 installer、service manager 或 auto-updater。
 - quick start 不要求用户本机安装 Rust toolchain。
 - `init → doctor --read-only → serve → remember/search/inspect/correct` 在 fresh macOS 环境可按文档完成。

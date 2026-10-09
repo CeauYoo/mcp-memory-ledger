@@ -3,6 +3,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
     str::FromStr,
+    time::Duration,
 };
 
 use chrono::Utc;
@@ -86,6 +87,8 @@ pub struct DatabaseLifecycleReport {
     pub runtime_defaults_present: bool,
     pub migration_ledger_consistent: bool,
     pub required_tables_present: bool,
+    pub schema_structure_valid: bool,
+    pub schema_structure_issues: Vec<String>,
     pub foreign_key_violations: usize,
     pub table_counts: Vec<DatabaseTableCount>,
     pub unknown_owner_inventory: UnknownOwnerInventory,
@@ -114,6 +117,8 @@ impl DatabaseLifecycleReport {
             runtime_defaults_present: false,
             migration_ledger_consistent: false,
             required_tables_present: false,
+            schema_structure_valid: false,
+            schema_structure_issues: Vec::new(),
             foreign_key_violations: 0,
             table_counts: Vec::new(),
             unknown_owner_inventory: UnknownOwnerInventory::empty(),
@@ -139,6 +144,8 @@ impl DatabaseLifecycleReport {
             runtime_defaults_present: false,
             migration_ledger_consistent: false,
             required_tables_present: false,
+            schema_structure_valid: false,
+            schema_structure_issues: Vec::new(),
             foreign_key_violations: 0,
             table_counts: Vec::new(),
             unknown_owner_inventory: UnknownOwnerInventory::empty(),
@@ -190,15 +197,28 @@ pub async fn initialize_database(database_url: &str) -> Result<DatabaseLifecycle
     }
 
     ensure_parent_directory(&path)?;
-    let migration = migrate_in_place(database_url, true).await;
-    if let Err(error) = migration {
-        cleanup_sqlite_files(&path);
-        return Err(error);
+    // Reserve the pathname atomically. Never remove a database or SQLite sidecar
+    // on failure: another process may own or have replaced it by cleanup time.
+    for suffix in ["-wal", "-shm", "-journal"] {
+        if PathBuf::from(format!("{}{suffix}", path.display())).exists() {
+            return Err(AppError::Message(
+                "init refuses existing SQLite sidecar files".into(),
+            ));
+        }
     }
+    fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)
+        .map_err(|error| {
+            AppError::Message(format!(
+                "init could not exclusively create database: {error}"
+            ))
+        })?;
+    migrate_in_place(database_url, false).await?;
 
     let mut report = inspect_database(database_url).await?;
     if !report.is_current() {
-        cleanup_sqlite_files(&path);
         return Err(AppError::Message(format!(
             "initialized database did not pass current-schema readback: {}",
             report.status
@@ -214,16 +234,28 @@ pub async fn initialize_database(database_url: &str) -> Result<DatabaseLifecycle
 pub async fn migrate_database(database_url: &str) -> Result<DatabaseLifecycleReport, AppError> {
     parse_options(database_url)?;
     let path = require_file_path(database_url)?;
+    if !path.exists() {
+        return Err(AppError::Message(
+            "migrate requires an existing database; run init first".into(),
+        ));
+    }
+    // A reserved SQLite write lock blocks ALL writers (including non-lifecycle
+    // clients and WAL writers) throughout backup, rehearsal, and final write.
+    // Readers remain possible, so VACUUM INTO can make the backup separately.
+    let mut locked = begin_migration(database_url, false).await?;
     let initial = inspect_database(database_url).await?;
     if initial.status == "missing" {
         return Err(AppError::Message(
             "migrate requires an existing database; run init first".to_string(),
         ));
     }
-    if initial.status == "unsupported_newer_schema" {
+    if initial.status == "unsupported_newer_schema" || initial.status == "schema_structure_invalid"
+    {
         return Err(AppError::Message(initial.message));
     }
     if initial.is_current() {
+        execute(&mut locked, "ROLLBACK").await?;
+        locked.close().await.map_err(sqlite_error)?;
         let mut report = initial;
         report.operation = "migrate".to_string();
         report.restore_rehearsal = "not_needed_current".to_string();
@@ -259,36 +291,21 @@ pub async fn migrate_database(database_url: &str) -> Result<DatabaseLifecycleRep
     cleanup_sqlite_files(&rehearsal_path);
     let rehearsal = rehearsal_result?;
 
-    let pre_write_readback = inspect_database(database_url).await?;
-    if initial.schema_version != pre_write_readback.schema_version
-        || initial.table_counts != pre_write_readback.table_counts
-    {
-        return Err(AppError::Message(
-            "database changed after backup rehearsal; refusing to migrate a moving target"
-                .to_string(),
-        ));
-    }
-
-    migrate_in_place(database_url, false).await?;
-    let mut report = inspect_database(database_url).await?;
-    if !report.is_current() {
-        return Err(AppError::Message(format!(
-            "migration completed but current-schema readback failed: {}",
-            report.status
-        )));
-    }
-    if report.table_counts != rehearsal.table_counts {
-        return Err(AppError::Message(
-            "migrated database row-count readback differs from restore rehearsal; backup remains available"
-                .to_string(),
-        ));
-    }
+    // Validate the final state while the migration still owns its write
+    // reservation. Once COMMIT releases it, ordinary writers may change rows.
+    let mut report = migrate_locked(
+        &mut locked,
+        Some(&rehearsal.table_counts),
+        path_writable_hint(&path),
+    )
+    .await?;
+    locked.close().await.map_err(sqlite_error)?;
 
     report.operation = "migrate".to_string();
     report.backup_path = Some(backup_path.to_string_lossy().into_owned());
     report.restore_rehearsal = "passed_before_original_write".to_string();
     report.bootstrap_performed = true;
-    report.message = "database migrated after backup and restore rehearsal".to_string();
+    report.message = "database migrated after backup and restore rehearsal; report describes the validated migration transaction snapshot at commit".to_string();
     Ok(report)
 }
 
@@ -329,44 +346,82 @@ pub async fn open_read_only_current_database(
     Ok(Some(SqliteStore { pool }))
 }
 
-async fn migrate_in_place(database_url: &str, create_if_missing: bool) -> Result<(), AppError> {
+async fn begin_migration(
+    database_url: &str,
+    create_if_missing: bool,
+) -> Result<SqliteConnection, AppError> {
     let options = parse_options(database_url)?
         .create_if_missing(create_if_missing)
-        .foreign_keys(false);
+        .foreign_keys(false)
+        .busy_timeout(Duration::ZERO);
     let mut connection = SqliteConnection::connect_with(&options)
         .await
         .map_err(sqlite_error)?;
-    let version = schema_version(&mut connection).await?;
+    execute(&mut connection, "PRAGMA legacy_alter_table = ON").await?;
+    execute(&mut connection, "BEGIN IMMEDIATE")
+        .await
+        .map_err(|error| {
+            AppError::Message(format!(
+                "exclusive lifecycle write reservation unavailable: {error}"
+            ))
+        })?;
+    Ok(connection)
+}
+
+async fn migrate_in_place(database_url: &str, create_if_missing: bool) -> Result<(), AppError> {
+    let mut connection = begin_migration(database_url, create_if_missing).await?;
+    migrate_locked(&mut connection, None, None).await?;
+    connection.close().await.map_err(sqlite_error)
+}
+
+async fn migrate_locked(
+    connection: &mut SqliteConnection,
+    rehearsal_counts: Option<&[DatabaseTableCount]>,
+    path_writable_hint: Option<bool>,
+) -> Result<DatabaseLifecycleReport, AppError> {
+    let version = schema_version(connection).await?;
     if version > CURRENT_SCHEMA_VERSION {
         return Err(AppError::Message(format!(
             "database schema version {version} is newer than supported version {CURRENT_SCHEMA_VERSION}"
         )));
     }
-    validate_existing_ledger(&mut connection, version).await?;
-    let before_counts = existing_preserved_counts(&mut connection).await?;
-
-    execute(&mut connection, "PRAGMA foreign_keys = OFF").await?;
-    execute(&mut connection, "PRAGMA legacy_alter_table = ON").await?;
-    execute(&mut connection, "BEGIN IMMEDIATE").await?;
-
-    let migration_result = run_migration_steps(&mut connection, version, &before_counts).await;
-    match migration_result {
-        Ok(()) => {
-            if let Err(error) = execute(&mut connection, "COMMIT").await {
-                let _ = execute(&mut connection, "ROLLBACK").await;
-                let _ = reset_connection_pragmas(&mut connection).await;
+    validate_existing_ledger(connection, version).await?;
+    let before_counts = existing_preserved_counts(connection).await?;
+    let migration_result = async {
+        run_migration_steps(connection, version, &before_counts).await?;
+        let report = inspect_connection(connection, "migrate", true, path_writable_hint).await?;
+        if !report.is_current() {
+            return Err(AppError::Message(format!(
+                "migration current-schema readback failed before commit: {}",
+                report.status
+            )));
+        }
+        if rehearsal_counts.is_some_and(|counts| report.table_counts != counts) {
+            return Err(AppError::Message(
+                "migrated database row-count readback differs from restore rehearsal; migration rolled back; backup remains available"
+                    .to_string(),
+            ));
+        }
+        Ok::<_, AppError>(report)
+    }
+    .await;
+    let report = match migration_result {
+        Ok(report) => {
+            if let Err(error) = execute(connection, "COMMIT").await {
+                let _ = execute(connection, "ROLLBACK").await;
+                let _ = reset_connection_pragmas(connection).await;
                 return Err(error);
             }
+            report
         }
         Err(error) => {
-            let _ = execute(&mut connection, "ROLLBACK").await;
-            let _ = reset_connection_pragmas(&mut connection).await;
+            let _ = execute(connection, "ROLLBACK").await;
+            let _ = reset_connection_pragmas(connection).await;
             return Err(error);
         }
-    }
-    reset_connection_pragmas(&mut connection).await?;
-    connection.close().await.map_err(sqlite_error)?;
-    Ok(())
+    };
+    reset_connection_pragmas(connection).await?;
+    Ok(report)
 }
 
 async fn run_migration_steps(
@@ -405,6 +460,13 @@ async fn run_migration_steps(
         )));
     }
     validate_existing_ledger(connection, CURRENT_SCHEMA_VERSION).await?;
+    let issues = schema_structure_issues(connection).await?;
+    if !issues.is_empty() {
+        return Err(AppError::Message(format!(
+            "current-schema structural readback failed: {}",
+            issues.join(", ")
+        )));
+    }
     Ok(())
 }
 
@@ -529,24 +591,65 @@ async fn inspect_pool(
     database_exists: bool,
     path_writable_hint: Option<bool>,
 ) -> Result<DatabaseLifecycleReport, AppError> {
+    // All schema and data checks must describe one read snapshot.
+    let mut transaction = pool.begin().await.map_err(sqlite_error)?;
+    let report = inspect_connection(
+        &mut transaction,
+        operation,
+        database_exists,
+        path_writable_hint,
+    )
+    .await;
+    transaction.rollback().await.map_err(sqlite_error)?;
+    report
+}
+
+async fn inspect_connection(
+    connection: &mut SqliteConnection,
+    operation: &str,
+    database_exists: bool,
+    path_writable_hint: Option<bool>,
+) -> Result<DatabaseLifecycleReport, AppError> {
     let version = sqlx::query_scalar::<_, i64>("PRAGMA user_version")
-        .fetch_one(pool)
+        .fetch_one(&mut *connection)
         .await
         .map_err(sqlite_error)?;
-    let table_names = table_names_pool(pool).await?;
+    let table_names = table_names_connection(connection).await?;
     let required_tables_present = REQUIRED_TABLES
         .iter()
         .all(|table| table_names.contains(*table));
+    let schema_structure_issues = if version == CURRENT_SCHEMA_VERSION {
+        schema_structure_issues(connection).await?
+    } else {
+        Vec::new()
+    };
+    let schema_structure_valid =
+        version == CURRENT_SCHEMA_VERSION && schema_structure_issues.is_empty();
+    if version == CURRENT_SCHEMA_VERSION && !schema_structure_valid {
+        // Do not issue data queries against malformed columns or foreign keys.
+        let mut report = DatabaseLifecycleReport::missing(path_writable_hint);
+        report.operation = operation.into();
+        report.status = "schema_structure_invalid".into();
+        report.database_exists = database_exists;
+        report.schema_version = Some(version);
+        report.required_tables_present = required_tables_present;
+        report.schema_structure_issues = schema_structure_issues;
+        report.message = format!(
+            "current-schema structural readback failed: {}; explicit repair is required",
+            report.schema_structure_issues.join(", ")
+        );
+        return Ok(report);
+    }
     let migration_ledger_consistent =
-        ledger_is_consistent_pool(pool, version, &table_names).await?;
-    let foreign_key_violations = foreign_key_violation_count_pool(pool).await?;
-    let table_counts = required_table_counts_pool(pool, &table_names).await?;
+        ledger_is_consistent(connection, version, &table_names).await?;
+    let foreign_key_violations = foreign_key_violation_count(connection).await?;
+    let table_counts = required_table_counts(connection, &table_names).await?;
     let identity_present = table_count(&table_counts, "identity_claims") > 0;
     let baseline_commitment_present = if table_names.contains("commitments") {
         sqlx::query_scalar::<_, i64>(
             "SELECT COUNT(*) FROM commitments WHERE description = 'forbid:write_identity_core_directly' AND owner = 'self'",
         )
-        .fetch_one(pool)
+        .fetch_one(&mut *connection)
         .await
         .map_err(sqlite_error)?
             > 0
@@ -554,7 +657,7 @@ async fn inspect_pool(
         false
     };
     let runtime_defaults_present = identity_present && baseline_commitment_present;
-    let unknown_owner_inventory = unknown_owner_inventory_pool(pool, &table_names).await?;
+    let unknown_owner_inventory = unknown_owner_inventory(connection, &table_names).await?;
 
     let (status, migration_required, message) = if version > CURRENT_SCHEMA_VERSION {
         (
@@ -608,6 +711,8 @@ async fn inspect_pool(
         runtime_defaults_present,
         migration_ledger_consistent,
         required_tables_present,
+        schema_structure_valid,
+        schema_structure_issues,
         foreign_key_violations,
         table_counts,
         unknown_owner_inventory,
@@ -619,8 +724,8 @@ async fn inspect_pool(
     })
 }
 
-async fn ledger_is_consistent_pool(
-    pool: &SqlitePool,
+async fn ledger_is_consistent(
+    connection: &mut SqliteConnection,
     version: i64,
     tables: &BTreeSet<String>,
 ) -> Result<bool, AppError> {
@@ -631,7 +736,7 @@ async fn ledger_is_consistent_pool(
         return Ok(false);
     }
     let rows = sqlx::query("SELECT version, name FROM schema_migrations ORDER BY version")
-        .fetch_all(pool)
+        .fetch_all(&mut *connection)
         .await
         .map_err(sqlite_error)?;
     let expected = SCHEMA_MIGRATIONS
@@ -644,8 +749,8 @@ async fn ledger_is_consistent_pool(
         }))
 }
 
-async fn required_table_counts_pool(
-    pool: &SqlitePool,
+async fn required_table_counts(
+    connection: &mut SqliteConnection,
     tables: &BTreeSet<String>,
 ) -> Result<Vec<DatabaseTableCount>, AppError> {
     let mut counts = Vec::new();
@@ -653,20 +758,20 @@ async fn required_table_counts_pool(
         if tables.contains(table) {
             counts.push(DatabaseTableCount {
                 table: table.to_string(),
-                rows: table_count_pool(pool, table).await?,
+                rows: table_count_connection(connection, table).await?,
             });
         }
     }
     Ok(counts)
 }
 
-async fn unknown_owner_inventory_pool(
-    pool: &SqlitePool,
+async fn unknown_owner_inventory(
+    connection: &mut SqliteConnection,
     tables: &BTreeSet<String>,
 ) -> Result<UnknownOwnerInventory, AppError> {
     let events = if tables.contains("events") {
         sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM events WHERE owner = 'unknown'")
-            .fetch_one(pool)
+            .fetch_one(&mut *connection)
             .await
             .map_err(sqlite_error)?
     } else {
@@ -674,7 +779,7 @@ async fn unknown_owner_inventory_pool(
     };
     let claims = if tables.contains("claims") {
         sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM claims WHERE owner = 'unknown'")
-            .fetch_one(pool)
+            .fetch_one(&mut *connection)
             .await
             .map_err(sqlite_error)?
     } else {
@@ -842,14 +947,6 @@ async fn foreign_key_violation_count(connection: &mut SqliteConnection) -> Resul
         .map_err(sqlite_error)
 }
 
-async fn foreign_key_violation_count_pool(pool: &SqlitePool) -> Result<usize, AppError> {
-    sqlx::query("PRAGMA foreign_key_check")
-        .fetch_all(pool)
-        .await
-        .map(|rows| rows.len())
-        .map_err(sqlite_error)
-}
-
 async fn table_names_connection(
     connection: &mut SqliteConnection,
 ) -> Result<BTreeSet<String>, AppError> {
@@ -866,33 +963,12 @@ async fn table_names_connection(
     })
 }
 
-async fn table_names_pool(pool: &SqlitePool) -> Result<BTreeSet<String>, AppError> {
-    sqlx::query(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
-    )
-    .fetch_all(pool)
-    .await
-    .map_err(sqlite_error)
-    .map(|rows| {
-        rows.into_iter()
-            .map(|row| row.get::<String, _>("name"))
-            .collect()
-    })
-}
-
 async fn table_count_connection(
     connection: &mut SqliteConnection,
     table: &str,
 ) -> Result<i64, AppError> {
     sqlx::query_scalar::<_, i64>(&format!("SELECT COUNT(*) FROM \"{table}\""))
         .fetch_one(connection)
-        .await
-        .map_err(sqlite_error)
-}
-
-async fn table_count_pool(pool: &SqlitePool, table: &str) -> Result<i64, AppError> {
-    sqlx::query_scalar::<_, i64>(&format!("SELECT COUNT(*) FROM \"{table}\""))
-        .fetch_one(pool)
         .await
         .map_err(sqlite_error)
 }
@@ -914,4 +990,159 @@ async fn execute(connection: &mut SqliteConnection, sql: &str) -> Result<(), App
 
 fn sqlite_error(error: sqlx::Error) -> AppError {
     AppError::Message(error.to_string())
+}
+
+// Compare against the actual SQLite interpretation of our canonical schema, not
+// hand-maintained fragments or the mere presence of a CHECK constraint name.
+async fn schema_structure_issues(
+    connection: &mut SqliteConnection,
+) -> Result<Vec<String>, AppError> {
+    let mut reference = SqliteConnection::connect("sqlite::memory:")
+        .await
+        .map_err(sqlite_error)?;
+    execute_init_sql(&mut reference).await?;
+    let mut issues = Vec::new();
+    for table in REQUIRED_TABLES {
+        let expected = table_structure(&mut reference, table).await?;
+        let actual = table_structure(connection, table).await?;
+        if actual != expected {
+            issues.push(format!(
+                "{table}: columns, constraints, foreign keys, or indexes differ"
+            ));
+        }
+    }
+    reference.close().await.map_err(sqlite_error)?;
+    Ok(issues)
+}
+
+async fn table_structure(
+    connection: &mut SqliteConnection,
+    table: &str,
+) -> Result<Vec<String>, AppError> {
+    let mut result = Vec::new();
+    let ddl = sqlx::query_scalar::<_, String>(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
+    )
+    .bind(table)
+    .fetch_optional(&mut *connection)
+    .await
+    .map_err(sqlite_error)?;
+    let Some(ddl) = ddl else {
+        return Ok(result);
+    };
+    // SQLite rewrites CREATE TABLE names when renaming and drops IF NOT EXISTS.
+    // Compare the body, preserving quoted string contents exactly.
+    result.push(normalize_schema_ddl(
+        ddl.split_once('(').map_or(ddl.as_str(), |(_, body)| body),
+    ));
+    for row in sqlx::query(&format!("PRAGMA table_xinfo('{table}')"))
+        .fetch_all(&mut *connection)
+        .await
+        .map_err(sqlite_error)?
+    {
+        result.push(format!(
+            "column:{:?}",
+            (
+                row.get::<i64, _>("cid"),
+                row.get::<String, _>("name"),
+                row.get::<String, _>("type"),
+                row.get::<i64, _>("notnull"),
+                row.get::<Option<String>, _>("dflt_value"),
+                row.get::<i64, _>("pk"),
+                row.get::<i64, _>("hidden")
+            )
+        ));
+    }
+    let mut foreign_keys = Vec::new();
+    for row in sqlx::query(&format!("PRAGMA foreign_key_list('{table}')"))
+        .fetch_all(&mut *connection)
+        .await
+        .map_err(sqlite_error)?
+    {
+        foreign_keys.push(format!(
+            "fk:{:?}",
+            (
+                row.get::<i64, _>("id"),
+                row.get::<i64, _>("seq"),
+                row.get::<String, _>("table"),
+                row.get::<String, _>("from"),
+                row.get::<Option<String>, _>("to"),
+                row.get::<String, _>("on_update"),
+                row.get::<String, _>("on_delete"),
+                row.get::<String, _>("match")
+            )
+        ));
+    }
+    foreign_keys.sort();
+    result.extend(foreign_keys);
+    let mut indexes = Vec::new();
+    for row in sqlx::query(&format!("PRAGMA index_list('{table}')"))
+        .fetch_all(&mut *connection)
+        .await
+        .map_err(sqlite_error)?
+    {
+        let name = row.get::<String, _>("name");
+        let mut index = format!(
+            "index:{:?}",
+            (
+                &name,
+                row.get::<i64, _>("unique"),
+                row.get::<String, _>("origin"),
+                row.get::<i64, _>("partial")
+            )
+        );
+        for column in sqlx::query(
+            "SELECT seqno, cid, name, desc, coll, key FROM pragma_index_xinfo(?) ORDER BY seqno",
+        )
+        .bind(&name)
+        .fetch_all(&mut *connection)
+        .await
+        .map_err(sqlite_error)?
+        {
+            index.push_str(&format!(
+                "{:?}",
+                (
+                    column.get::<i64, _>("seqno"),
+                    column.get::<i64, _>("cid"),
+                    column.get::<Option<String>, _>("name"),
+                    column.get::<i64, _>("desc"),
+                    column.get::<Option<String>, _>("coll"),
+                    column.get::<i64, _>("key")
+                )
+            ));
+        }
+        let definition = sqlx::query_scalar::<_, Option<String>>(
+            "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?",
+        )
+        .bind(&name)
+        .fetch_one(&mut *connection)
+        .await
+        .map_err(sqlite_error)?;
+        index.push_str(&format!(
+            "ddl:{:?}",
+            definition.map(|ddl| normalize_schema_ddl(&ddl))
+        ));
+        indexes.push(index);
+    }
+    indexes.sort();
+    result.extend(indexes);
+    Ok(result)
+}
+
+fn normalize_schema_ddl(ddl: &str) -> String {
+    let mut literal = false;
+    ddl.chars()
+        .filter_map(|ch| {
+            if ch == '\'' {
+                literal = !literal;
+            }
+            if literal || ch == '\'' {
+                Some(ch)
+            } else if ch.is_whitespace() || ch == '"' {
+                None
+            } else {
+                Some(ch.to_ascii_lowercase())
+            }
+        })
+        .collect()
 }

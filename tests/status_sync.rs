@@ -150,14 +150,14 @@ fn active_plan_and_reality_gate_documents_are_in_sync() {
         "M2.0.1 Exclusive Init-and-Migration Lifecycle Gate",
     ] {
         assert!(
-            plan.contains(&format!("- [ ] **{planned_gate}**")),
-            "active plan must retain the unresolved gate: {planned_gate}"
+            plan.contains(&format!("- [x] **{planned_gate}**")),
+            "active plan must expose the verified lifecycle gate: {planned_gate}"
         );
         assert!(
-            !report
+            report
                 .completed_plan_items
                 .contains(&planned_gate.to_string()),
-            "unresolved gate must not be reported complete: {planned_gate}"
+            "verified lifecycle gate must be reported complete: {planned_gate}"
         );
     }
     assert!(

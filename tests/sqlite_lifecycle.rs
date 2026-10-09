@@ -343,3 +343,275 @@ async fn ledger_rows_match_declared_versions_after_migration() {
     );
     connection.close().await.expect("close migrated");
 }
+
+#[tokio::test]
+async fn current_version_rejects_weakened_schema_without_writing_or_repairing() {
+    // Keep user_version and migration ledger unchanged; row-count/FK-check-only
+    // inspection would incorrectly call all of these empty databases current.
+    for (table, from, to) in [
+        (
+            "events",
+            "owner = 'self' AND namespace = 'self'",
+            "owner = 'self'",
+        ),
+        ("claims", "namespace TEXT NOT NULL", "namespace TEXT"),
+        (
+            "evidence_links",
+            "FOREIGN KEY (event_id) REFERENCES events(event_id)",
+            "CHECK (1)",
+        ),
+        (
+            "reflections",
+            "supporting_evidence_event_ids TEXT NOT NULL DEFAULT '[]'",
+            "supporting_evidence_event_ids TEXT",
+        ),
+        (
+            "operation_log",
+            "redaction_version INTEGER NOT NULL DEFAULT 1",
+            "redaction_version TEXT NOT NULL DEFAULT '1'",
+        ),
+    ] {
+        let temp = tempdir().expect("tempdir");
+        let path = temp.path().join("weakened.sqlite");
+        let url = sqlite_url(&path);
+        initialize_database(&url).await.expect("init");
+        let mut connection = SqliteConnection::connect(&url).await.expect("connect");
+        sqlx::query("PRAGMA writable_schema = ON")
+            .execute(&mut connection)
+            .await
+            .expect("enable fixture mutation");
+        let changed = sqlx::query(
+            "UPDATE sqlite_master SET sql = replace(sql, ?, ?) WHERE type = 'table' AND name = ?",
+        )
+        .bind(from)
+        .bind(to)
+        .bind(table)
+        .execute(&mut connection)
+        .await
+        .expect("weaken fixture schema");
+        assert_eq!(changed.rows_affected(), 1);
+        connection.close().await.expect("close");
+        let before = fs::read(&path).expect("before");
+        let report = inspect_database(&url).await.expect("inspect");
+        assert_eq!(report.status, "schema_structure_invalid", "{table}");
+        assert!(!report.schema_structure_valid);
+        assert!(
+            report
+                .schema_structure_issues
+                .iter()
+                .any(|issue| issue.starts_with(table))
+        );
+        assert!(
+            !report.migration_required,
+            "same-version damage needs explicit repair"
+        );
+        assert!(migrate_database(&url).await.is_err());
+        assert_eq!(fs::read(&path).expect("after"), before);
+        assert!(backup_files(temp.path(), "weakened.sqlite").is_empty());
+        let config = AppConfig {
+            database_url: url,
+            ..Default::default()
+        };
+        assert!(validate_stdio_runtime(&config).await.is_err());
+    }
+}
+
+#[tokio::test]
+async fn current_version_rejects_missing_columns_and_changed_primary_indexes() {
+    for mutation in [
+        "ALTER TABLE operation_log DROP COLUMN diagnostic_summary_json",
+        "DROP TABLE episode_events; CREATE TABLE episode_events (episode_reference TEXT NOT NULL, event_id TEXT NOT NULL, FOREIGN KEY (event_id) REFERENCES events(event_id))",
+        "CREATE UNIQUE INDEX unexpected_unique_event_summary ON events(summary)",
+    ] {
+        let temp = tempdir().expect("tempdir");
+        let url = sqlite_url(&temp.path().join("structural.sqlite"));
+        initialize_database(&url).await.expect("init");
+        let mut connection = SqliteConnection::connect(&url).await.expect("connect");
+        sqlx::raw_sql(mutation)
+            .execute(&mut connection)
+            .await
+            .expect("mutate structure");
+        connection.close().await.expect("close");
+        assert_eq!(
+            inspect_database(&url).await.expect("inspect").status,
+            "schema_structure_invalid"
+        );
+    }
+}
+
+#[tokio::test]
+async fn init_race_has_one_winner_and_does_not_delete_winners_database() {
+    let temp = tempdir().expect("tempdir");
+    let path = temp.path().join("race.sqlite");
+    let url = sqlite_url(&path);
+    let (first, second) = tokio::join!(initialize_database(&url), initialize_database(&url));
+    assert_ne!(first.is_ok(), second.is_ok());
+    let report = inspect_database(&url).await.expect("winner readback");
+    assert!(report.is_current());
+    assert!(report.schema_structure_valid);
+}
+
+#[tokio::test]
+async fn init_refuses_preexisting_sidecars_and_preserves_them() {
+    let temp = tempdir().expect("tempdir");
+    let path = temp.path().join("sidecar.sqlite");
+    let sidecar = temp.path().join("sidecar.sqlite-wal");
+    fs::write(&sidecar, b"belongs to another operation").expect("write sidecar");
+    assert!(initialize_database(&sqlite_url(&path)).await.is_err());
+    assert!(!path.exists());
+    assert_eq!(
+        fs::read(sidecar).expect("sidecar"),
+        b"belongs to another operation"
+    );
+}
+
+#[tokio::test]
+async fn migration_refuses_active_external_writer_without_creating_backup() {
+    for wal in [false, true] {
+        let temp = tempdir().expect("tempdir");
+        let path = temp.path().join("busy.sqlite");
+        let url = sqlite_url(&path);
+        create_legacy_database(&path, true).await;
+        let mut writer = SqliteConnection::connect(&url).await.expect("writer");
+        if wal {
+            sqlx::query("PRAGMA journal_mode = WAL")
+                .execute(&mut writer)
+                .await
+                .expect("wal");
+        }
+        sqlx::query("BEGIN IMMEDIATE")
+            .execute(&mut writer)
+            .await
+            .expect("reserve writer");
+        sqlx::query("UPDATE events SET summary = 'same row count, different content'")
+            .execute(&mut writer)
+            .await
+            .expect("update");
+        let error = migrate_database(&url).await.expect_err("busy migration");
+        assert!(error.to_string().contains("write reservation unavailable"));
+        assert!(backup_files(temp.path(), "busy.sqlite").is_empty());
+        sqlx::query("ROLLBACK")
+            .execute(&mut writer)
+            .await
+            .expect("rollback");
+        writer.close().await.expect("close");
+        assert!(
+            migrate_database(&url)
+                .await
+                .expect("migration after unlock")
+                .is_current()
+        );
+    }
+}
+
+#[tokio::test]
+async fn version_two_reflection_alter_migration_matches_canonical_structure() {
+    let temp = tempdir().expect("tempdir");
+    let path = temp.path().join("version-two.sqlite");
+    let url = sqlite_url(&path);
+    initialize_database(&url).await.expect("init");
+    let mut connection = SqliteConnection::connect(&url).await.expect("connect");
+    sqlx::raw_sql(
+        "ALTER TABLE reflections DROP COLUMN supporting_evidence_event_ids;
+         ALTER TABLE reflections DROP COLUMN requested_identity_update;
+         ALTER TABLE reflections DROP COLUMN requested_commitment_updates;
+         DELETE FROM schema_migrations WHERE version = 3;
+         PRAGMA user_version = 2;",
+    )
+    .execute(&mut connection)
+    .await
+    .expect("version two fixture");
+    connection.close().await.expect("close");
+    let report = migrate_database(&url).await.expect("migrate version two");
+    assert!(report.is_current());
+    assert!(report.schema_structure_valid);
+    assert!(report.schema_structure_issues.is_empty());
+    assert_eq!(report.restore_rehearsal, "passed_before_original_write");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn migration_report_keeps_locked_snapshot_when_external_writer_resumes() {
+    for wal in [false, true] {
+        let temp = tempdir().expect("tempdir");
+        let path = temp.path().join("resume-writer.sqlite");
+        let url = sqlite_url(&path);
+        create_legacy_database(&path, true).await;
+        let mut writer = SqliteConnection::connect_with(
+            &SqliteConnectOptions::from_str(&url)
+                .expect("options")
+                .busy_timeout(std::time::Duration::ZERO),
+        )
+        .await
+        .expect("writer");
+        if wal {
+            sqlx::query("PRAGMA journal_mode = WAL")
+                .execute(&mut writer)
+                .await
+                .expect("wal");
+        }
+        let parent = temp.path().to_path_buf();
+        let writer_task = tokio::spawn(async move {
+            // The backup appears only after migration owns BEGIN IMMEDIATE.
+            // Start contending then, so the write can succeed only after the
+            // migration commits and releases its reservation.
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+            while backup_files(&parent, "resume-writer.sqlite").is_empty() {
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "backup never appeared"
+                );
+                tokio::task::yield_now().await;
+            }
+            loop {
+                let result = sqlx::query(
+                    "INSERT INTO events (event_id, recorded_at, owner, namespace, kind, summary) VALUES ('resumed-writer-event', '2026-01-01T00:00:00Z', 'self', 'self', 'observation', 'written after migration commit')",
+                )
+                .execute(&mut writer)
+                .await;
+                match result {
+                    Ok(_) => break,
+                    Err(error) => {
+                        let busy = error.as_database_error().is_some_and(|error| {
+                            matches!(
+                                error.code().as_deref(),
+                                Some("5" | "6" | "261" | "262" | "517")
+                            )
+                        });
+                        assert!(busy, "unexpected writer failure: {error}");
+                        assert!(std::time::Instant::now() < deadline, "writer stayed locked");
+                        tokio::task::yield_now().await;
+                    }
+                }
+            }
+            writer.close().await.expect("close writer");
+        });
+
+        let report = migrate_database(&url).await.expect("migration succeeds");
+        writer_task.await.expect("writer task");
+        assert!(report.is_current());
+        assert!(report.schema_structure_valid);
+        assert!(report.preserved_row_counts);
+        assert!(report.message.contains("migration transaction snapshot"));
+        assert_eq!(
+            report
+                .table_counts
+                .iter()
+                .find(|count| count.table == "events")
+                .expect("snapshot event count")
+                .rows,
+            1,
+            "migration report must retain its own protected snapshot",
+        );
+        let live = inspect_database(&url).await.expect("live inspection");
+        assert!(live.is_current());
+        assert_eq!(
+            live.table_counts
+                .iter()
+                .find(|count| count.table == "events")
+                .expect("live event count")
+                .rows,
+            2,
+            "ordinary post-commit writer must succeed independently of the migration report",
+        );
+    }
+}

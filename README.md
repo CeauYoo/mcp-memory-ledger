@@ -2,6 +2,8 @@
 
 Local-first MCP memory for AI agents, backed by SQLite and evidence-gated self-revision.
 
+Database safety: current-schema inspection validates canonical columns, keys, foreign keys, constraints and indexes. Initialization reserves its path atomically; migration holds a SQLite write lock through backup and readback. A malformed current-version database requires explicit repair, and failed initialization retains files for diagnosis.
+
 Languages: English | [Simplified Chinese](docs/README.zh-CN.md) | [Japanese](docs/README.ja.md)
 
 MCP Memory Ledger is a Rust MCP `stdio` memory service for local AI clients. It records interactions, evidence, claims, self snapshots, and reflection audits in SQLite so an agent can use durable memory inside explicit, inspectable boundaries instead of relying only on a single prompt context.

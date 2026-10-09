@@ -1,5 +1,9 @@
 # 当前实现状态
 
+## 2026-10-09 数据库安全前置门
+
+已实现 current-schema 结构读回（canonical DDL/columns/FK/index、一致 read transaction）和排他 init/migrate。弱化同版本结构返回 `schema_structure_invalid`，不会报告 current 或自动修复。init 原子 create_new，失败保留文件而不清除潜在并发数据；migration write reservation 覆盖 backup、rehearsal、write。SQLite 生命周期 focused 回归覆盖并发和结构破坏；平台证据随精确提交 CI 单独核验。
+
 ## 2026-10-09 最新上游与有界候选
 
 已重新拉取上游 `dev-work@c318caf`，确认包含 PR #2 的默认 stdio bootstrap 测试隔离修复。下述 8 月远端/本地分支差异是历史记录，不代表当前 GitHub 状态。可用性改进将沿唯一 active plan 的有界执行批次推进；规划中的能力未因此成为已实现，当前仍是 local-first technical MVP。
@@ -395,7 +399,7 @@ Implementation notes:
 ## 未实现
 
 - versioned identity/commitment ledger 与 record-only Reflection history
-- current-schema structural readback，以及 exclusive init/migration lifecycle gate
+- 更广泛 crash/power-loss 和实际 fresh-machine 证据（结构读回与排他 init/migrate 已于 2026-10-09 实现）
 - Event/Episode/Reflection 纠错、identity/commitment 作为 `supersede_memory` 的一部分，以及真实 MCP 客户端“记录 → 重连 → 检索 → 查看证据 → supersede → 回看历史”退出证据
 - richer 自动 evidence lookup（当前 `replacement_evidence_query` / `proposed_evidence_query` 仍只是 namespace / owner / kind / inclusive recency window / limit 的窄化 evidence-oriented 查询基础；只读 relation projection 已有首片，但不是 full ranking/weighting engine）
 - richer evidence weighting / full ranking engine

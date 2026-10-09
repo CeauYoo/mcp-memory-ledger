@@ -1544,3 +1544,7 @@ AGENT_LLM_MM_DATABASE_URL=sqlite:///private/tmp/agent-llm-mm-doctor.sqlite ./scr
 - 当前 active plan 与 reality gate 同步，且根目录没有误回流的 `not-a-sqlite-url` SQLite 文件
 - `namespace`、SQLite migration、MCP `stdio`、reflection 闭环和 automatic self-revision MVP 基线都可继续追加定向验证
 - 本机运行时 bootstrap 正常
+
+## 2026-10-09 database prerequisite regressions
+
+Run `cargo test --test sqlite_lifecycle` for canonical structural readback, weakened same-version columns/keys/FKs/CHECK/index rejection, v2-to-current migration, concurrent init, pre-existing sidecar preservation, and external same-count writers including WAL. Default doctor stays read-only. Failed init deliberately retains the reserved database for diagnosis; inspect before manual cleanup. `schema_structure_invalid` is not automatically repaired. Full source gates remain required before publishing a completed implementation stage.
