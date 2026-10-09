@@ -1,5 +1,9 @@
 # 当前实现状态
 
+## 2026-10-09 最新上游与有界候选
+
+已重新拉取上游 `dev-work@c318caf`，确认包含 PR #2 的默认 stdio bootstrap 测试隔离修复。下述 8 月远端/本地分支差异是历史记录，不代表当前 GitHub 状态。可用性改进将沿唯一 active plan 的有界执行批次推进；规划中的能力未因此成为已实现，当前仍是 local-first technical MVP。
+
 ## 2026-08-25 正式化与远端主线同步基线
 
 项目已进入“从 technical MVP 收束为可交付 Local Product Alpha”的正式化规划阶段，但尚未通过 M1、M2 或人工 release gate，因此当前对外口径仍是 local-first technical MVP。正式化的产品、工程、安全、发布和协作差距统一见[正式化改进与主线同步计划](formalization-improvement-plan-2026-08-25.md)；该文件是覆盖矩阵，不替代唯一 [active project plan](plans/2026-07-10-product-replan.md)。

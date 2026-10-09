@@ -143,6 +143,25 @@ M0 先冻结以下概念，不立即重做所有表：
 
 预计节奏只用于排序，不是发布日期承诺。
 
+### 2026-10-09 有界可用性候选执行批次
+
+最新已核验上游基线为 `dev-work@c318caf`，已包含 stdio bootstrap 回归修复；9 月 5 日讨论稿只作为设计输入，不作为已实现或已验证证据。本批次在现有 M1 → M2 主线内收束一个 **local-first technical MVP 可用性候选**，不宣告 Local Alpha 发布。
+
+依赖调整：将 M2.0.1 生命周期排他性与 M1.3.0 一起作为所有 schema 变更的前置门；把 M3 中最小中英文文本召回和有界任务上下文前移为 M1 用户闭环所需的实用性切片。FTS/embedding/ranking 调优、50 场景全面评测仍留在 M3。
+
+| 批次阶段 | 有界交付 | 验收与停止条件 |
+| --- | --- | --- |
+| 0 基线与范围 | 重拉上游、保留既有修复、更新唯一队列 | 新 head 与差异已核验；独立开发分支、单一草稿 PR；不合并或部署 |
+| 1 数据库前置门 | M1.3.0 结构读回 + M2.0.1 安全生命周期 | 同版本弱化约束 fail closed；只读检查不改库；并发 init/migrate 不破坏他人数据；迁移失败保留原库与恢复锚点 |
+| 2 可靠更正与重试 | 事务内 scope/evidence/state 校验、单后继更正、持久化幂等及原子写入回执 | active/disputed 可更正，terminal 拒绝；相同 key/payload 返回原结果，不同 payload 冲突；失败无部分 claim/evidence/audit；直接 reflection 同样受约束 |
+| 3 外部反馈 provenance | 有界结构化观察，保留来源、目标、预期/实际、验证方法与限制 | 原始观察不可改写；caller/tool/model 声明可区分但不视为认证；跨 scope 证据拒绝；不增加执行权限 |
+| 4 本地召回与任务上下文 | additive 文本 recall 与独立有界 context，不改变历史 browse | 北京/咖啡/记忆及英文、字面符号可召回；active claim 不被事件淹没；固定离线小样本 recall@5 ≥ 0.80、provenance 100%、scope 泄漏 0；完整 JSON UTF-8 字节数不超过请求预算 |
+| 5 可重现交付候选 | init → MCP 写入 → 重启 → 检索 → evidence → 更正 → history → backup/restore | 实际进程 stdio transcript 与读回证据、full/fmt/Clippy/status-sync、精确远端提交与 CI；平台实测和 fresh-machine 尚未完成项继续明确标注 |
+
+每阶段先 focused 回归，再相应全量门禁；代码、能力边界和测试文档同阶段更新。每个通过阶段发布到 `CeauYoo:dev_work_dots` 并更新指向上游 `dev-work` 的同一草稿 PR。不得用历史 CI、文档或模拟环境替代当前检查，不调用付费/远程模型作默认验收。
+
+本批次结束条件是上述有界本地工作流与声明的平台证据可复现、候选可 review；正式二进制跨平台发布、真实 fresh-machine ≤10 分钟、live-provider 认证、人工 release decision 未取得证据时保持开放。强制 embeddings、云服务、远程/团队、自治控制器、广泛重构和完整 procedural memory 不在本批次范围内。
+
 ## 6. M0 — Truth and Safety Reset
 
 M0 已收口，当前只能从 M1 领取一个独立最小切片。新 provider、远程、daemon 写能力或正式发布工作仍未因 M0 完成而获得授权。

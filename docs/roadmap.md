@@ -1,7 +1,7 @@
 # MCP Memory Ledger 路线图
 
 状态：`active summary`
-更新日期：`2026-08-25`
+更新日期：`2026-10-09`
 
 本文件只回答三个问题：现在做什么、接下来做什么、哪些方向暂不排期。具体任务、依赖、证据门与停止条件统一见 [2026-07-10 全新项目规划](plans/2026-07-10-product-replan.md)。
 
@@ -101,7 +101,9 @@ M0 未通过前，不开始新 provider、daemon 写能力、remote/team 或正�
 - 保留 ID、scope、时间、status、mode 和 provenance 的返回结构；
 - provider 离线时仍可用的 deterministic read path。
 
-冻结顺序：`current-schema structural readback → real-client closure`。
+冻结顺序：`structural readback + exclusive lifecycle → reliable corrections/replay → feedback provenance → minimal offline recall/context → real-client closure`。
+
+本次有界可用性候选的范围、验收与停止条件见唯一 active plan 的“2026-10-09 有界可用性候选执行批次”。最小文本召回与 context 预算因用户闭环需要从 M3 前移；全面检索调优及正式 Alpha 发布门仍不越级。
 
 退出门：真实 MCP 客户端完成“写入 → 重连 → 检索 → 查看证据 → supersede → 回看历史”，且两个干扰 namespace 没有任何数据混入。
 
