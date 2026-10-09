@@ -339,6 +339,7 @@ async fn ledger_rows_match_declared_versions_after_migration() {
             (1, "baseline_schema".to_string()),
             (2, "owner_namespace_scope".to_string()),
             (3, "reflection_audit_columns".to_string()),
+            (4, "event_feedback_metadata".to_string()),
         ]
     );
     connection.close().await.expect("close migrated");
@@ -515,7 +516,7 @@ async fn version_two_reflection_alter_migration_matches_canonical_structure() {
         "ALTER TABLE reflections DROP COLUMN supporting_evidence_event_ids;
          ALTER TABLE reflections DROP COLUMN requested_identity_update;
          ALTER TABLE reflections DROP COLUMN requested_commitment_updates;
-         DELETE FROM schema_migrations WHERE version = 3;
+         DELETE FROM schema_migrations WHERE version >= 3;
          PRAGMA user_version = 2;",
     )
     .execute(&mut connection)

@@ -42,3 +42,21 @@ jobs:
 
       - name: Check plan and status synchronization
         run: ./scripts/status-sync-check.sh
+
+      - name: Verify installed-binary offline memory workflow
+        run: python3 scripts/local-memory-smoke.py --binary target/debug/agent_llm_mm --output target/reports/local-memory-smoke
+
+  windows-runtime:
+    name: Windows native runtime / Rust 1.95.0
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+      - name: Verify pinned toolchain
+        run: rustc --version --verbose
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Test native memory and lifecycle runtime
+        run: cargo test --lib --test sqlite_lifecycle --test sqlite_store --test correction_atomicity --test feedback_provenance --test mcp_stdio
+      - name: Verify installed-binary offline memory workflow
+        run: python scripts/local-memory-smoke.py --binary target/debug/agent_llm_mm.exe --output target/reports/local-memory-smoke

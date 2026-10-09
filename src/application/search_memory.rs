@@ -5,6 +5,7 @@ use crate::{
     domain::{
         claim::ClaimReference,
         event::EventReference,
+        feedback::FeedbackMetadata,
         types::{EventKind, MemoryScope, Mode, Namespace, Owner},
     },
     error::AppError,
@@ -218,6 +219,8 @@ pub enum SearchMemoryRecord {
         namespace: String,
         kind: EventKind,
         summary: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        feedback: Option<FeedbackMetadata>,
         provenance: EventProvenance,
     },
     Claim {
@@ -423,6 +426,7 @@ impl From<EventReadRecord> for SearchMemoryRecord {
             namespace: value.event.event.namespace().as_str().to_string(),
             kind: value.event.event.kind(),
             summary: value.event.event.summary().to_string(),
+            feedback: value.event.event.feedback().cloned(),
             provenance: EventProvenance {
                 evidence_event_reference: reference,
                 claim_ids: value.claim_ids,

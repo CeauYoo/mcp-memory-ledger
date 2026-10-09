@@ -1486,6 +1486,7 @@ struct State {
 
 #[derive(Debug, Clone, Default)]
 struct CommittedState {
+    receipts: Vec<(String, agent_llm_mm::ports::StoredWriteReceipt)>,
     log: Vec<String>,
     events: Vec<StoredEvent>,
     claims: Vec<StoredClaim>,
@@ -1499,6 +1500,7 @@ struct CommittedState {
 
 #[derive(Debug, Default)]
 struct PendingIngest {
+    receipts: Vec<(String, agent_llm_mm::ports::StoredWriteReceipt)>,
     log: Vec<String>,
     events: Vec<StoredEvent>,
     claims: Vec<StoredClaim>,
@@ -1508,6 +1510,7 @@ struct PendingIngest {
 
 #[derive(Debug, Default)]
 struct PendingReflection {
+    receipts: Vec<(String, agent_llm_mm::ports::StoredWriteReceipt)>,
     claims: Vec<StoredClaim>,
     evidence_links: Vec<(String, String)>,
     reflections: Vec<StoredReflection>,
@@ -2154,6 +2157,47 @@ struct InMemoryIngestTransaction {
 
 #[async_trait]
 impl IngestTransaction for InMemoryIngestTransaction {
+    async fn load_event_for_ingest(
+        &mut self,
+        event_id: &str,
+    ) -> Result<Option<StoredEvent>, AppError> {
+        Ok(self
+            .deps
+            .state
+            .lock()
+            .unwrap()
+            .committed
+            .events
+            .iter()
+            .find(|event| event.event_id == event_id)
+            .cloned())
+    }
+    async fn load_write_receipt(
+        &mut self,
+        operation_id: &str,
+    ) -> Result<Option<agent_llm_mm::ports::StoredWriteReceipt>, AppError> {
+        Ok(self
+            .deps
+            .state
+            .lock()
+            .unwrap()
+            .committed
+            .receipts
+            .iter()
+            .find(|(id, _)| id == operation_id)
+            .map(|(_, receipt)| receipt.clone()))
+    }
+    async fn append_write_receipt(
+        &mut self,
+        request: &agent_llm_mm::ports::WriteReceiptRequest,
+        receipt: agent_llm_mm::ports::StoredWriteReceipt,
+        _recorded_at: DateTime<Utc>,
+    ) -> Result<(), AppError> {
+        self.pending
+            .receipts
+            .push((request.operation_id.clone(), receipt));
+        Ok(())
+    }
     async fn append_event(&mut self, event: StoredEvent) -> Result<(), AppError> {
         self.pending.log.push("append_event".to_string());
         self.pending.events.push(event);
@@ -2189,6 +2233,7 @@ impl IngestTransaction for InMemoryIngestTransaction {
 
     async fn commit(self: Box<Self>) -> Result<(), AppError> {
         let mut state = self.deps.state.lock().unwrap();
+        state.committed.receipts.extend(self.pending.receipts);
         state.committed.log.extend(self.pending.log);
         state.committed.events.extend(self.pending.events);
         for claim in self.pending.claims {
@@ -2216,6 +2261,78 @@ struct InMemoryReflectionTransaction {
 
 #[async_trait]
 impl ReflectionTransaction for InMemoryReflectionTransaction {
+    async fn load_write_receipt(
+        &mut self,
+        operation_id: &str,
+    ) -> Result<Option<agent_llm_mm::ports::StoredWriteReceipt>, AppError> {
+        Ok(self
+            .deps
+            .state
+            .lock()
+            .unwrap()
+            .committed
+            .receipts
+            .iter()
+            .find(|(id, _)| id == operation_id)
+            .map(|(_, receipt)| receipt.clone()))
+    }
+    async fn append_write_receipt(
+        &mut self,
+        request: &agent_llm_mm::ports::WriteReceiptRequest,
+        receipt: agent_llm_mm::ports::StoredWriteReceipt,
+        _recorded_at: DateTime<Utc>,
+    ) -> Result<(), AppError> {
+        self.pending
+            .receipts
+            .push((request.operation_id.clone(), receipt));
+        Ok(())
+    }
+    async fn load_claim_for_reflection(
+        &mut self,
+        claim_id: &str,
+    ) -> Result<Option<StoredClaim>, AppError> {
+        Ok(self
+            .deps
+            .state
+            .lock()
+            .unwrap()
+            .committed
+            .claims
+            .iter()
+            .find(|claim| claim.claim_id == claim_id)
+            .cloned())
+    }
+    async fn load_event_for_reflection(
+        &mut self,
+        event_id: &str,
+    ) -> Result<Option<StoredEvent>, AppError> {
+        Ok(self
+            .deps
+            .state
+            .lock()
+            .unwrap()
+            .committed
+            .events
+            .iter()
+            .find(|event| event.event_id == event_id)
+            .cloned())
+    }
+    async fn compare_and_set_claim_status(
+        &mut self,
+        claim_id: &str,
+        expected: ClaimStatus,
+        status: ClaimStatus,
+    ) -> Result<(), AppError> {
+        let target = self.load_claim_for_reflection(claim_id).await?;
+        if target.is_none_or(|target| {
+            target.status != expected || target.status == ClaimStatus::Superseded
+        }) {
+            return Err(AppError::InvalidParams(
+                "reflection target claim changed or no longer exists".to_string(),
+            ));
+        }
+        self.update_claim_status(claim_id, status).await
+    }
     async fn upsert_claim(&mut self, claim: StoredClaim) -> Result<(), AppError> {
         self.pending.claims.push(claim);
         Ok(())
@@ -2292,6 +2409,7 @@ impl ReflectionTransaction for InMemoryReflectionTransaction {
 
     async fn commit(self: Box<Self>) -> Result<(), AppError> {
         let mut state = self.deps.state.lock().unwrap();
+        state.committed.receipts.extend(self.pending.receipts);
         for claim in self.pending.claims {
             upsert_claim(&mut state.committed.claims, claim);
         }
@@ -2322,4 +2440,81 @@ impl ReflectionTransaction for InMemoryReflectionTransaction {
         }
         Ok(())
     }
+}
+
+#[tokio::test]
+async fn direct_reflection_revalidates_target_and_rejects_terminal_or_missing_claims() {
+    for status in [Some(ClaimStatus::Superseded), None] {
+        let deps = test_support::reflection_deps();
+        {
+            let mut state = deps.state.lock().unwrap();
+            if let Some(status) = status {
+                state.committed.claims[0].status = status;
+            } else {
+                state.committed.claims.clear();
+            }
+        }
+        let result = execute_reflection(&deps, test_support::reflection_input()).await;
+        assert!(matches!(result, Err(AppError::InvalidParams(_))));
+        assert!(deps.state.lock().unwrap().committed.reflections.is_empty());
+        assert!(deps.claim("id-1:replacement").is_none());
+    }
+}
+
+#[tokio::test]
+async fn direct_reflection_rejects_replacement_scope_escape() {
+    let deps = test_support::reflection_deps();
+    let input = ReflectionInput::new(
+        Reflection::new("Attempt to move a self claim into user memory"),
+        "claim-old",
+        Some(ClaimDraft::new(
+            Owner::User,
+            "user.role",
+            "is",
+            "architect",
+            Mode::Observed,
+        )),
+        vec!["evt-reflection-1".to_string()],
+    );
+    let result = execute_reflection(&deps, input).await;
+    assert!(matches!(result, Err(AppError::InvalidParams(_))));
+    assert_eq!(deps.claim("claim-old").unwrap().status, ClaimStatus::Active);
+    assert!(deps.state.lock().unwrap().committed.reflections.is_empty());
+}
+
+#[tokio::test]
+async fn disputed_claim_can_be_corrected_only_once() {
+    let deps = test_support::reflection_deps();
+    {
+        let mut state = deps.state.lock().unwrap();
+        state.committed.claims[0].status = ClaimStatus::Disputed;
+        state.committed.events = vec![StoredEvent::new(
+            "evt-reflection-1".to_string(),
+            state.now,
+            Event::new(Owner::Self_, EventKind::Observation, "updated role"),
+        )];
+    }
+    execute_reflection(&deps, test_support::reflection_input())
+        .await
+        .unwrap();
+    let result = execute_reflection(&deps, test_support::reflection_input()).await;
+    assert!(matches!(result, Err(AppError::InvalidParams(_))));
+    assert_eq!(deps.state.lock().unwrap().committed.reflections.len(), 1);
+    assert_eq!(
+        deps.claim("claim-old").unwrap().status,
+        ClaimStatus::Superseded
+    );
+}
+
+#[tokio::test]
+async fn scoped_self_correction_rejects_legacy_world_evidence() {
+    let deps = test_support::reflection_deps();
+    let result = execute_reflection(
+        &deps,
+        test_support::reflection_input().with_strict_evidence_scope(),
+    )
+    .await;
+    assert!(matches!(result, Err(AppError::InvalidParams(_))));
+    assert_eq!(deps.claim("claim-old").unwrap().status, ClaimStatus::Active);
+    assert!(deps.state.lock().unwrap().committed.reflections.is_empty());
 }

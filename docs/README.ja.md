@@ -10,9 +10,13 @@ MCP Memory Ledger は、ローカル AI クライアント向けの Rust 製 MCP
 
 [正式化改善・mainline 同期計画](formalization-improvement-plan-2026-08-25.md)は、product、engineering、security、release、GitHub mainline の現在の gap をまとめます。これは acceptance map であり、Local Alpha や production-ready の完了証拠ではありません。active plan が引き続き唯一の実行キューです。
 
+## 2026-10-09 Usability candidate
+
+`recall_memory` / `build_task_context` を追加し、計12ツールになりました。transactional correction、durable request_id replay、structured Event feedback、明示的なschema v4 migrationに対応します。短いCJK literal queryと完全な結果JSONのbyte budgetを検証しますが、JSON-RPC envelopeやtoken数は対象外です。[ローカルworkflowと互換性境界](local-memory-usability.md)を参照してください。正式Alpha releaseではなく、legacy global self-model governanceは引き続きexperimentalです。
+
 ## Features
 
-- **Local MCP memory service**: MCP `stdio` 経由で `ingest_interaction`、`search_memory`、`get_memory`、`get_reflection_history`、`get_self_model_history`、`get_evidence_relation`、`supersede_memory`、`build_self_snapshot`、`decide_with_snapshot`、`run_reflection` の 10 ツールを提供します。
+- **Local MCP memory service**: MCP `stdio` 経由で `ingest_interaction`、`search_memory`、`get_memory`、`get_reflection_history`、`get_self_model_history`、`get_evidence_relation`、`supersede_memory`、`build_self_snapshot`、`decide_with_snapshot`、`run_reflection` の 12 ツールを提供します。
 - **Scoped Event / Claim / Episode / Reflection recall**: `search_memory` は明示的な namespace を必須とします。型を省略すると bounded recent-first Event を返します。`record_type = Claim / Episode / Reflection` はそれぞれ scoped Claim、同一 scope の Event から投影した Episode、同一 scope の Claim 端点だけに帰属する Reflection を返します。record-only Reflection は見えません。additive `record_types` で既存 tagged record の scoped union を要求できます。deterministic read は provider 非依存です。mixed-scope Claim revision edge は辺ごと隠します。
 - **Scoped stable-ID lookup**: `get_memory(namespace, id, record_type?)` は Event、Claim、Episode、または scoped Reflection を 1 件返します。`record_type` 省略時は Event 互換です。missing / 別 namespace / record-only Reflection は `record: null` で、クエリを広げません。
 - **Claim reflection history**: `get_reflection_history` は 1 件の exact scoped Claim から newest-first の双方向 revision chain を返します。

@@ -146,6 +146,8 @@ impl From<EventKindDto> for EventKind {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct EventDto {
+    #[serde(default)]
+    pub feedback: Option<crate::domain::feedback::FeedbackMetadata>,
     pub owner: OwnerDto,
     #[serde(default)]
     pub namespace: Option<String>,
@@ -164,9 +166,13 @@ impl TryFrom<EventDto> for Event {
         let kind = EventKind::from(value.kind);
         let namespace = value.namespace.map(Namespace::parse).transpose()?;
 
-        match namespace {
-            Some(namespace) => Event::new_with_namespace(owner, namespace, kind, value.summary),
-            None => Ok(Event::new(owner, kind, value.summary)),
+        let event = match namespace {
+            Some(namespace) => Event::new_with_namespace(owner, namespace, kind, value.summary)?,
+            None => Event::new(owner, kind, value.summary),
+        };
+        match value.feedback {
+            Some(feedback) => event.with_feedback(feedback),
+            None => Ok(event),
         }
     }
 }
@@ -220,6 +226,8 @@ impl From<CommitmentDto> for Commitment {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct IngestInteractionParams {
+    #[serde(default)]
+    pub request_id: Option<String>,
     pub event: EventDto,
     pub claim_drafts: Vec<ClaimDraftDto>,
     pub episode_reference: Option<String>,
@@ -231,7 +239,7 @@ impl TryFrom<IngestInteractionParams> for IngestInput {
     type Error = crate::domain::DomainError;
 
     fn try_from(value: IngestInteractionParams) -> Result<Self, Self::Error> {
-        Ok(IngestInput::new(
+        let input = IngestInput::new(
             Event::try_from(value.event)?,
             value
                 .claim_drafts
@@ -239,7 +247,12 @@ impl TryFrom<IngestInteractionParams> for IngestInput {
                 .map(ClaimDraft::try_from)
                 .collect::<Result<Vec<_>, _>>()?,
             value.episode_reference,
-        ))
+        )
+        .with_trigger_hints(value.trigger_hints);
+        Ok(match value.request_id {
+            Some(key) => input.with_request_id(key),
+            None => input,
+        })
     }
 }
 
@@ -636,6 +649,8 @@ impl TryFrom<GetSelfModelHistoryParams> for GetSelfModelHistoryInput {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct SupersedeMemoryParams {
+    #[serde(default)]
+    pub request_id: Option<String>,
     pub namespace: String,
     pub claim_reference: String,
     pub replacement_claim: ClaimDraftDto,
@@ -654,6 +669,7 @@ impl TryFrom<SupersedeMemoryParams> for SupersedeMemoryInput {
             )));
         }
         let input = Self {
+            request_id: value.request_id,
             namespace: Namespace::parse(value.namespace).map_err(AppError::from)?,
             claim_reference: ClaimReference::parse(value.claim_reference)
                 .map_err(AppError::from)?,
@@ -881,5 +897,54 @@ impl TryFrom<RunReflectionParams> for ReflectionInput {
         }
 
         Ok(input)
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct RecallMemoryParams {
+    pub namespace: String,
+    pub query: String,
+    #[serde(default)]
+    pub limit: Option<usize>,
+}
+
+impl TryFrom<RecallMemoryParams> for crate::application::recall_memory::RecallMemoryInput {
+    type Error = AppError;
+    fn try_from(value: RecallMemoryParams) -> Result<Self, Self::Error> {
+        Ok(Self {
+            namespace: Namespace::parse(value.namespace).map_err(AppError::from)?,
+            query: value.query,
+            limit: value
+                .limit
+                .unwrap_or(crate::application::recall_memory::DEFAULT_RECALL_LIMIT),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+pub struct BuildTaskContextParams {
+    pub namespace: String,
+    pub query: String,
+    #[serde(default)]
+    pub limit: Option<usize>,
+    #[serde(default)]
+    pub max_bytes: Option<usize>,
+}
+
+impl TryFrom<BuildTaskContextParams>
+    for crate::application::build_task_context::BuildTaskContextInput
+{
+    type Error = AppError;
+    fn try_from(value: BuildTaskContextParams) -> Result<Self, Self::Error> {
+        Ok(Self {
+            namespace: Namespace::parse(value.namespace).map_err(AppError::from)?,
+            query: value.query,
+            limit: value
+                .limit
+                .unwrap_or(crate::application::recall_memory::DEFAULT_RECALL_LIMIT),
+            max_bytes: value
+                .max_bytes
+                .unwrap_or(crate::application::build_task_context::DEFAULT_CONTEXT_MAX_BYTES),
+        })
     }
 }

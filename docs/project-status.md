@@ -1,5 +1,13 @@
 # 当前实现状态
 
+## 2026-10-09 可用性候选实现与验证范围
+
+新增第 11/12 个 MCP 工具 `recall_memory` / `build_task_context`：本地 literal 中英文文本召回、active Claim 优先、完整 provenance，以及 compact JSON UTF-8 硬字节预算。历史 `search_memory` 保持原合同；不声称 semantic retrieval、全文索引或大库性能。
+
+更正 now 在写事务内复核 scope/evidence/state 并 CAS；ingest / supersede 支持 namespace+operation 作用域的可选 request_id，持久化原子 hash/result 回执，重放不重复 auto-reflection。Event 新增有界结构化 feedback，schema v4 显式迁移保留历史。来源标签是 caller supplied，不是认证或事实证明。
+
+详见 [本地可用性合同](local-memory-usability.md)。执行型 installed-binary smoke 已在本地通过；它是安装模拟，不是fresh-machine证明。Windows native CI 已加入，平台结果以草稿PR精确head checks为准。完整MCP回归通过后仍不把legacy global self-model路径称为统一scope隔离；它可以按既有治理使用project证据影响全局identity/commitments。
+
 ## 2026-10-09 数据库安全前置门
 
 已实现 current-schema 结构读回（canonical DDL/columns/FK/index、一致 read transaction）和排他 init/migrate。弱化同版本结构返回 `schema_structure_invalid`，不会报告 current 或自动修复。init 原子 create_new，失败保留文件而不清除潜在并发数据；migration write reservation 覆盖 backup、rehearsal、write。SQLite 生命周期 focused 回归覆盖并发和结构破坏；平台证据随精确提交 CI 单独核验。

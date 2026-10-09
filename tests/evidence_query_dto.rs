@@ -475,6 +475,7 @@ fn get_self_model_history_dto_rejects_invalid_scope_and_limits() {
 #[test]
 fn supersede_memory_dto_parses_canonical_claim_and_event_references() {
     let input = SupersedeMemoryInput::try_from(SupersedeMemoryParams {
+        request_id: None,
         namespace: "project/dto".to_string(),
         claim_reference: "claim:stored-claim".to_string(),
         replacement_claim: ClaimDraftDto {
@@ -506,6 +507,7 @@ fn supersede_memory_dto_parses_canonical_claim_and_event_references() {
 #[test]
 fn supersede_memory_dto_rejects_invalid_scope_target_and_empty_evidence() {
     let invalid_namespace = SupersedeMemoryInput::try_from(SupersedeMemoryParams {
+        request_id: None,
         namespace: "invalid".to_string(),
         claim_reference: "claim:stored-claim".to_string(),
         replacement_claim: ClaimDraftDto {
@@ -523,6 +525,7 @@ fn supersede_memory_dto_rejects_invalid_scope_target_and_empty_evidence() {
     assert!(invalid_namespace.to_string().contains("InvalidNamespace"));
 
     let empty_evidence = SupersedeMemoryInput::try_from(SupersedeMemoryParams {
+        request_id: None,
         namespace: "project/dto".to_string(),
         claim_reference: "stored-claim".to_string(),
         replacement_claim: ClaimDraftDto {
@@ -540,6 +543,7 @@ fn supersede_memory_dto_rejects_invalid_scope_target_and_empty_evidence() {
     assert!(empty_evidence.to_string().contains("evidence"));
 
     let mismatched_scope = SupersedeMemoryInput::try_from(SupersedeMemoryParams {
+        request_id: None,
         namespace: "project/dto".to_string(),
         claim_reference: "stored-claim".to_string(),
         replacement_claim: ClaimDraftDto {
@@ -890,6 +894,7 @@ fn snapshot_dto_bounds_evidence_manifest_before_query_construction() {
 #[test]
 fn event_and_claim_dtos_reject_unknown_owner_for_new_writes() {
     let event = Event::try_from(EventDto {
+        feedback: None,
         owner: OwnerDto::Unknown,
         namespace: Some("world".to_string()),
         kind: EventKindDto::Observation,
@@ -908,6 +913,7 @@ fn event_and_claim_dtos_reject_unknown_owner_for_new_writes() {
     assert!(claim.is_err());
 
     let accepted = Event::try_from(EventDto {
+        feedback: None,
         owner: OwnerDto::World,
         namespace: Some("project/demo".to_string()),
         kind: EventKindDto::Observation,

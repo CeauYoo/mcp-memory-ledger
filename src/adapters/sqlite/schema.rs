@@ -1,10 +1,11 @@
 pub(super) const OWNER_NAMESPACE_SCOPE_CONSTRAINT_NAME: &str = "owner_namespace_scope";
-pub(super) const CURRENT_SCHEMA_VERSION: i64 = 3;
+pub(super) const CURRENT_SCHEMA_VERSION: i64 = 4;
 
-pub(super) const SCHEMA_MIGRATIONS: [(i64, &str); 3] = [
+pub(super) const SCHEMA_MIGRATIONS: [(i64, &str); 4] = [
     (1, "baseline_schema"),
     (2, "owner_namespace_scope"),
     (3, "reflection_audit_columns"),
+    (4, "event_feedback_metadata"),
 ];
 
 const OWNER_NAMESPACE_SCOPE_CONSTRAINT_SQL: &str = r#"    CONSTRAINT owner_namespace_scope CHECK (
@@ -149,6 +150,7 @@ CREATE TABLE{if_not_exists_clause} events (
     namespace TEXT NOT NULL,
     kind TEXT NOT NULL,
     summary TEXT NOT NULL,
+    feedback_json TEXT,
 {owner_namespace_scope_constraint}
 )"#,
         owner_namespace_scope_constraint = OWNER_NAMESPACE_SCOPE_CONSTRAINT_SQL,

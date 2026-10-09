@@ -4031,6 +4031,7 @@ async fn sqlite_supersede_memory_is_scoped_claim_correction_and_hides_cross_scop
     let prepared = prepare_scoped_supersede(
         &context.store,
         &SupersedeMemoryInput {
+            request_id: None,
             namespace: project_a.clone(),
             claim_reference: ClaimReference::parse("claim:supersede-claim-a").unwrap(),
             replacement_claim: ClaimDraft::new_with_namespace(
@@ -4062,6 +4063,7 @@ async fn sqlite_supersede_memory_is_scoped_claim_correction_and_hides_cross_scop
     let cross_claim = prepare_scoped_supersede(
         &context.store,
         &SupersedeMemoryInput {
+            request_id: None,
             namespace: project_a.clone(),
             claim_reference: ClaimReference::parse("supersede-claim-b").unwrap(),
             replacement_claim: ClaimDraft::new_with_namespace(
@@ -4082,6 +4084,7 @@ async fn sqlite_supersede_memory_is_scoped_claim_correction_and_hides_cross_scop
     let cross_evidence = prepare_scoped_supersede(
         &context.store,
         &SupersedeMemoryInput {
+            request_id: None,
             namespace: project_a.clone(),
             claim_reference: ClaimReference::parse("supersede-claim-a").unwrap(),
             replacement_claim: ClaimDraft::new_with_namespace(
@@ -4102,6 +4105,7 @@ async fn sqlite_supersede_memory_is_scoped_claim_correction_and_hides_cross_scop
     let missing = prepare_scoped_supersede(
         &context.store,
         &SupersedeMemoryInput {
+            request_id: None,
             namespace: project_a.clone(),
             claim_reference: ClaimReference::parse("claim:missing").unwrap(),
             replacement_claim: ClaimDraft::new_with_namespace(
@@ -4120,6 +4124,7 @@ async fn sqlite_supersede_memory_is_scoped_claim_correction_and_hides_cross_scop
     assert!(matches!(missing, Err(AppError::InvalidParams(_))));
 
     let mismatched_replacement = SupersedeMemoryInput {
+        request_id: None,
         namespace: project_a,
         claim_reference: ClaimReference::parse("supersede-claim-a").unwrap(),
         replacement_claim: ClaimDraft::new_with_namespace(

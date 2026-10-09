@@ -424,6 +424,24 @@ async fn migrate_locked(
     Ok(report)
 }
 
+// Rebuild rather than ALTER ADD so the canonical DDL remains identical for
+// fresh and migrated databases; lifecycle holds the migration write reservation.
+async fn ensure_event_feedback_column(connection: &mut SqliteConnection) -> Result<(), AppError> {
+    let exists = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM pragma_table_info('events') WHERE name = 'feedback_json'",
+    )
+    .fetch_one(&mut *connection)
+    .await
+    .map_err(sqlite_error)?;
+    if exists == 0 {
+        execute(connection, "ALTER TABLE events RENAME TO events_legacy").await?;
+        execute(connection, &super::schema::events_table_sql(false)).await?;
+        execute(connection, "INSERT INTO events (event_id, recorded_at, owner, namespace, kind, summary) SELECT event_id, recorded_at, owner, namespace, kind, summary FROM events_legacy").await?;
+        execute(connection, "DROP TABLE events_legacy").await?;
+    }
+    Ok(())
+}
+
 async fn run_migration_steps(
     connection: &mut SqliteConnection,
     from_version: i64,
@@ -440,6 +458,7 @@ async fn run_migration_steps(
                 ensure_claims_namespace_column(connection).await?;
             }
             3 => ensure_reflection_audit_columns(connection).await?,
+            4 => ensure_event_feedback_column(connection).await?,
             _ => {
                 return Err(AppError::Message(format!(
                     "missing migration implementation for version {version}"

@@ -6,6 +6,7 @@ use crate::{
         identity_core::IdentityCore,
         reflection::{Reflection, ReflectionIdentityUpdate},
         rules::reflection_policy::{ReflectionDecision, ReflectionTrigger, classify_reflection},
+        types::Owner,
     },
     error::AppError,
     ports::{
@@ -24,6 +25,10 @@ pub struct ReflectionInput {
     identity_update: Option<ReflectionIdentityUpdate>,
     commitment_updates: Option<Vec<Commitment>>,
     handled_trigger_ledger_entry: Option<StoredTriggerLedgerEntry>,
+    #[serde(default)]
+    strict_evidence_scope: bool,
+    #[serde(skip)]
+    write_receipt: Option<crate::ports::WriteReceiptRequest>,
 }
 
 impl ReflectionInput {
@@ -42,6 +47,8 @@ impl ReflectionInput {
             identity_update: None,
             commitment_updates: None,
             handled_trigger_ledger_entry: None,
+            strict_evidence_scope: false,
+            write_receipt: None,
         }
     }
 
@@ -58,7 +65,20 @@ impl ReflectionInput {
             identity_update: None,
             commitment_updates: None,
             handled_trigger_ledger_entry: None,
+            strict_evidence_scope: false,
+            write_receipt: None,
         }
+    }
+
+    pub(crate) fn with_write_receipt(mut self, request: crate::ports::WriteReceiptRequest) -> Self {
+        self.write_receipt = Some(request);
+        self
+    }
+
+    /// Scoped correction entrypoints opt into strict evidence isolation, including self memory.
+    pub fn with_strict_evidence_scope(mut self) -> Self {
+        self.strict_evidence_scope = true;
+        self
     }
 
     pub fn with_replacement_evidence_query(
@@ -106,6 +126,8 @@ pub async fn execute<D>(deps: &D, input: ReflectionInput) -> Result<ReflectionRe
 where
     D: ReflectionTransactionRunner + EventStore + IdGenerator + Clock + Sync,
 {
+    let receipt_payload =
+        serde_json::to_value(&input).map_err(|e| AppError::Message(e.to_string()))?;
     let ReflectionInput {
         reflection,
         target_claim_id,
@@ -115,6 +137,8 @@ where
         identity_update,
         commitment_updates,
         handled_trigger_ledger_entry,
+        strict_evidence_scope,
+        write_receipt,
     } = input;
     let replacement_evidence_event_ids = normalize_event_ids(replacement_evidence_event_ids)?;
 
@@ -143,6 +167,18 @@ where
         Vec::new()
     };
 
+    // Resolve optional query candidates before reserving the writer connection.
+    // Their existence and allowed scope are revalidated below in this transaction.
+    let mut transaction = deps.begin_reflection_transaction().await?;
+    if let Some(request) = &write_receipt
+        && let Some(receipt) = transaction
+            .load_write_receipt(&request.operation_id)
+            .await?
+    {
+        let result = receipt.replay(request)?;
+        transaction.commit().await?;
+        return Ok(result);
+    }
     if (identity_update.is_some() || commitment_updates.is_some())
         && supporting_evidence_event_ids.is_empty()
     {
@@ -186,15 +222,59 @@ where
         ));
     }
 
+    // Authoritative validation belongs inside the write transaction. The scoped
+    // preparation path is only a convenience and must not be a security boundary.
+    let target = if let Some(target_claim_id) = &target_claim_id {
+        let target = transaction
+            .load_claim_for_reflection(target_claim_id)
+            .await?
+            .ok_or_else(|| {
+                AppError::InvalidParams("reflection target claim does not exist".to_string())
+            })?;
+        if target.status == ClaimStatus::Superseded {
+            return Err(AppError::InvalidParams(
+                "reflection target claim is already superseded".to_string(),
+            ));
+        }
+        if replacement_claim.as_ref().is_some_and(|replacement| {
+            replacement.owner() != target.claim.owner()
+                || replacement.namespace() != target.claim.namespace()
+        }) {
+            return Err(AppError::InvalidParams(
+                "replacement claim must remain in the target claim scope".to_string(),
+            ));
+        }
+        Some(target)
+    } else {
+        None
+    };
     for event_id in &supporting_evidence_event_ids {
-        if !deps.has_event(event_id).await? {
-            return Err(AppError::InvalidParams(format!(
-                "unknown replacement evidence event id: {event_id}"
-            )));
+        let event = transaction
+            .load_event_for_reflection(event_id)
+            .await?
+            .ok_or_else(|| {
+                AppError::InvalidParams(format!(
+                    "unknown replacement evidence event id: {event_id}"
+                ))
+            })?;
+        if target.as_ref().is_some_and(|target| {
+            let same_scope = event.event.owner() == target.claim.owner()
+                && event.event.namespace() == target.claim.namespace();
+            // Legacy self-governance may cite global world observations. Scoped
+            // corrections never inherit that exception, and project evidence is isolated.
+            let legacy_world_observation = !strict_evidence_scope
+                && target.claim.owner() == Owner::Self_
+                && event.event.owner() == Owner::World
+                && event.event.namespace()
+                    == &crate::domain::types::Namespace::for_owner(Owner::World);
+            !same_scope && !legacy_world_observation
+        }) {
+            return Err(AppError::InvalidParams(
+                "reflection evidence must remain in the target claim scope".to_string(),
+            ));
         }
     }
 
-    let mut transaction = deps.begin_reflection_transaction().await?;
     let commitment_updates = if let Some(commitment_updates) = commitment_updates {
         let existing_commitments = transaction.load_commitments().await?;
         Some(preserve_baseline_commitments(
@@ -271,7 +351,11 @@ where
                 AppError::Message("disputing reflections require a target claim id".to_string())
             })?;
             transaction
-                .update_claim_status(&target_claim_id, ClaimStatus::Disputed)
+                .compare_and_set_claim_status(
+                    &target_claim_id,
+                    target.as_ref().expect("validated target").status,
+                    ClaimStatus::Disputed,
+                )
                 .await?;
         }
         ReflectionDecision::SupersedeWithReplacement => {
@@ -279,18 +363,41 @@ where
                 AppError::Message("superseding reflections require a target claim id".to_string())
             })?;
             transaction
-                .update_claim_status(&target_claim_id, ClaimStatus::Superseded)
+                .compare_and_set_claim_status(
+                    &target_claim_id,
+                    target.as_ref().expect("validated target").status,
+                    ClaimStatus::Superseded,
+                )
                 .await?;
         }
         ReflectionDecision::RecordOnly => {}
     }
 
-    transaction.commit().await?;
-
-    Ok(ReflectionResult {
+    let result = ReflectionResult {
         reflection_id,
         replacement_claim_id,
-    })
+    };
+    let request = match write_receipt {
+        Some(request) => request,
+        None => crate::ports::WriteReceiptRequest::new(
+            "run_reflection",
+            target
+                .as_ref()
+                .map(|target| target.claim.namespace().as_str())
+                .unwrap_or("self"),
+            &result.reflection_id,
+            &receipt_payload,
+        )?,
+    };
+    transaction
+        .append_write_receipt(
+            &request,
+            crate::ports::write_receipt::receipt_result(&request, &result)?,
+            recorded_at,
+        )
+        .await?;
+    transaction.commit().await?;
+    Ok(result)
 }
 
 fn preserve_baseline_commitments(

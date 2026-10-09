@@ -1,5 +1,6 @@
 use crate::domain::{
     DomainError,
+    feedback::FeedbackMetadata,
     types::{EventKind, Namespace, Owner},
 };
 
@@ -61,6 +62,8 @@ pub struct Event {
     namespace: Namespace,
     kind: EventKind,
     summary: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    feedback: Option<FeedbackMetadata>,
 }
 
 impl Event {
@@ -70,6 +73,7 @@ impl Event {
             namespace: Namespace::for_owner(owner),
             kind,
             summary: summary.into(),
+            feedback: None,
         }
     }
 
@@ -88,7 +92,18 @@ impl Event {
             namespace,
             kind,
             summary: summary.into(),
+            feedback: None,
         })
+    }
+
+    pub fn with_feedback(mut self, feedback: FeedbackMetadata) -> Result<Self, DomainError> {
+        feedback.validate()?;
+        self.feedback = Some(feedback);
+        Ok(self)
+    }
+
+    pub fn feedback(&self) -> Option<&FeedbackMetadata> {
+        self.feedback.as_ref()
     }
 
     pub fn owner(&self) -> Owner {

@@ -8,3 +8,5 @@ pub use lifecycle::{
     open_current_database, open_read_only_current_database,
 };
 pub use store::SqliteStore;
+
+mod text_recall;

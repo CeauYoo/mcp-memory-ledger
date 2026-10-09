@@ -31,7 +31,7 @@
 
 已实现：
 
-- Rust MCP `stdio` 服务与 10 个工具；`search_memory` 已覆盖显式 namespace 的 Event、Claim 与 scoped Episode / Reflection provenance recall 首片，`get_memory` 已覆盖 Event、Claim、Episode 与 scoped Reflection lookup 首片，`get_reflection_history` 已覆盖 exact scoped Claim revision chain 首片，`get_self_model_history` 已覆盖 scoped identity/commitment revision audit 首片，`get_evidence_relation` 已覆盖 scoped evidence-relation runtime 首片，`supersede_memory` 已覆盖 scoped Claim audited supersede 首片；
+- Rust MCP `stdio` 服务与 12 个工具；`search_memory` 已覆盖显式 namespace 的 Event、Claim 与 scoped Episode / Reflection provenance recall 首片，`get_memory` 已覆盖 Event、Claim、Episode 与 scoped Reflection lookup 首片，`get_reflection_history` 已覆盖 exact scoped Claim revision chain 首片，`get_self_model_history` 已覆盖 scoped identity/commitment revision audit 首片，`get_evidence_relation` 已覆盖 scoped evidence-relation runtime 首片，`supersede_memory` 已覆盖 scoped Claim audited supersede 首片；
 - SQLite 持久化与 ingest / reflection 事务；
 - `run_reflection` 受治理的 durable write path；
 - mock、OpenAI-compatible、OpenRouter 配置路径；
@@ -90,8 +90,8 @@ M0 未通过前，不开始新 provider、daemon 写能力、remote/team 或正�
 
 计划能力：
 
-- M1.0 前置门、四类 scoped search、evidence-relation runtime、跨类型 union、四类 lookup、identity/commitment revision audit 与 scoped Claim audited supersede 已通过；current-schema structural readback 与 exclusive lifecycle 已完成；下一步可靠更正/重试；
-- 已完成 scoped Episode / Reflection provenance search、evidence-relation runtime、跨类型 union、Episode / Reflection lookup、self-model history 与 Claim supersede 首片；current-schema structural readback 与 exclusive lifecycle 已完成；下一步可靠更正/重试；
+- M1.0 前置门、四类 scoped search、evidence-relation runtime、跨类型 union、四类 lookup、identity/commitment revision audit 与 scoped Claim audited supersede 已通过；current-schema structural readback、exclusive lifecycle、可靠更正/重试、有界反馈、本地literal recall与context已实现；下一步精确提交的平台/用户闭环验证；
+- 已完成 scoped Episode / Reflection provenance search、evidence-relation runtime、跨类型 union、Episode / Reflection lookup、self-model history 与 Claim supersede 首片；current-schema structural readback、exclusive lifecycle、可靠更正/重试、有界反馈、本地literal recall与context已实现；下一步精确提交的平台/用户闭环验证；
 - `search_memory`；
 - `get_memory`：当前 Event / Claim / Episode / scoped Reflection；record-only Reflection 仍不可见；
 - `get_reflection_history`：已完成 Claim-linked 首片；record-only history 仍开放；
@@ -106,6 +106,8 @@ M0 未通过前，不开始新 provider、daemon 写能力、remote/team 或正�
 本次有界可用性候选的范围、验收与停止条件见唯一 active plan 的“2026-10-09 有界可用性候选执行批次”。最小文本召回与 context 预算因用户闭环需要从 M3 前移；全面检索调优及正式 Alpha 发布门仍不越级。
 
 退出门：真实 MCP 客户端完成“写入 → 重连 → 检索 → 查看证据 → supersede → 回看历史”，且两个干扰 namespace 没有任何数据混入。
+
+本次最小召回不等于完整 M3：固定双语fixture覆盖短中文词、字面符号、scope隔离和旧Claim排除；仍无embedding、FTS索引或大库性能承诺。完整context预算覆盖metadata，排除JSON-RPC包装。legacy direct/automatic全局self-model治理仍为experimental，不借namespace声明多用户安全隔离。
 
 ## Next — M2 Local Product Alpha
 

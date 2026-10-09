@@ -30,12 +30,14 @@ async fn server_exposes_expected_tools_over_stdio() {
         names,
         vec![
             "build_self_snapshot".to_string(),
+            "build_task_context".to_string(),
             "decide_with_snapshot".to_string(),
             "get_evidence_relation".to_string(),
             "get_memory".to_string(),
             "get_reflection_history".to_string(),
             "get_self_model_history".to_string(),
             "ingest_interaction".to_string(),
+            "recall_memory".to_string(),
             "run_reflection".to_string(),
             "search_memory".to_string(),
             "supersede_memory".to_string(),
@@ -5093,7 +5095,7 @@ required = true
         .expect("client");
 
     let tools = client.list_all_tools().await.expect("list tools");
-    assert_eq!(tools.len(), 10);
+    assert_eq!(tools.len(), 12);
 
     let health: serde_json::Value = reqwest::get(format!("http://127.0.0.1:{port}/api/health"))
         .await
@@ -5172,7 +5174,7 @@ max_concurrent_tasks = 1
             .await
             .unwrap();
     let tools = client.list_all_tools().await.unwrap();
-    assert_eq!(tools.len(), 10);
+    assert_eq!(tools.len(), 12);
 
     client
         .call_tool(
@@ -5767,7 +5769,7 @@ async fn inferred_replacement_reflection_with_evidence_is_accepted_over_stdio() 
                 json!({
                     "event": {
                         "owner": "World",
-                        "namespace": "project/agent-llm-mm",
+                        "namespace": "world",
                         "kind": "Observation",
                         "summary": summary
                     },
@@ -5950,7 +5952,7 @@ async fn reflected_claim_replacement_query_is_accepted_over_stdio() {
                 json!({
                     "event": {
                         "owner": "World",
-                        "namespace": "project/agent-llm-mm",
+                        "namespace": "world",
                         "kind": "Observation",
                         "summary": summary
                     },
@@ -6009,7 +6011,7 @@ async fn reflected_claim_replacement_query_is_accepted_over_stdio() {
                     "mode": "Inferred"
                 },
                 "replacement_evidence_query": {
-                    "namespace": "project/agent-llm-mm",
+                    "namespace": "world",
                     "owner": "World",
                     "kind": "Observation",
                     "limit": 2

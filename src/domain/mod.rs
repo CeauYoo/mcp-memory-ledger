@@ -7,6 +7,7 @@ pub enum DomainError {
     NamespaceOwnerMismatch,
     UnknownOwnerNotWritable,
     InvalidSnapshotTimeWindow,
+    InvalidFeedbackMetadata,
 }
 
 pub mod claim;
@@ -25,3 +26,5 @@ pub mod rules;
 pub mod self_revision;
 pub mod snapshot;
 pub mod types;
+
+pub mod feedback;

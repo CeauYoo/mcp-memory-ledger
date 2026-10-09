@@ -230,3 +230,11 @@ evidence, does not prove Windows runner parity, and does not change the
 
 The wrapper also rejects an unexpected root-level `not-a-sqlite-url` artifact,
 so the archived SQLite fixture cannot silently re-enter the current tree.
+
+
+| Milestone | Plan item | Status | Implemented boundary | Limits | Evidence |
+| --- | --- | --- | --- | --- | --- |
+| `M1` | M1.2.8 Transactional Corrections and Durable Replay | `implemented` | Transactional scope/state/evidence checks, CAS and atomic hash/result receipts; scoped retries preserve IDs and skip auto-reflection. | Legacy global self-model governance stays experimental; namespace is not authentication; no unkeyed at-most-once claim. | tests/correction_atomicity.rs, application/failure/MCP regressions. |
+| `M1` | M1.2.9 Structured Feedback Provenance | `implemented` | Optional bounded Event metadata, transactional exact-scope evidence, explicit v4 migration. | Caller-supplied provenance is not authenticated truth or execution authority. | tests/feedback_provenance.rs and installed-binary MCP workflow. |
+| `M1` | M1.2.10 Offline Bilingual Literal Recall | `implemented` | Scope-filtered active Claims and Events, short CJK literal matching, stable claims-first ranking, complete provenance. | Table scan, no embeddings/fuzzy/Unicode-folding or broad latency claims. | Fixed bilingual SQLite unit fixture with decoys, punctuation, old claims and event floods. |
+| `M1` | M1.2.11 Byte-Bounded Task Context | `implemented` | Complete compact result JSON UTF-8 budget including metadata/size; whole records and omission counts. | Excludes JSON-RPC envelope; not token cap; empty envelope must fit. | Unit budget sweep, exact boundary/UTF-8/large-record tests and MCP smoke. |

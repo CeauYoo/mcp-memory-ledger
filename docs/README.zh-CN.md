@@ -10,6 +10,10 @@ MCP Memory Ledger 是一个本地优先的 Rust MCP `stdio` 记忆服务。它�
 
 [正式化改进与主线同步计划](formalization-improvement-plan-2026-08-25.md)集中整理了当前产品、工程、安全、发布和 GitHub 主线差距。它是验收映射，不代表 Local Alpha 或 production-ready 已完成；当前 active plan 仍是唯一任务入口。
 
+## 2026-10-09 可用性候选
+
+新增 `recall_memory` / `build_task_context`（总计12工具）、事务内更正、可选request_id持久化重放、结构化Event反馈与schema v4显式迁移。支持北京/咖啡/记忆等短中文literal召回；context硬预算包含完整结果JSON metadata但不含JSON-RPC包装。详见[本地工作流与兼容边界](local-memory-usability.md)。当前仍为technical MVP，非正式Alpha发布；legacy direct/auto global self-model治理仍是experimental，namespace不是多用户认证边界。
+
 ## 核心能力
 
 - **本地 MCP 记忆服务**：通过 `stdio` 暴露 `ingest_interaction`、`search_memory`、`get_memory`、`get_reflection_history`、`get_self_model_history`、`get_evidence_relation`、`supersede_memory`、`build_self_snapshot`、`decide_with_snapshot` 和 `run_reflection` 共 10 个工具。

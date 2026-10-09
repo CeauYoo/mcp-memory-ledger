@@ -14,6 +14,14 @@ The current project is best understood as a technical MVP for local agent memory
 
 The [formalization improvement plan](docs/formalization-improvement-plan-2026-08-25.md) consolidates the current product, engineering, security, release, and mainline-sync gaps. It is an acceptance map, not evidence that Local Alpha or production readiness has already been achieved; the active project plan remains the only execution queue.
 
+## Offline usability candidate
+
+The MCP surface now adds `recall_memory` and `build_task_context` (12 tools total). Record and correct with optional durable `request_id` replay, inspect bounded structured Event feedback, retrieve short Chinese/English literal queries without a model, and pack complete provenance-bearing records under an exact compact-JSON byte budget.
+
+Compatibility note: direct reflection no longer permits project evidence to revise global self Claims; project-specific facts stay scoped, while the documented legacy global-world observation exception remains.
+
+See the [workflow and contracts](docs/local-memory-usability.md) for retry rules, schema-v4 migration, feedback trust limits, current-vs-historical retrieval, context byte accounting, and an executable installed-binary restart/backup/restore simulation. Text recall currently scans scoped data; it has no embeddings or large-corpus performance claim. Formal Alpha/fresh-machine/release gates remain open.
+
 ## Features
 
 - **Local MCP memory service**: exposes `ingest_interaction`, `search_memory`, `get_memory`, `get_reflection_history`, `get_self_model_history`, `get_evidence_relation`, `supersede_memory`, `build_self_snapshot`, `decide_with_snapshot`, and `run_reflection` over MCP `stdio`.

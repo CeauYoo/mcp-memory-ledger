@@ -31,7 +31,7 @@ MCP Memory Ledger 已经拥有可运行的 Rust + SQLite + MCP `stdio` 核心、
 ### 2.1 已实现
 
 - 单一 Rust crate，正式 CLI 为 `serve` 与 `doctor`。
-- MCP `stdio` 运行时暴露 10 个工具：`ingest_interaction`、`search_memory`、`get_memory`、`get_reflection_history`、`get_self_model_history`、`get_evidence_relation`、`supersede_memory`、`build_self_snapshot`、`decide_with_snapshot`、`run_reflection`。其中 `search_memory` 已覆盖显式 scope 的 Event、Claim、Episode 与 Reflection provenance 首片，`get_memory` 已覆盖 Event、Claim、Episode 与 scoped Reflection 首片，`get_reflection_history` 已覆盖 exact scoped Claim revision chain 首片，`get_self_model_history` 已覆盖 scoped identity/commitment revision audit 首片，`get_evidence_relation` 已覆盖 scoped evidence-relation runtime 首片，`supersede_memory` 已覆盖 scoped Claim audited supersede 首片。
+- MCP `stdio` 运行时暴露 12 个工具（新增 `recall_memory`、`build_task_context`）：`ingest_interaction`、`search_memory`、`get_memory`、`get_reflection_history`、`get_self_model_history`、`get_evidence_relation`、`supersede_memory`、`build_self_snapshot`、`decide_with_snapshot`、`run_reflection`。其中 `search_memory` 已覆盖显式 scope 的 Event、Claim、Episode 与 Reflection provenance 首片，`get_memory` 已覆盖 Event、Claim、Episode 与 scoped Reflection 首片，`get_reflection_history` 已覆盖 exact scoped Claim revision chain 首片，`get_self_model_history` 已覆盖 scoped identity/commitment revision audit 首片，`get_evidence_relation` 已覆盖 scoped evidence-relation runtime 首片，`supersede_memory` 已覆盖 scoped Claim audited supersede 首片。
 - SQLite 持久化 events、claims、evidence links、episode events、reflections、trigger ledger、identity、commitments 和 operation log。
 - ingest 与 reflection 具备事务边界；`run_reflection` 是当前 identity / commitments 的唯一 durable write path。
 - mock、OpenAI-compatible 和 OpenRouter provider 路径存在。
@@ -47,7 +47,7 @@ MCP Memory Ledger 已经拥有可运行的 Rust + SQLite + MCP `stdio` 核心、
 | F-03 | M0.3 已用 claim → evidence → episode distinct join 替代全局数量推断，并覆盖 governance transaction failure atomicity | 现有 join 仍不是完整 provenance graph，事务证据也不是 crash recovery | M0.3 限定退出门已通过；完整 provenance / recovery 继续保持公开边界 |
 | F-04 | M0.4 已拆分显式 init / migrate / bootstrap permission；默认 doctor 只读，serve current-only | remote backup / scheduled backup / production DR 仍不属于本地 SQLite 合同 | M0.4 已收口；后续 schema 变更继续复用 ledger / backup / rehearsal / transaction / readback 门 |
 | F-05 | M0.4 已为 legacy rebuild 建立 schema version、migration ledger、备份/恢复演练与显式事务 | 本地 SQLite 合同已收口；remote/scheduled/production DR 仍不存在 | 后续 schema 变更必须复用同一迁移与恢复门禁 |
-| F-06 | M1.1.1 / M1.1.2 / M1.1.3 / M1.1.4 / M1.1.5 / M1.1.6 已提供 scoped Event / Claim / Episode / Reflection search、scoped evidence-relation runtime 与稳定跨类型 union；M1.2.1 / M1.2.2 / M1.2.4 / M1.2.5 增加 Event/Claim/Episode/Reflection stable-ID lookup；M1.2.3 / M1.2.6 增加 Claim-linked reflection history 与 scoped identity/commitment revision audit 首片；M1.2.7 增加 scoped Claim audited supersede 首片；M1.0.1–M1.0.3 前置门已通过 | 四类 search、union、四类 lookup、Claim revision chain、self-model audit history、evidence-relation runtime 与 scoped supersede 可用，但 versioned identity/commitment ledger 仍缺；record-only Reflection 仍因无 scope 不可读 | 继续按 M1 建设 Read Model v2；下一片为 M1.3.0 |
+| F-06 | M1.1.1 / M1.1.2 / M1.1.3 / M1.1.4 / M1.1.5 / M1.1.6 已提供 scoped Event / Claim / Episode / Reflection search、scoped evidence-relation runtime 与稳定跨类型 union；M1.2.1 / M1.2.2 / M1.2.4 / M1.2.5 增加 Event/Claim/Episode/Reflection stable-ID lookup；M1.2.3 / M1.2.6 增加 Claim-linked reflection history 与 scoped identity/commitment revision audit 首片；M1.2.7 增加 scoped Claim audited supersede 首片；M1.0.1–M1.0.3 前置门已通过 | 四类 search、union、四类 lookup、Claim revision chain、self-model audit history、evidence-relation runtime 与 scoped supersede 可用，但 versioned identity/commitment ledger 仍缺；record-only Reflection 仍因无 scope 不可读 | 继续按 M1 建设 Read Model v2；M1.3.0 与 M2.0.1 已完成；继续有界可用性候选验证 |
 | F-07 | Dashboard 仍无认证，但启用时已拒绝非 loopback host | 本地只读口径已有强制边界；remote dashboard 仍未授权 | M0.5 已收口；保持 loopback-only，认证与 remote 另走独立 gate |
 | F-08 | Linux/macOS CI 与 CLI stderr tracing 已建立；真实二进制包尚未建立 | source gate 已持续化，artifact delivery 仍不完整 | M0.5 已收口；M2 补真实包 |
 | F-09 | evidence / episode / memory layer projection 主要停留在定义和测试调用 | 测试存在被误读为运行时产品能力 | 未接入前标记 partial / experimental |
@@ -334,7 +334,7 @@ M0 已收口，当前只能从 M1 领取一个独立最小切片。新 provider�
 - 已完成（2026-08-13）：两个及以上类型组成 scoped union：分别按同一 scope 与 `1..=100` limit 读取，再按 `recorded_at DESC`（Claim 无 timestamp 排在最后）、type rank（Event / Episode / Reflection / Claim）、id DESC 稳定收口并截断。union 拒绝所有类型专属 filter；Claim 在 union 中仍默认 Active。既有 tagged record JSON 不变。Episode lookup 由后续 M1.2.4 单独完成；Reflection `get_memory` 仍开放。
 - 该项没有 schema migration / index，也不开放 Episode/Reflection lookup、identity/commitment history 或 correction。
 
-- 已完成四类 scoped search、evidence-relation runtime、跨类型 union、Episode / Reflection lookup、identity/commitment revision audit 与 audited supersede 首片；下一步按冻结顺序领取 M1.3.0 current-schema structural readback。
+- 已完成四类 scoped search、evidence-relation runtime、跨类型 union、Episode / Reflection lookup、identity/commitment revision audit 与 audited supersede 首片；结构读回与生命周期排他性已完成；按 2026-10-09 有界批次继续。
 - 查询结果保留 ID、namespace、owner、recorded_at、status、mode、provenance 和 supersession 状态。
 - SQLite 增加经过 explain/benchmark 证明需要的索引；不先假设 FTS 或向量数据库。
 
@@ -383,6 +383,15 @@ M0 已收口，当前只能从 M1 领取一个独立最小切片。新 provider�
 - `supersede_memory`：已完成 scoped Claim audited supersede 首片；复用 `run_reflection`，默认不 hard delete。
 
 现有 `ingest_interaction` 保持兼容。MCP Resources 只在上述查询契约稳定后评估，且必须复用同一 read service。
+
+### M1.2.8–M1.2.11 有界可用性补全
+
+- [x] **M1.2.8 Transactional Corrections and Durable Replay** — 事务内 scope/evidence/state CAS，operation+namespace+request_id 作用域的 hash/result 原子回执；相同typed payload重放，不同payload冲突；replay不重复auto-reflection。scoped supersede不修改全局identity/commitments。legacy direct/auto全局self-model治理保持experimental边界。
+- [x] **M1.2.9 Structured Feedback Provenance** — 有界caller/tool/model来源声明、producer、target/version、expected/actual、verification与limitations；同scope证据事务内验证；schema v4显式迁移。来源标签不是认证或真实性证明。
+- [x] **M1.2.10 Offline Bilingual Literal Recall** — additive recall_memory针对active Claim与Event的scope-first literal OR substring查询；短CJK可用、ASCII大小写折叠、Claim优先、完整provenance；现有search_memory历史浏览不变。小型固定离线fixture，不声称全面M3检索质量或大库性能。
+- [x] **M1.2.11 Byte-Bounded Task Context** — build_task_context保留完整record/provenance，完整compact结果JSON UTF-8硬字节预算，包含metadata/自身size；不计JSON-RPC包装、不等于token上限；过大record跳过并返回omission说明。
+
+行为、兼容变化、验证命令和保留的legacy风险详见[可用性合同](../local-memory-usability.md)。四片共享事务、读模型与MCP接口，在同一集成提交验证发布；不代表正式Local Alpha gate完成。
 
 ### M1.3 用户闭环
 

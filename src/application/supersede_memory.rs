@@ -10,7 +10,7 @@ use crate::{
     },
     error::AppError,
     ports::{
-        ClaimRecordQuery, Clock, EventStore, IdGenerator, MemoryReadStore,
+        ClaimRecordQuery, ClaimStatus, Clock, EventStore, IdGenerator, MemoryReadStore,
         ReflectionTransactionRunner, ScopedEventIdQuery,
     },
 };
@@ -24,6 +24,7 @@ pub struct SupersedeMemoryInput {
     pub replacement_claim: ClaimDraft,
     pub evidence_event_ids: Vec<EventReference>,
     pub summary: String,
+    pub request_id: Option<String>,
 }
 
 impl SupersedeMemoryInput {
@@ -72,14 +73,41 @@ pub async fn execute<D>(
     input: SupersedeMemoryInput,
 ) -> Result<SupersedeMemoryResult, AppError>
 where
-    D: MemoryReadStore + ReflectionTransactionRunner + EventStore + IdGenerator + Clock + Sync,
+    D: ReflectionTransactionRunner + EventStore + IdGenerator + Clock + Sync,
 {
     let namespace = input.namespace.clone();
     let claim_reference = input.claim_reference.clone();
     let owner = MemoryScope::for_namespace(namespace.clone())
         .owner()
         .expect("namespace-derived memory scope must have an owner");
-    let reflection_input = prepare_scoped_supersede(deps, &input).await?;
+    input.validate()?;
+    // Preflight reads are intentionally bypassed here: replay and authoritative
+    // validation must happen in the same transaction, even for terminal targets.
+    let mut reflection_input = ReflectionInput::new(
+        Reflection::new(input.summary.clone()),
+        input.claim_reference.claim_id(),
+        Some(input.replacement_claim.clone()),
+        input
+            .evidence_event_ids
+            .iter()
+            .map(|id| id.event_id().to_string())
+            .collect(),
+    )
+    .with_strict_evidence_scope();
+    if let Some(key) = &input.request_id {
+        let request = crate::ports::WriteReceiptRequest::new(
+            "supersede_memory",
+            input.namespace.as_str(),
+            key,
+            &(
+                &input.claim_reference,
+                &input.replacement_claim,
+                &input.evidence_event_ids,
+                &input.summary,
+            ),
+        )?;
+        reflection_input = reflection_input.with_write_receipt(request);
+    }
     let result = run_reflection::execute(deps, reflection_input).await?;
     Ok(SupersedeMemoryResult {
         owner,
@@ -108,7 +136,8 @@ where
         target_claim_id,
         Some(input.replacement_claim.clone()),
         evidence_event_ids,
-    ))
+    )
+    .with_strict_evidence_scope())
 }
 
 async fn require_scoped_claim<D>(
@@ -131,10 +160,11 @@ where
     records
         .into_iter()
         .next()
+        .filter(|record| record.claim.status != ClaimStatus::Superseded)
         .map(|record| record.claim.claim_id)
         .ok_or_else(|| {
             AppError::InvalidParams(
-                "supersede_memory target claim was not found in the requested namespace"
+                "supersede_memory target claim was not found or is already superseded in the requested namespace"
                     .to_string(),
             )
         })

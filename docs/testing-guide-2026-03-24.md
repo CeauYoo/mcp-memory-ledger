@@ -1548,3 +1548,10 @@ AGENT_LLM_MM_DATABASE_URL=sqlite:///private/tmp/agent-llm-mm-doctor.sqlite ./scr
 ## 2026-10-09 database prerequisite regressions
 
 Run `cargo test --test sqlite_lifecycle` for canonical structural readback, weakened same-version columns/keys/FKs/CHECK/index rejection, v2-to-current migration, concurrent init, pre-existing sidecar preservation, and external same-count writers including WAL. Default doctor stays read-only. Failed init deliberately retains the reserved database for diagnosis; inspect before manual cleanup. `schema_structure_invalid` is not automatically repaired. Full source gates remain required before publishing a completed implementation stage.
+
+## Bounded usability candidate regressions
+
+- `cargo test --test correction_atomicity --test feedback_provenance`: transaction target/state/scope revalidation, concurrent replay/supersession, receipt-insert rollback, schema-v4 migration, typed feedback and same-scope evidence.
+- `cargo test --lib`: fixed bilingual literal-query fixtures, active-claim priority under event floods, scope/provenance checks, query limits, and exact UTF-8 context-budget sweeps. This small deterministic fixture is not a public/model-judged benchmark or large-corpus latency result.
+- `python3 scripts/local-memory-smoke.py --binary target/debug/agent_llm_mm --output target/reports/local-memory-smoke`: actual stdio installed-copy restart/correction/history/restore story; requires an empty output directory. Windows uses `python` and `.exe`. No remote model call.
+- Full/fmt/all-feature Clippy/status-sync remain mandatory. Windows native CI is a defined subset, not proof of shell-wrapper parity or a published installer. See [workflow contract](local-memory-usability.md).

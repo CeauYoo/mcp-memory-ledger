@@ -28,8 +28,8 @@ use crate::{
         ReflectionProvenanceLinks, ReflectionReadRecord, ReflectionRecordQuery, ReflectionStore,
         ReflectionTransaction, ReflectionTransactionRunner, ScopedEventIdQuery,
         SelfModelHistoryKind, SelfModelHistoryPage, SelfModelHistoryQuery, SelfModelHistoryRecord,
-        StoredClaim, StoredEvent, StoredReflection, StoredTriggerLedgerEntry, TriggerLedgerStatus,
-        TriggerLedgerStore,
+        StoredClaim, StoredEvent, StoredReflection, StoredTriggerLedgerEntry, StoredWriteReceipt,
+        TriggerLedgerStatus, TriggerLedgerStore, WriteReceiptRequest,
     },
 };
 
@@ -301,7 +301,7 @@ impl MemoryReadStore for SqliteStore {
             .expect("explicit memory scope must have a namespace");
         let recorded_at_sort_key = sqlite_rfc3339_sort_key("recorded_at");
         let mut builder = QueryBuilder::<Sqlite>::new(
-            "SELECT event_id, recorded_at, owner, namespace, kind, summary FROM events WHERE owner = ",
+            "SELECT event_id, recorded_at, owner, namespace, kind, summary, feedback_json FROM events WHERE owner = ",
         );
         builder
             .push_bind(owner_as_str(owner))
@@ -1793,7 +1793,7 @@ impl IdentityStore for SqliteStore {
     }
 
     async fn save_identity(&self, identity: IdentityCore) -> Result<(), AppError> {
-        let mut tx = map_sqlite(self.pool.begin().await)?;
+        let mut tx = map_sqlite(self.pool.begin_with("BEGIN IMMEDIATE").await)?;
         replace_identity_rows(tx.as_mut(), &identity).await?;
         map_sqlite(tx.commit().await)?;
         Ok(())
@@ -1812,7 +1812,7 @@ impl IngestTransactionRunner for SqliteStore {
     async fn begin_ingest_transaction(
         &self,
     ) -> Result<Box<dyn IngestTransaction + Send + '_>, AppError> {
-        let transaction = map_sqlite(self.pool.begin().await)?;
+        let transaction = map_sqlite(self.pool.begin_with("BEGIN IMMEDIATE").await)?;
 
         Ok(Box::new(SqliteIngestTransaction {
             transaction: Some(transaction),
@@ -1826,7 +1826,7 @@ impl ReflectionTransactionRunner for SqliteStore {
     async fn begin_reflection_transaction(
         &self,
     ) -> Result<Box<dyn ReflectionTransaction + Send + '_>, AppError> {
-        let transaction = map_sqlite(self.pool.begin().await)?;
+        let transaction = map_sqlite(self.pool.begin_with("BEGIN IMMEDIATE").await)?;
 
         Ok(Box::new(SqliteReflectionTransaction {
             transaction: Some(transaction),
@@ -1842,6 +1842,55 @@ struct SqliteIngestTransaction<'a> {
 
 #[async_trait]
 impl IngestTransaction for SqliteIngestTransaction<'_> {
+    async fn load_event_for_ingest(
+        &mut self,
+        event_id: &str,
+    ) -> Result<Option<StoredEvent>, AppError> {
+        self.ensure_writable()?;
+        let result = async {
+            let transaction = self.transaction.as_mut().ok_or_else(|| AppError::Message("transaction already closed".to_string()))?;
+            let row = map_sqlite(sqlx::query("SELECT event_id, recorded_at, owner, namespace, kind, summary, feedback_json FROM events WHERE event_id = ?")
+                .bind(event_id).fetch_optional(transaction.as_mut()).await)?;
+            row.as_ref().map(stored_event_from_row).transpose()
+        }.await;
+        self.note_result(result)
+    }
+
+    async fn load_write_receipt(
+        &mut self,
+        operation_id: &str,
+    ) -> Result<Option<StoredWriteReceipt>, AppError> {
+        self.ensure_writable()?;
+        let result = async {
+            let transaction = self.transaction.as_mut().ok_or_else(|| AppError::Message("transaction already closed".into()))?;
+            let row = map_sqlite(sqlx::query("SELECT request_summary_json, response_summary_json FROM operation_log WHERE operation_id = ? AND actor_id = 'durable_write_receipt_v1' AND status = 'ok'")
+                .bind(operation_id).fetch_optional(transaction.as_mut()).await)?;
+            row.map(|row| {
+                let request_json: String = row.get("request_summary_json");
+                let metadata: serde_json::Value = deserialize_json(&request_json)?;
+                let request_hash = metadata.get("request_hash").and_then(|v| v.as_str()).ok_or_else(|| AppError::Message("invalid durable receipt request hash".into()))?.to_string();
+                Ok(StoredWriteReceipt { request_hash, result_json: row.get("response_summary_json") })
+            }).transpose()
+        }.await;
+        self.note_result(result)
+    }
+    async fn append_write_receipt(
+        &mut self,
+        request: &WriteReceiptRequest,
+        receipt: StoredWriteReceipt,
+        recorded_at: DateTime<Utc>,
+    ) -> Result<(), AppError> {
+        self.ensure_writable()?;
+        let result = async {
+            let transaction = self.transaction.as_mut().ok_or_else(|| AppError::Message("transaction already closed".into()))?;
+            map_sqlite(sqlx::query("INSERT INTO operation_log (operation_id, occurred_at, namespace, actor_kind, actor_id, entrypoint, operation_kind, status, request_summary_json, response_summary_json, redaction_version) VALUES (?, ?, ?, 'system', 'durable_write_receipt_v1', ?, 'tool', 'ok', ?, ?, 1)")
+                .bind(&request.operation_id).bind(recorded_at.to_rfc3339()).bind(&request.namespace).bind(&request.operation)
+                .bind(serde_json::json!({"request_hash": receipt.request_hash}).to_string()).bind(&receipt.result_json)
+                .execute(transaction.as_mut()).await)?;
+            Ok(())
+        }.await;
+        self.note_result(result)
+    }
     async fn append_event(&mut self, event: StoredEvent) -> Result<(), AppError> {
         self.ensure_writable()?;
 
@@ -1941,6 +1990,105 @@ struct SqliteReflectionTransaction<'a> {
 
 #[async_trait]
 impl ReflectionTransaction for SqliteReflectionTransaction<'_> {
+    async fn load_write_receipt(
+        &mut self,
+        operation_id: &str,
+    ) -> Result<Option<StoredWriteReceipt>, AppError> {
+        self.ensure_writable()?;
+        let result = async {
+            let transaction = self.transaction.as_mut().ok_or_else(|| AppError::Message("transaction already closed".into()))?;
+            let row = map_sqlite(sqlx::query("SELECT request_summary_json, response_summary_json FROM operation_log WHERE operation_id = ? AND actor_id = 'durable_write_receipt_v1' AND status = 'ok'")
+                .bind(operation_id).fetch_optional(transaction.as_mut()).await)?;
+            row.map(|row| {
+                let request_json: String = row.get("request_summary_json");
+                let metadata: serde_json::Value = deserialize_json(&request_json)?;
+                let request_hash = metadata.get("request_hash").and_then(|v| v.as_str()).ok_or_else(|| AppError::Message("invalid durable receipt request hash".into()))?.to_string();
+                Ok(StoredWriteReceipt { request_hash, result_json: row.get("response_summary_json") })
+            }).transpose()
+        }.await;
+        self.note_result(result)
+    }
+    async fn append_write_receipt(
+        &mut self,
+        request: &WriteReceiptRequest,
+        receipt: StoredWriteReceipt,
+        recorded_at: DateTime<Utc>,
+    ) -> Result<(), AppError> {
+        self.ensure_writable()?;
+        let result = async {
+            let transaction = self.transaction.as_mut().ok_or_else(|| AppError::Message("transaction already closed".into()))?;
+            map_sqlite(sqlx::query("INSERT INTO operation_log (operation_id, occurred_at, namespace, actor_kind, actor_id, entrypoint, operation_kind, status, request_summary_json, response_summary_json, redaction_version) VALUES (?, ?, ?, 'system', 'durable_write_receipt_v1', ?, 'tool', 'ok', ?, ?, 1)")
+                .bind(&request.operation_id).bind(recorded_at.to_rfc3339()).bind(&request.namespace).bind(&request.operation)
+                .bind(serde_json::json!({"request_hash": receipt.request_hash}).to_string()).bind(&receipt.result_json)
+                .execute(transaction.as_mut()).await)?;
+            Ok(())
+        }.await;
+        self.note_result(result)
+    }
+    async fn load_claim_for_reflection(
+        &mut self,
+        claim_id: &str,
+    ) -> Result<Option<StoredClaim>, AppError> {
+        self.ensure_writable()?;
+        let result = async {
+            let transaction = self.transaction.as_mut().ok_or_else(|| AppError::Message("transaction already closed".to_string()))?;
+            let row = map_sqlite(sqlx::query("SELECT claim_id, owner, namespace, subject, predicate, object, mode, status FROM claims WHERE claim_id = ?")
+                .bind(claim_id).fetch_optional(transaction.as_mut()).await)?;
+            row.as_ref().map(stored_claim_from_row).transpose()
+        }.await;
+        self.note_result(result)
+    }
+
+    async fn load_event_for_reflection(
+        &mut self,
+        event_id: &str,
+    ) -> Result<Option<StoredEvent>, AppError> {
+        self.ensure_writable()?;
+        let result = async {
+            let transaction = self.transaction.as_mut().ok_or_else(|| AppError::Message("transaction already closed".to_string()))?;
+            let row = map_sqlite(sqlx::query("SELECT event_id, recorded_at, owner, namespace, kind, summary, feedback_json FROM events WHERE event_id = ?")
+                .bind(event_id).fetch_optional(transaction.as_mut()).await)?;
+            row.as_ref().map(stored_event_from_row).transpose()
+        }.await;
+        self.note_result(result)
+    }
+
+    async fn compare_and_set_claim_status(
+        &mut self,
+        claim_id: &str,
+        expected: ClaimStatus,
+        status: ClaimStatus,
+    ) -> Result<(), AppError> {
+        self.ensure_writable()?;
+        let result = async {
+            if expected == ClaimStatus::Superseded || status == ClaimStatus::Active {
+                return Err(AppError::InvalidParams(
+                    "invalid reflection claim status transition".to_string(),
+                ));
+            }
+            let transaction = self
+                .transaction
+                .as_mut()
+                .ok_or_else(|| AppError::Message("transaction already closed".to_string()))?;
+            let updated = map_sqlite(
+                sqlx::query("UPDATE claims SET status = ? WHERE claim_id = ? AND status = ?")
+                    .bind(status.as_str())
+                    .bind(claim_id)
+                    .bind(expected.as_str())
+                    .execute(transaction.as_mut())
+                    .await,
+            )?;
+            if updated.rows_affected() != 1 {
+                return Err(AppError::InvalidParams(
+                    "reflection target claim changed or no longer exists".to_string(),
+                ));
+            }
+            Ok(())
+        }
+        .await;
+        self.note_result(result)
+    }
+
     async fn upsert_claim(&mut self, claim: StoredClaim) -> Result<(), AppError> {
         self.ensure_writable()?;
 
@@ -2105,11 +2253,15 @@ async fn insert_event<'e, E>(executor: E, event: &StoredEvent) -> Result<(), App
 where
     E: sqlx::Executor<'e, Database = Sqlite>,
 {
+    if let Some(feedback) = event.event.feedback() {
+        feedback.validate()?;
+    }
+    let feedback_json = event.event.feedback().map(serialize_json).transpose()?;
     map_sqlite(
         sqlx::query(
             r#"
-            INSERT INTO events (event_id, recorded_at, owner, namespace, kind, summary)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO events (event_id, recorded_at, owner, namespace, kind, summary, feedback_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             "#,
         )
         .bind(&event.event_id)
@@ -2118,6 +2270,7 @@ where
         .bind(event.event.namespace().as_str())
         .bind(event_kind_as_str(event.event.kind()))
         .bind(event.event.summary())
+        .bind(feedback_json)
         .execute(executor)
         .await,
     )?;
@@ -2688,18 +2841,26 @@ fn stored_claim_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<StoredClaim, A
 
 #[allow(dead_code)]
 fn stored_event_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<StoredEvent, AppError> {
+    let mut event = Event::new_with_namespace(
+        parse_owner(&row.get::<String, _>("owner"))?,
+        parse_namespace(&row.get::<String, _>("namespace"))?,
+        parse_event_kind(&row.get::<String, _>("kind"))?,
+        row.get::<String, _>("summary"),
+    )
+    .map_err(|error| {
+        AppError::Message(format!("invalid stored event namespace mapping: {error:?}"))
+    })?;
+    if let Some(json) = row.get::<Option<String>, _>("feedback_json") {
+        event = event
+            .with_feedback(deserialize_json(&json)?)
+            .map_err(|error| {
+                AppError::Message(format!("invalid stored feedback metadata: {error:?}"))
+            })?;
+    }
     Ok(StoredEvent::new(
         row.get("event_id"),
         parse_timestamp(&row.get::<String, _>("recorded_at"))?,
-        Event::new_with_namespace(
-            parse_owner(&row.get::<String, _>("owner"))?,
-            parse_namespace(&row.get::<String, _>("namespace"))?,
-            parse_event_kind(&row.get::<String, _>("kind"))?,
-            row.get::<String, _>("summary"),
-        )
-        .map_err(|error| {
-            AppError::Message(format!("invalid stored event namespace mapping: {error:?}"))
-        })?,
+        event,
     ))
 }
 

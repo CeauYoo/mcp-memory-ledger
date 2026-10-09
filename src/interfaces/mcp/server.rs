@@ -228,49 +228,51 @@ impl Server {
             ingest_interaction::execute(&self.runtime, input).await,
         )
         .await?;
-        match auto_reflect_if_needed::execute(
-            &self.runtime,
-            auto_reflect_input.with_recursion_guard(RecursionGuard::Allow),
-        )
-        .await
-        {
-            Ok(diagnostics) => {
-                log_auto_reflection_success(
-                    runtime_hook,
-                    &diagnostics,
-                    Some(result.event_id.as_str()),
-                    &self.runtime.dashboard,
-                    dashboard_namespace.clone(),
-                    Some(correlation_id.clone()),
-                );
-                self.runtime
-                    .record_auto_reflection_operation(
-                        "ingest_interaction",
+        if !result.replayed {
+            match auto_reflect_if_needed::execute(
+                &self.runtime,
+                auto_reflect_input.with_recursion_guard(RecursionGuard::Allow),
+            )
+            .await
+            {
+                Ok(diagnostics) => {
+                    log_auto_reflection_success(
+                        runtime_hook,
                         &diagnostics,
+                        Some(result.event_id.as_str()),
+                        &self.runtime.dashboard,
                         dashboard_namespace.clone(),
                         Some(correlation_id.clone()),
-                    )
-                    .await;
-            }
-            Err(error) => {
-                warn!(
-                    runtime_hook,
-                    event_id = %result.event_id,
-                    trigger_type = ?auto_reflect_trigger_type,
-                    trigger_key = %auto_reflect_trigger_key,
-                    error = %error,
-                    "best-effort auto-reflection failed after successful ingest"
-                );
-                self.runtime
-                    .record_auto_reflection_failure_operation(
-                        "ingest_interaction",
-                        dashboard_namespace.clone(),
-                        Some(correlation_id.clone()),
-                        auto_reflect_trigger_type,
-                        &auto_reflect_trigger_key,
-                        &error,
-                    )
-                    .await;
+                    );
+                    self.runtime
+                        .record_auto_reflection_operation(
+                            "ingest_interaction",
+                            &diagnostics,
+                            dashboard_namespace.clone(),
+                            Some(correlation_id.clone()),
+                        )
+                        .await;
+                }
+                Err(error) => {
+                    warn!(
+                        runtime_hook,
+                        event_id = %result.event_id,
+                        trigger_type = ?auto_reflect_trigger_type,
+                        trigger_key = %auto_reflect_trigger_key,
+                        error = %error,
+                        "best-effort auto-reflection failed after successful ingest"
+                    );
+                    self.runtime
+                        .record_auto_reflection_failure_operation(
+                            "ingest_interaction",
+                            dashboard_namespace.clone(),
+                            Some(correlation_id.clone()),
+                            auto_reflect_trigger_type,
+                            &auto_reflect_trigger_key,
+                            &error,
+                        )
+                        .await;
+                }
             }
         }
         self.runtime.dashboard.record_tool_ok(
@@ -290,6 +292,47 @@ impl Server {
                 .with_response_summary(serde_json::json!({ "event_id": result.event_id })),
             )
             .await;
+        structured(result)
+    }
+
+    #[tool(
+        description = "Recall active claims and event summaries by literal text in one explicit namespace, entirely offline. ASCII case-insensitive; CJK matches exact substrings including two-character terms. Up to 8 whitespace-separated terms and 512 query bytes, any-term matches; active claims rank before events, then matched-term count and stable ID. Full provenance included. Existing search_memory remains history browsing. No semantic/vector search or model call.",
+        input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<super::dto::RecallMemoryParams>>()
+    )]
+    async fn recall_memory(&self, raw_params: JsonObject) -> Result<CallToolResult, McpError> {
+        let params = decode_tool_params::<super::dto::RecallMemoryParams>(raw_params)
+            .map_err(|error| McpError::invalid_params(error.to_string(), None))?;
+        let input = crate::application::recall_memory::RecallMemoryInput::try_from(params)
+            .map_err(|error| McpError::invalid_params(error.to_string(), None))?;
+        let result = map_tool_error(
+            &self.runtime,
+            "recall_memory",
+            Some(input.namespace.as_str().to_string()),
+            None,
+            crate::application::recall_memory::execute(&self.runtime.store, input).await,
+        )
+        .await?;
+        structured(result)
+    }
+
+    #[tool(
+        description = "Build offline task context from active claims and event observations in an explicit namespace. Returns whole records with provenance and omission counts. max_bytes is a hard UTF-8 byte cap on compact serialized result JSON including its metadata, excluding the MCP/JSON-RPC transport envelope. Too-small budgets are rejected; no token-count guarantee. Fetch omitted full records using scoped get_memory.",
+        input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<super::dto::BuildTaskContextParams>>()
+    )]
+    async fn build_task_context(&self, raw_params: JsonObject) -> Result<CallToolResult, McpError> {
+        let params = decode_tool_params::<super::dto::BuildTaskContextParams>(raw_params)
+            .map_err(|error| McpError::invalid_params(error.to_string(), None))?;
+        let input = crate::application::build_task_context::BuildTaskContextInput::try_from(params)
+            .map_err(|error| McpError::invalid_params(error.to_string(), None))?;
+        let result = map_tool_error(
+            &self.runtime,
+            "build_task_context",
+            Some(input.namespace.as_str().to_string()),
+            None,
+            crate::application::build_task_context::execute(&self.runtime.store, input).await,
+        )
+        .await?;
+        // Structured-only, matching the other tools: no duplicate text payload.
         structured(result)
     }
 
