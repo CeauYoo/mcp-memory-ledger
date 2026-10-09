@@ -10,7 +10,7 @@
 
 ## 2026-10-09 数据库安全前置门
 
-已实现 current-schema 结构读回（canonical DDL/columns/FK/index、一致 read transaction）和排他 init/migrate。弱化同版本结构返回 `schema_structure_invalid`，不会报告 current 或自动修复。init 原子 create_new，失败保留文件而不清除潜在并发数据；migration write reservation 覆盖 backup、rehearsal、write。SQLite 生命周期 focused 回归覆盖并发和结构破坏；平台证据随精确提交 CI 单独核验。
+已实现 current-schema 结构读回（canonical DDL/columns/FK/index、一致 read transaction）和排他 init/migrate。弱化同版本结构返回 `schema_structure_invalid`，不会报告 current 或自动修复。init 原子 create_new，失败保留文件而不清除潜在并发数据；migration write reservation 覆盖 backup、rehearsal、write。已用持有reader的确定性用例复现并修复提交时SQLITE_BUSY：writer入场仍快速拒绝，取得reservation后使用5秒busy timeout等待短暂reader锁；结构/行数读回在commit前完成。SQLite 生命周期 focused 回归覆盖并发和结构破坏；平台证据随精确提交 CI 单独核验。
 
 ## 2026-10-09 最新上游与有界候选
 

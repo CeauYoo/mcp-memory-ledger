@@ -22,7 +22,7 @@ export AGENT_LLM_MM_DATABASE_URL="sqlite://$HOME/.local/share/mcp-memory-ledger/
 ./target/release/agent_llm_mm doctor --read-only
 ```
 
-If that database already exists, do not retry init or delete it. Inspect with read-only doctor; use explicit `migrate` only when doctor reports an older supported schema. Migration creates its own backup anchor and rehearsal. For an additional user-controlled backup, see [backup/restore instructions](development-macos.md) and the tested `scripts/backup-sqlite.sh` / `scripts/restore-sqlite.sh`; restore to a new path and inspect before switching. Windows setup/PowerShell instructions remain in [development-windows.md](development-windows.md), with native-runtime evidence tracked separately from shell-wrapper parity.
+If that database already exists, do not retry init or delete it. Inspect with read-only doctor; use explicit `migrate` only when doctor reports an older supported schema. Migration creates its own backup anchor and rehearsal. Writer admission fails fast on contention; after acquiring its reservation, migration allows a bounded five-second wait for transient reader locks, including at COMMIT. For an additional user-controlled backup, see [backup/restore instructions](development-macos.md) and the tested `scripts/backup-sqlite.sh` / `scripts/restore-sqlite.sh`; restore to a new path and inspect before switching. Windows setup/PowerShell instructions remain in [development-windows.md](development-windows.md), with native-runtime evidence tracked separately from shell-wrapper parity.
 
 Use absolute paths when registering the binary. A typical stdio client configuration is:
 

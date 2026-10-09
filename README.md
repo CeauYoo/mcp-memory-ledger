@@ -2,7 +2,7 @@
 
 Local-first MCP memory for AI agents, backed by SQLite and evidence-gated self-revision.
 
-Database safety: current-schema inspection validates canonical columns, keys, foreign keys, constraints and indexes. Initialization reserves its path atomically; migration holds a SQLite write lock through backup and readback. A malformed current-version database requires explicit repair, and failed initialization retains files for diagnosis.
+Database safety: current-schema inspection validates canonical columns, keys, foreign keys, constraints and indexes. Initialization reserves its path atomically; migration holds a SQLite write lock through backup and readback. Writer admission fails fast, then a five-second busy timeout permits transient readers to clear before commit. A malformed current-version database requires explicit repair, and failed initialization retains files for diagnosis.
 
 Languages: English | [Simplified Chinese](docs/README.zh-CN.md) | [Japanese](docs/README.ja.md)
 

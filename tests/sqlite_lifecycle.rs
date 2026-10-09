@@ -616,3 +616,41 @@ async fn migration_report_keeps_locked_snapshot_when_external_writer_resumes() {
         );
     }
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn migration_waits_for_existing_reader_before_commit() {
+    let temp = tempdir().expect("tempdir");
+    let path = temp.path().join("reader-at-commit.sqlite");
+    create_legacy_database(&path, true).await;
+    let url = sqlite_url(&path);
+    let mut reader = SqliteConnection::connect(&url).await.expect("reader");
+    sqlx::query("BEGIN")
+        .execute(&mut reader)
+        .await
+        .expect("begin reader");
+    let _: i64 = sqlx::query_scalar("SELECT count(*) FROM events")
+        .fetch_one(&mut reader)
+        .await
+        .expect("hold shared read lock");
+    let migration_url = url.clone();
+    let migration = tokio::spawn(async move { migrate_database(&migration_url).await });
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    sqlx::query("ROLLBACK")
+        .execute(&mut reader)
+        .await
+        .expect("release reader");
+    reader.close().await.expect("close reader");
+    let report = migration
+        .await
+        .expect("migration task")
+        .expect("bounded commit wait");
+    assert!(report.is_current());
+    assert!(report.preserved_row_counts);
+    assert_eq!(report.restore_rehearsal, "passed_before_original_write");
+    assert!(
+        inspect_database(&url)
+            .await
+            .expect("current readback")
+            .is_current()
+    );
+}

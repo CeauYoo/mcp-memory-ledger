@@ -365,6 +365,11 @@ async fn begin_migration(
                 "exclusive lifecycle write reservation unavailable: {error}"
             ))
         })?;
+    // Keep writer admission fail-fast, but COMMIT in rollback-journal mode
+    // must briefly wait for readers (including competing writers' read locks).
+    // A zero timeout here makes safe concurrent readers cause false failures,
+    // particularly with Windows file locking. The wait remains bounded.
+    execute(&mut connection, "PRAGMA busy_timeout = 5000").await?;
     Ok(connection)
 }
 
