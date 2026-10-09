@@ -1,13 +1,19 @@
 """Pure offline regression tests for evaluation definitions, not retrieval outcomes."""
 import importlib.util
+import json
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
 sys.dont_write_bytecode = True
 ROOT = Path(__file__).resolve().parents[3]
 spec = importlib.util.spec_from_file_location("evaluation", ROOT / "scripts/evaluate-memory-loop.py")
 evaluation = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(evaluation)
+
+
+def load_fixture(name):
+    return json.loads((Path(__file__).parent / name).read_text(encoding="utf-8"))
 
 
 class MetricsTests(unittest.TestCase):
@@ -28,18 +34,32 @@ class MetricsTests(unittest.TestCase):
         self.assertIsNone(row["model_task_success"])
 
     def test_fixture_ids_and_fixed_strata(self):
-        import json
-        fixture = json.loads((Path(__file__).parent / "tasks.json").read_text())
+        fixture = load_fixture("tasks.json")
         tasks = fixture["tasks"]
         self.assertEqual(len(tasks), 10)
         self.assertEqual(len({t["id"] for t in tasks}), 10)
         self.assertEqual({t["language"] for t in tasks}, {"en", "zh"})
         self.assertEqual(sum(t["stratum"] == "unsupported_paraphrase" for t in tasks), 2)
-        matrix = json.loads((Path(__file__).parent / "query-scenarios-v1.json").read_text())["cases"]
+        matrix = load_fixture("query-scenarios-v1.json")["cases"]
         self.assertEqual(len(matrix), 50)
         for task in tasks:
             cases = [c for c in matrix if c["task_id"] == task["id"]]
             self.assertEqual(len({c["query"] for c in cases}), 5)
+
+    def test_multilingual_fixtures_with_non_utf8_default_encoding(self):
+        # Simulate Windows' legacy default without relying on installed locales
+        # or Python's UTF-8 mode. Explicit encodings must still pass through.
+        def default_encoding(encoding, *args):
+            return "cp1252" if encoding is None else encoding
+
+        with patch("io.text_encoding", side_effect=default_encoding):
+            # Prove this simulation would reproduce the original failure.
+            with self.assertRaises(UnicodeDecodeError):
+                (Path(__file__).parent / "tasks.json").read_text()
+            for name in ("tasks.json", "query-scenarios-v1.json"):
+                with self.subTest(fixture=name):
+                    expected = json.loads((Path(__file__).parent / name).read_bytes())
+                    self.assertEqual(load_fixture(name), expected)
 
 
 if __name__ == "__main__":
