@@ -87,6 +87,17 @@ cp examples/agent-llm-mm.example.toml agent-llm-mm.local.toml
 
 如果只是跑现有自动化测试，不需要手工设置；测试本身已经隔离数据库。`doctor` 默认只读，对 missing / old / read-only 路径只报告 `database_lifecycle`，不会因无法写入而 bootstrap。需要建立或升级测试库时，必须显式运行 `init` 或 `migrate`。正式接入、手工测试和实验验证仍应使用不同数据库文件。
 
+`bootstrap` 的默认启动回归会先显式初始化临时数据库，再以独立环境和管道
+`stdin` / `stdout` 启动无子命令的真实二进制，完成 MCP `initialize` 与
+`tools/list` 往返。它不依赖测试运行器的 stdin、用户默认库或本地配置；响应等待
+有超时，失败时也会回收子进程。`serve` 仍不隐式创建或迁移数据库；缺失数据库的拒绝路径
+由 `sqlite_lifecycle` 覆盖。定向验证可运行：
+
+```bash
+cargo test --test bootstrap default_command_serves_stdio_after_explicit_database_init -- --exact
+cargo test --test bootstrap --test sqlite_lifecycle --test mcp_stdio
+```
+
 ---
 
 ## 4. 推荐测试顺序

@@ -10,9 +10,10 @@ use agent_llm_mm::{
 use std::{
     collections::HashMap,
     fs,
+    io::{BufRead, BufReader, Write},
     path::{Path, PathBuf},
-    process::Command,
-    sync::{Mutex, OnceLock},
+    process::{Child, Command, Stdio},
+    sync::{Mutex, OnceLock, mpsc},
     time::Duration,
     vec,
 };
@@ -729,24 +730,101 @@ async fn doctor_reports_dashboard_config_without_starting_dashboard() {
 }
 
 #[tokio::test]
-async fn run_uses_stdio_server_path_and_does_not_exit_immediately() {
-    let handle = tokio::spawn(agent_llm_mm::run());
+async fn default_command_serves_stdio_after_explicit_database_init() {
+    let temp_dir = tempdir().expect("temp dir");
+    let database_url = sqlite_url(&temp_dir.path().join("stdio.sqlite"));
+    agent_llm_mm::adapters::sqlite::initialize_database(&database_url)
+        .await
+        .expect("initialize isolated stdio database");
 
-    for _ in 0..10 {
-        tokio::task::yield_now().await;
-        if handle.is_finished() {
-            break;
+    // Do not inherit the test runner's stdin, local config, or process-wide env
+    // mutations from other bootstrap tests. The default CLI command is serve.
+    let mut child = StdioChild(
+        Command::new(env!("CARGO_BIN_EXE_agent_llm_mm"))
+            .current_dir(temp_dir.path())
+            .env_clear()
+            .env(DATABASE_URL_ENV_VAR, &database_url)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .expect("spawn default stdio command"),
+    );
+    let mut stdin = child.0.stdin.take().expect("child stdin");
+    let stdout = child.0.stdout.take().expect("child stdout");
+    let (sender, receiver) = mpsc::channel();
+    let reader = std::thread::spawn(move || {
+        for line in BufReader::new(stdout).lines() {
+            if sender.send(line).is_err() {
+                break;
+            }
         }
-        std::thread::sleep(Duration::from_millis(5));
-    }
+    });
 
+    writeln!(
+        stdin,
+        "{}",
+        serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-03-26",
+                "capabilities": {},
+                "clientInfo": {"name": "bootstrap-test", "version": "0.1.0"}
+            }
+        })
+    )
+    .expect("send initialize");
+    stdin.flush().expect("flush initialize");
+    let initialize = receive_stdio_message(&receiver);
+    assert_eq!(initialize["id"], 1);
+    assert!(initialize.get("error").is_none(), "{initialize}");
     assert!(
-        !handle.is_finished(),
-        "run() returned immediately instead of serving stdio"
+        initialize["result"]["serverInfo"].is_object(),
+        "{initialize}"
     );
 
-    handle.abort();
-    let _ = handle.await;
+    writeln!(
+        stdin,
+        "{}\n{}",
+        serde_json::json!({"jsonrpc": "2.0", "method": "notifications/initialized"}),
+        serde_json::json!({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}})
+    )
+    .expect("send initialized and tools/list");
+    stdin.flush().expect("flush tools/list");
+    let tools = receive_stdio_message(&receiver);
+    assert_eq!(tools["id"], 2);
+    assert!(tools.get("error").is_none(), "{tools}");
+    assert!(
+        tools["result"]["tools"]
+            .as_array()
+            .is_some_and(|tools| !tools.is_empty()),
+        "{tools}"
+    );
+    assert!(child.0.try_wait().expect("check server status").is_none());
+
+    drop(stdin);
+    drop(child);
+    reader.join().expect("join stdout reader");
+}
+
+fn receive_stdio_message(receiver: &mpsc::Receiver<std::io::Result<String>>) -> serde_json::Value {
+    let line = receiver
+        .recv_timeout(Duration::from_secs(30))
+        .expect("stdio response before timeout or EOF")
+        .expect("read stdio response");
+    serde_json::from_str(&line).expect("JSON-RPC response")
+}
+
+struct StdioChild(Child);
+
+impl Drop for StdioChild {
+    fn drop(&mut self) {
+        // Reap the process on success, assertion failure, and response timeout.
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
 }
 
 #[tokio::test]
