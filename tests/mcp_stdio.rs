@@ -33,6 +33,7 @@ async fn server_exposes_expected_tools_over_stdio() {
             "build_task_context".to_string(),
             "commit_feedback_candidate".to_string(),
             "decide_with_snapshot".to_string(),
+            "export_memory".to_string(),
             "get_episode_detail".to_string(),
             "get_evidence_relation".to_string(),
             "get_experience_candidate".to_string(),
@@ -2110,7 +2111,23 @@ async fn search_memory_returns_scoped_claims_with_revision_provenance_over_stdio
     assert_eq!(records[0]["object"], "new");
     assert_eq!(records[0]["mode"], "Observed");
     assert_eq!(records[0]["status"], "Active");
-    assert!(records[0].get("recorded_at").is_none());
+    let replacement_time = chrono::DateTime::parse_from_rfc3339(
+        records[0]["recorded_at"]
+            .as_str()
+            .expect("new replacement has application recording time"),
+    )
+    .unwrap();
+    let audit_time: String =
+        sqlx::query_scalar("SELECT recorded_at FROM reflections WHERE reflection_id = ?")
+            .bind(reflection_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(
+        replacement_time,
+        chrono::DateTime::parse_from_rfc3339(&audit_time).unwrap()
+    );
+    assert!(records[0]["observed_at"].is_null());
     assert_eq!(
         records[0]["provenance"]["evidence_event_references"],
         json!([format!("event:{project_a_event_id}")])
@@ -3293,11 +3310,12 @@ async fn search_memory_union_returns_scoped_mixed_records_and_preserves_event_de
         .iter()
         .map(|record| record["record_type"].as_str().unwrap().to_string())
         .collect::<Vec<_>>();
-    assert_eq!(types, vec!["reflection", "event", "episode", "claim"]);
+    assert_eq!(types, vec!["reflection", "claim", "event", "episode"]);
     assert_eq!(records[0]["id"], reflection_id);
-    assert_eq!(records[1]["id"], format!("event:{event_id}"));
-    assert_eq!(records[2]["id"], "episode:union-stdio-a");
-    assert_eq!(records[3]["id"], format!("claim:{replacement_claim_id}"));
+    assert_eq!(records[1]["id"], format!("claim:{replacement_claim_id}"));
+    assert_eq!(records[1]["recorded_at"], records[0]["recorded_at"]);
+    assert_eq!(records[2]["id"], format!("event:{event_id}"));
+    assert_eq!(records[3]["id"], "episode:union-stdio-a");
     assert!(
         records
             .iter()
@@ -5113,7 +5131,7 @@ required = true
         .expect("client");
 
     let tools = client.list_all_tools().await.expect("list tools");
-    assert_eq!(tools.len(), 30);
+    assert_eq!(tools.len(), 31);
 
     let health: serde_json::Value = reqwest::get(format!("http://127.0.0.1:{port}/api/health"))
         .await
@@ -5192,7 +5210,7 @@ max_concurrent_tasks = 1
             .await
             .unwrap();
     let tools = client.list_all_tools().await.unwrap();
-    assert_eq!(tools.len(), 30);
+    assert_eq!(tools.len(), 31);
 
     client
         .call_tool(

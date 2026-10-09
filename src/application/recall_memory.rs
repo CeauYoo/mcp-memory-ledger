@@ -157,11 +157,16 @@ fn explain(record: &SearchMemoryRecord, terms: &[String]) -> RecallExplanation {
             subject,
             predicate,
             object,
+            recorded_at,
             ..
         } => (
             vec![subject.as_str(), predicate.as_str(), object.as_str()],
             "active_claim_not_independently_verified",
-            "claim_creation_time_unknown_no_recency_assumed",
+            if recorded_at.is_some() {
+                "claim_recorded_at_desc_after_term_count"
+            } else {
+                "claim_creation_time_unknown_no_recency_assumed"
+            },
         ),
         SearchMemoryRecord::Event { summary, .. } => (
             vec![summary.as_str()],

@@ -50,6 +50,7 @@ pub struct GetSelfModelHistoryResult {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SelfModelHistoryRecord {
+    pub scope: crate::domain::reflection_scope::ReflectionScopeMetadata,
     pub reflection_id: String,
     pub recorded_at: DateTime<Utc>,
     pub summary: String,
@@ -92,6 +93,7 @@ where
             .records
             .into_iter()
             .map(|record| SelfModelHistoryRecord {
+                scope: record.scope,
                 reflection_id: record.reflection_id,
                 recorded_at: record.recorded_at,
                 summary: record.summary,

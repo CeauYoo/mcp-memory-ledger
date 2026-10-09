@@ -226,6 +226,11 @@ impl From<CommitmentDto> for Commitment {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct IngestInteractionParams {
+    /// Optional caller observation time (RFC3339, at most nanosecond precision).
+    /// This never overrides the server-assigned ledger recording time.
+    #[serde(default)]
+    #[schemars(length(max = 35))]
+    pub observed_at: Option<String>,
     #[serde(default)]
     pub request_id: Option<String>,
     pub event: EventDto,
@@ -249,6 +254,10 @@ impl TryFrom<IngestInteractionParams> for IngestInput {
             value.episode_reference,
         )
         .with_trigger_hints(value.trigger_hints);
+        let input = match value.observed_at {
+            Some(observed_at) => input.with_observed_at(observed_at)?,
+            None => input,
+        };
         Ok(match value.request_id {
             Some(key) => input.with_request_id(key),
             None => input,
@@ -852,7 +861,11 @@ fn parse_optional_timestamp(
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct RunReflectionParams {
     pub reflection: ReflectionDto,
-    pub supersede_claim_id: String,
+    #[serde(default)]
+    pub supersede_claim_id: Option<String>,
+    /// Audit source attribution, not global mutation authorization.
+    #[serde(default)]
+    pub origin_namespace: Option<String>,
     pub replacement_claim: Option<ClaimDraftDto>,
     #[serde(default)]
     pub replacement_evidence_event_ids: Vec<String>,
@@ -868,16 +881,39 @@ impl TryFrom<RunReflectionParams> for ReflectionInput {
     type Error = AppError;
 
     fn try_from(value: RunReflectionParams) -> Result<Self, Self::Error> {
-        let mut input = ReflectionInput::new(
-            value.reflection.into(),
-            value.supersede_claim_id,
-            value
-                .replacement_claim
-                .map(ClaimDraft::try_from)
-                .transpose()
-                .map_err(AppError::from)?,
-            value.replacement_evidence_event_ids,
-        );
+        let origin = value
+            .origin_namespace
+            .map(Namespace::parse)
+            .transpose()
+            .map_err(AppError::from)?
+            .map(MemoryScope::for_namespace);
+        let mut input = if let Some(target) = value.supersede_claim_id {
+            ReflectionInput::new(
+                value.reflection.into(),
+                target,
+                value
+                    .replacement_claim
+                    .map(ClaimDraft::try_from)
+                    .transpose()
+                    .map_err(AppError::from)?,
+                value.replacement_evidence_event_ids,
+            )
+        } else {
+            if origin.is_none()
+                || value.replacement_claim.is_some()
+                || value.identity_update.is_some()
+                || value.commitment_updates.is_some()
+            {
+                return Err(AppError::InvalidParams("targetless reflections require origin_namespace and may only record an evidence-backed reflection; replacement, identity and commitment updates are not allowed".into()));
+            }
+            ReflectionInput::record_only(
+                value.reflection.into(),
+                value.replacement_evidence_event_ids,
+            )
+        };
+        if let Some(scope) = origin {
+            input = input.with_origin_scope(scope);
+        }
 
         if let Some(replacement_evidence_query) = value.replacement_evidence_query {
             input = input.with_replacement_evidence_query(replacement_evidence_query.try_into()?);

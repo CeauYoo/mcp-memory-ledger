@@ -8,6 +8,7 @@ pub enum DomainError {
     UnknownOwnerNotWritable,
     InvalidSnapshotTimeWindow,
     InvalidFeedbackMetadata,
+    InvalidObservedAt,
 }
 
 pub mod claim;
@@ -31,3 +32,9 @@ pub mod feedback;
 
 pub mod experience;
 pub mod feedback_candidate;
+
+pub mod temporal;
+
+pub mod reflection_scope;
+
+pub mod ledger_export;

@@ -1,4 +1,6 @@
-# Original-plan continuation: delivered slice and open requirements
+# Original-plan continuation: v5 historical delta and subsequent closure
+
+The matrix below records the v5 delivery. The next schema-v6 slice now implements its previously deferred temporal fields/keys, independent Reflection scopes and authoritative evidence relations, safe targetless history and readonly bounded export. See [temporal](../temporal-metadata.md), [scope](../reflection-scope-history.md), and [export](../scoped-export.md). M01–M03 module separation and D10 status diagnostics are actively being completed rather than left as arbitrary deferrals. Final source-specific verification is tracked in each stage and the draft PR.
 
 The [70-item e14a59e baseline matrix](2026-10-09-original-plan-traceability.md) is intentionally immutable historical evidence. This addendum maps the continuation back to those IDs. It does not turn all original planning suggestions into completed product claims.
 

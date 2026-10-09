@@ -1421,6 +1421,24 @@ async fn sqlite_reflection_transactions_replace_identity_and_commitments_atomica
         .await
         .unwrap();
 
+    // Reflection evidence is now an FK-backed ledger relation. Seed real
+    // same-scope sources so this fixture continues to test transaction behavior.
+    for event_id in ["evt-reflection-1", "evt-reflection-3", "evt-reflection-9"] {
+        context
+            .store
+            .append_event(StoredEvent::new(
+                event_id.to_string(),
+                test_support::fixed_now(),
+                Event::new(
+                    Owner::Self_,
+                    EventKind::Reflection,
+                    "self-model update evidence",
+                ),
+            ))
+            .await
+            .unwrap();
+    }
+
     let mut ok_tx = context.store.begin_reflection_transaction().await.unwrap();
     let loaded_identity = ok_tx.load_identity().await.unwrap();
     let loaded_commitments = ok_tx.load_commitments().await.unwrap();

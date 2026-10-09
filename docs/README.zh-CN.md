@@ -17,8 +17,8 @@ MCP Memory Ledger 是一个本地优先的 Rust MCP `stdio` 记忆服务。它�
 ## 核心能力
 
 - **本地 MCP 记忆服务**：通过 `stdio` 暴露 `ingest_interaction`、`search_memory`、`get_memory`、`get_reflection_history`、`get_self_model_history`、`get_evidence_relation`、`supersede_memory`、`build_self_snapshot`、`decide_with_snapshot` 和 `run_reflection` 共 10 个工具。
-- **按 scope 检索 Event / Claim / Episode / Reflection**：`search_memory` 要求显式 namespace。省略类型时默认返回有界、recent-first 的 Event；`record_type = Claim / Episode / Reflection` 分别返回 scoped Claim、按同 scope Event 投影的 Episode，以及只通过同 scope Claim 端点归属的 Reflection。record-only Reflection 不可见。additive `record_types` 可请求这四类 tagged record 的 scoped union。确定性读取路径不依赖 provider；mixed-scope Claim revision edge 整边隐藏。
-- **按稳定 ID 查找**：`get_memory(namespace, id, record_type?)` 返回一条完整 Event、Claim、Episode 或 scoped Reflection。省略 `record_type` 保持 Event 语义。Episode / Reflection 把 `id` 当作 opaque exact persisted reference。missing、跨 namespace 与 record-only Reflection 返回 `record: null`，不扩大查询。
+- **按 scope 检索 Event / Claim / Episode / Reflection**：`search_memory` 要求显式 namespace。省略类型时默认返回有界、recent-first 的 Event；`record_type = Claim / Episode / Reflection` 分别返回 scoped Claim、按同 scope Event 投影的 Episode，以及只通过同 scope Claim 端点归属的 Reflection。v6 可读取来源/影响/证据范围一致的 record-only Reflection；历史 unknown/mixed 记录继续隔离。additive `record_types` 可请求这四类 tagged record 的 scoped union。确定性读取路径不依赖 provider；mixed-scope Claim revision edge 整边隐藏。
+- **按稳定 ID 查找**：`get_memory(namespace, id, record_type?)` 返回一条完整 Event、Claim、Episode 或 scoped Reflection。省略 `record_type` 保持 Event 语义。Episode / Reflection 把 `id` 当作 opaque exact persisted reference。missing、跨 namespace 与归属不明或不安全的 record-only Reflection 返回 `record: null`，不扩大查询。
 - **Claim 修订历史**：`get_reflection_history(namespace, claim_reference, limit?)` 从一条 exact scoped Claim 出发，按 newest-first 返回双向 revision chain。missing / cross-scope / mixed-scope 路径保持空或隐藏。
 - **identity/commitment 修订审计**：`get_self_model_history(namespace, history_type, limit?)` 读取 claim-attributed reflection 上的 identity 或 commitment 补丁。这是审计轨迹，不是 versioned identity/commitment ledger。
 - **证据关系运行时**：`get_evidence_relation` 把调用方 trigger window 与同 scope Event 做 intersect-only 收窄，并报告 selected / available-not-selected。不引入 ranking 或 widening。
@@ -129,7 +129,7 @@ pwsh -File .\scripts\agent-llm-mm.ps1 serve
 未实现：
 
 - 完整 memory layering
-- versioned identity/commitment ledger、record-only Reflection history，以及 Event / Episode / Reflection 纠错
+- versioned identity/commitment rollback ledger、歧义历史归属修复，以及 Event / Episode / Reflection 纠错
 - M1.3.0 current-schema structural readback 与 M1.3.1 真实客户端退出门
 - richer evidence ranking / weighting
 - 生产级 remote / team / multi-tenant 能力

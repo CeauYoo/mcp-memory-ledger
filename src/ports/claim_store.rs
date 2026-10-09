@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 
 use crate::{
     domain::{claim::ClaimDraft, types::MemoryScope},
@@ -27,6 +28,12 @@ pub struct StoredClaim {
     pub claim_id: String,
     pub claim: ClaimDraft,
     pub status: ClaimStatus,
+    /// Application-clock ledger creation time. Legacy records remain unknown.
+    #[serde(default)]
+    pub recorded_at: Option<DateTime<Utc>>,
+    /// Caller-supplied observation time, never an effective/valid-from time.
+    #[serde(default)]
+    pub observed_at: Option<String>,
 }
 
 impl StoredClaim {
@@ -35,7 +42,24 @@ impl StoredClaim {
             claim_id,
             claim,
             status,
+            recorded_at: None,
+            observed_at: None,
         }
+    }
+
+    pub fn with_recorded_at(mut self, recorded_at: DateTime<Utc>) -> Self {
+        self.recorded_at = Some(recorded_at);
+        self
+    }
+
+    pub fn with_temporal_metadata(
+        mut self,
+        recorded_at: Option<DateTime<Utc>>,
+        observed_at: Option<String>,
+    ) -> Self {
+        self.recorded_at = recorded_at;
+        self.observed_at = observed_at;
+        self
     }
 
     pub fn snapshot_value(&self) -> String {

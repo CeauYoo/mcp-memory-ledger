@@ -4,15 +4,18 @@ import argparse
 from datetime import datetime, timezone
 import concurrent.futures
 import hashlib
+import http.client
 import importlib.util
 import json
 import math
 from pathlib import Path
 import platform
 import sqlite3
+import socket
 import statistics
 import sys
 import tempfile
+import threading
 import time
 sys.dont_write_bytecode = True
 spec = importlib.util.spec_from_file_location("evaluation", Path(__file__).with_name("evaluate-memory-loop.py"))
@@ -75,7 +78,134 @@ def plans(db, term):
                  "plan": connection.execute("EXPLAIN QUERY PLAN " + sql, args).fetchall()} for name, sql, args in queries]
 
 
-def run_size(binary, size, repeats, directory):
+DASHBOARD_HTTP_PATHS = (
+    "/api/summary",
+    "/api/events?namespace=project%2Fcapacity-00&limit=20",
+    "/api/operation-log?namespace=project%2Fcapacity-00&limit=20",
+)
+
+
+def dashboard_config(database, port):
+    if not isinstance(port, int) or not 0 < port < 65536:
+        raise ValueError("dashboard port must be in 1..65535")
+    return ('database_url = ' + json.dumps('sqlite://' + database.as_posix()) +
+            '\n[model]\nprovider = "mock"\n[dashboard]\nenabled = true\n'
+            'host = "127.0.0.1"\nport = ' + str(port) + '\nopen_browser = false\n'
+            'required = true\nsse_enabled = false\n')
+
+
+def dashboard_get(port, path):
+    """Only direct loopback GETs; no proxy, redirects, browser or external service."""
+    if path not in DASHBOARD_HTTP_PATHS:
+        raise ValueError("unsupported dashboard read endpoint")
+    connection = http.client.HTTPConnection("127.0.0.1", port, timeout=30)
+    started = time.perf_counter()
+    try:
+        connection.request("GET", path)
+        response = connection.getresponse()
+        raw = response.read()
+        elapsed = (time.perf_counter() - started) * 1000
+        if response.status != 200:
+            raise RuntimeError(f"dashboard GET {path}: HTTP {response.status}")
+        value = json.loads(raw)
+        if path == "/api/summary":
+            assert value["runtime"]["provider"] == "mock" and value["runtime"]["read_only"]
+        else:
+            assert isinstance(value, list) and len(value) <= 20
+            assert all(row["namespace"] == "project/capacity-00" for row in value)
+            if path.startswith("/api/operation-log"):
+                assert all(row["read_only"] for row in value)
+        return {"method": "GET", "path": path, "status": response.status,
+                "latency_ms": elapsed, "response_bytes": len(raw),
+                "response_sha256": hashlib.sha256(raw).hexdigest()}, value
+    finally:
+        connection.close()
+
+
+def run_dashboard_http(binary, db, config, repeats, reader_client):
+    """Separate opt-in workload; default MCP measurements finish before this starts."""
+    # Let the OS select a free loopback port. required=true makes a port-allocation
+    # race fail closed during MCP initialization, before any HTTP requests are sent.
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as reservation:
+        reservation.bind(("127.0.0.1", 0))
+        port = reservation.getsockname()[1]
+    dashboard_path = config.with_name("dashboard-http.toml")
+    dashboard_path.write_text(dashboard_config(db, port), encoding="utf-8")
+    owner = evaluation.smoke.Client(binary, dashboard_path, [])
+    raw_requests, write_times, recall_times = [], [], []
+    examples = {}
+    try:
+        def write(i):
+            started = time.perf_counter()
+            owner.tool("ingest_interaction", {"request_id": f"dashboard-http-{i}", "event": {
+                "owner": "World", "namespace": "project/capacity-00", "kind": "Observation",
+                "summary": f"HTTP concurrency synthetic observation {i}"}, "claim_drafts": []})
+            return (time.perf_counter() - started) * 1000
+
+        def recall():
+            started = time.perf_counter()
+            value = reader_client.tool("recall_memory", {
+                "namespace": "project/capacity-00", "query": "北京", "limit": 20})
+            assert all(row["record"]["namespace"] == "project/capacity-00" for row in value["records"])
+            return (time.perf_counter() - started) * 1000
+
+        def browse(i):
+            responses = []
+            for path in DASHBOARD_HTTP_PATHS:
+                measurement, value = dashboard_get(port, path)
+                measurement.update({"round": i, "measured": i >= 0})
+                responses.append((measurement, value))
+            return responses
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+            for i in range(-2, repeats):
+                barrier = threading.Barrier(3)
+                def together(function, *arguments):
+                    barrier.wait(timeout=30)
+                    return function(*arguments)
+                writing, reading, browsing = (pool.submit(together, write, i),
+                                              pool.submit(together, recall),
+                                              pool.submit(together, browse, i))
+                write_ms, recall_ms = writing.result(), reading.result()
+                for measurement, value in browsing.result():
+                    raw_requests.append(measurement)
+                    examples[measurement["path"]] = value
+                if i >= 0:
+                    write_times.append(write_ms)
+                    recall_times.append(recall_ms)
+        # All writes/recalls have finished. Isolate GETs to verify read-only behavior.
+        with sqlite3.connect(db) as connection:
+            before = connection.execute("SELECT count(*) FROM operation_log").fetchone()[0]
+            for path in DASHBOARD_HTTP_PATHS:
+                _, value = dashboard_get(port, path)
+                examples[path] = value
+            after = connection.execute("SELECT count(*) FROM operation_log").fetchone()[0]
+        assert before == after, "dashboard GETs must not append operation logs"
+        assert examples[DASHBOARD_HTTP_PATHS[1]], "expected dashboard owner events"
+        assert examples[DASHBOARD_HTTP_PATHS[2]], "expected durable operation history"
+        return {"kind": "actual_loopback_dashboard_http_concurrency", "provider": "mock",
+                "host": "127.0.0.1", "remote_model_calls": 0, "browser_rendering_measured": False,
+                "warmup_rounds": 2, "measured_rounds": repeats, "requests": raw_requests,
+                "start_synchronization": "three-worker barrier for each round",
+                "endpoints": {path: {
+                    "http_latency_ms": describe([row["latency_ms"] for row in raw_requests if row["path"] == path and row["measured"]]),
+                    "response_bytes": describe([row["response_bytes"] for row in raw_requests if row["path"] == path and row["measured"]]),
+                    "final_response": examples[path]} for path in DASHBOARD_HTTP_PATHS},
+                "concurrent_mcp_latency_ms": {"write": describe(write_times), "recall": describe(recall_times)},
+                "isolated_get_operation_log_count": {"before": before, "after": after},
+                "scope_leaks": 0, "observed_dashboard_server_rss_bytes": rss(owner.proc.pid),
+                "limitations": [
+                    "Separate post-default-workload phase with extra writes; do not pool with default MCP timings.",
+                    "Three endpoints are read sequentially per HTTP worker round, concurrent with ingestion and recall.",
+                    "HTTP latency includes a new loopback connection, JSON response read and transport; no browser rendering or SSE.",
+                    "Summary/events use this process's in-memory recorder; operation-log reads shared durable SQLite history.",
+                    "Only event/Claim seed scale is 10k/100k; operation-log history is generated by this bounded workload, not 100k log rows.",
+                    "Shared host, sequential run, synthetic traffic, no latency gate or production SLA."]}
+    finally:
+        owner.close()
+
+
+def run_size(binary, size, repeats, directory, dashboard_http=False):
     db, config = evaluation.prepare(binary, directory)
     dataset = seed(db, size)
     target = ((size // 2 - 1) // 20) * 20
@@ -140,6 +270,8 @@ def run_size(binary, size, repeats, directory):
         finally:
             writer.close()
             browse.close()
+        if dashboard_http:
+            report["dashboard_http"] = run_dashboard_http(binary, db, config, repeats, client)
         report["database_bytes_after_reads_and_writes"] = sum(p.stat().st_size for p in directory.glob("memory.sqlite*"))
         report["observed_server_rss_bytes_after"] = rss(client.proc.pid)
     finally:
@@ -154,6 +286,7 @@ def main():
     parser.add_argument("--sizes", type=int, nargs="+", default=[10000, 100000])
     parser.add_argument("--repeats", type=int, default=20)
     parser.add_argument("--label", default="unversioned-build")
+    parser.add_argument("--dashboard-http", action="store_true", help="Add separate actual loopback dashboard GET/ingest/recall workload after default measurements")
     args = parser.parse_args()
     if any(n < 400 or n % 40 for n in args.sizes) or args.repeats < 2 or len(set(args.sizes)) != len(args.sizes):
         parser.error("sizes must be unique multiples of 40 >= 400; repeats >= 2")
@@ -175,7 +308,7 @@ def main():
     report["sizes"] = {}
     for size in args.sizes:
         with tempfile.TemporaryDirectory(prefix=f"ledger-capacity-{size}-") as temporary:
-            report["sizes"][str(size)] = run_size(binary, size, args.repeats, Path(temporary))
+            report["sizes"][str(size)] = run_size(binary, size, args.repeats, Path(temporary), args.dashboard_http)
         evaluation.write_json(args.output / f"capacity-{size}.json", report["sizes"][str(size)])
     evaluation.write_json(args.output / "report.json", report)
     print(evaluation.compact(report))

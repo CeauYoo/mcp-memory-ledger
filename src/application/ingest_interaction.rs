@@ -15,6 +15,8 @@ pub struct IngestInput {
     request_id: Option<String>,
     #[serde(default)]
     trigger_hints: Vec<String>,
+    #[serde(default)]
+    observed_at: Option<String>,
 }
 
 impl IngestInput {
@@ -29,6 +31,7 @@ impl IngestInput {
             episode_reference,
             request_id: None,
             trigger_hints: Vec::new(),
+            observed_at: None,
         }
     }
 
@@ -42,8 +45,22 @@ impl IngestInput {
         self
     }
 
-    fn into_parts(self) -> (Event, Vec<ClaimDraft>, Option<String>) {
-        (self.event, self.claim_drafts, self.episode_reference)
+    pub fn with_observed_at(
+        mut self,
+        observed_at: String,
+    ) -> Result<Self, crate::domain::DomainError> {
+        crate::domain::temporal::validate_observed_at(&observed_at)?;
+        self.observed_at = Some(observed_at);
+        Ok(self)
+    }
+
+    fn into_parts(self) -> (Event, Vec<ClaimDraft>, Option<String>, Option<String>) {
+        (
+            self.event,
+            self.claim_drafts,
+            self.episode_reference,
+            self.observed_at,
+        )
     }
 }
 
@@ -67,17 +84,21 @@ fn build_event(event_id: String, recorded_at: DateTime<Utc>, event: Event) -> St
     StoredEvent::new(event_id, recorded_at, event)
 }
 
-fn derive_claims(event_id: &str, drafts: Vec<ClaimDraft>) -> Result<Vec<StoredClaim>, AppError> {
+fn derive_claims(
+    event: &StoredEvent,
+    drafts: Vec<ClaimDraft>,
+) -> Result<Vec<StoredClaim>, AppError> {
     drafts
         .into_iter()
         .enumerate()
         .map(|(index, draft)| {
             draft.validate(0)?;
             Ok(StoredClaim::new(
-                format!("{event_id}:claim:{index}"),
+                format!("{}:claim:{index}", event.event_id),
                 draft,
                 ClaimStatus::Active,
-            ))
+            )
+            .with_temporal_metadata(Some(event.recorded_at), event.observed_at.clone()))
         })
         .collect()
 }
@@ -86,20 +107,35 @@ pub async fn execute<D>(deps: &D, input: IngestInput) -> Result<IngestResult, Ap
 where
     D: IngestTransactionRunner + IdGenerator + Clock + Sync,
 {
+    // Deserialization can bypass the builder, so validate before any write.
+    if let Some(observed_at) = input.observed_at.as_deref() {
+        crate::domain::temporal::validate_observed_at(observed_at)?;
+    }
     let event_id = deps.next_id().await?;
-    let request = crate::ports::WriteReceiptRequest::new(
-        "ingest",
-        input.event.namespace().as_str(),
-        input.request_id.as_deref().unwrap_or(&event_id),
-        &(
-            &input.event,
-            &input.claim_drafts,
-            &input.episode_reference,
-            &input.trigger_hints,
+    let legacy_payload = (
+        &input.event,
+        &input.claim_drafts,
+        &input.episode_reference,
+        &input.trigger_hints,
+    );
+    let receipt_key = input.request_id.as_deref().unwrap_or(&event_id);
+    // Omitted additive metadata MUST retain the exact v5 four-tuple hash.
+    let request = match input.observed_at.as_deref() {
+        None => crate::ports::WriteReceiptRequest::new(
+            "ingest",
+            input.event.namespace().as_str(),
+            receipt_key,
+            &legacy_payload,
         ),
-    )?;
-    let (event, claim_drafts, episode_reference) = input.into_parts();
-    let event = build_event(event_id, deps.now().await?, event);
+        Some(observed_at) => crate::ports::WriteReceiptRequest::new(
+            "ingest",
+            input.event.namespace().as_str(),
+            receipt_key,
+            &("ingest-observed-at:v1", legacy_payload, observed_at),
+        ),
+    }?;
+    let (event, claim_drafts, episode_reference, observed_at) = input.into_parts();
+    let event = build_event(event_id, deps.now().await?, event).with_observed_at(observed_at);
     let mut transaction = deps.begin_ingest_transaction().await?;
 
     if let Some(receipt) = transaction
@@ -139,7 +175,7 @@ where
             .await?;
     }
 
-    for claim in derive_claims(&event.event_id, claim_drafts)? {
+    for claim in derive_claims(&event, claim_drafts)? {
         transaction.upsert_claim(claim.clone()).await?;
         transaction
             .link_evidence(claim.claim_id.clone(), event.event_id.clone())

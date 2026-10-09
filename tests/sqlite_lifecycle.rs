@@ -343,6 +343,7 @@ async fn ledger_rows_match_declared_versions_after_migration() {
             (3, "reflection_audit_columns".to_string()),
             (4, "event_feedback_metadata".to_string()),
             (5, "feedback_experience_and_retrieval".to_string()),
+            (6, "temporal_metadata_and_reflection_scope".to_string()),
         ]
     );
     connection.close().await.expect("close migrated");

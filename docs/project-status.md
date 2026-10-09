@@ -1,5 +1,9 @@
 # 当前实现状态
 
+## 2026-10-09 时间/独立范围/导出续建
+
+Schema v6 补齐 nullable Claim recorded_at、独立 caller observed_at、持久纳秒排序键与 scope/time 索引。Reflection 的 origin/affected scope 与证据关系独立持久化；历史归属不明保持 unknown，targetless 读取严格限定来源和影响范围，不扩大权限。新增只读有界 export_memory（非恢复备份）。混合查询的 per-type LIMIT 前排序已修复，单类型旧浏览排序保留。详见 [时间](temporal-metadata.md)、[反思范围](reflection-scope-history.md)、[导出](scoped-export.md)。本地 613 项完整 Rust 测试、fmt、Clippy、status-sync 已通过；[阶段结果与独立证据](plans/2026-10-09-schema6-results.md)记录兼容性、上下文容量代价与实测结果。精确发布提交 CI 另行核验；下方 v5 完整结果是历史基线，不能代替 v6 验证。
+
 ## 2026-10-09 原方案 A–E 续建
 
 已新增 schema v5、持久反馈候选与原子确定性提交、FTS5 可重建派生召回（短中文精确 fallback）、完整响应预算/解释，以及持久 Episode 和版本化语义/流程候选。新工具合同与保守边界见 [A–E 运行指南](memory-feedback-experience.md)。候选激活只改变可召回状态，不增加权限。本地最终完整测试 570 项、fmt、all-target/all-feature Clippy、status-sync 均通过，新增 stdio 闭环与备份恢复验证通过。三平台 CI 仍须读取草稿 PR 的最终精确提交结果；下方 e14a59e 结果仅是历史基线。

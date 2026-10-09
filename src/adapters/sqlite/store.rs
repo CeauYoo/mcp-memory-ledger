@@ -49,24 +49,12 @@ impl SqliteStore {
     }
 }
 
-fn sqlite_rfc3339_sort_key(column: &str) -> String {
-    format!(
-        "strftime('%Y-%m-%dT%H:%M:%S', \
-         substr({column}, 1, 19) || \
-         CASE WHEN upper(substr({column}, -1)) = 'Z' THEN 'Z' ELSE substr({column}, -6) END) || \
-         '.' || \
-         CASE WHEN substr({column}, 20, 1) = '.' \
-         THEN substr(substr({column}, 21, length({column}) - 20 - \
-              CASE WHEN upper(substr({column}, -1)) = 'Z' THEN 1 ELSE 6 END) || \
-              '000000000', 1, 9) \
-         ELSE '000000000' END"
-    )
-}
-
 fn utc_timestamp_sort_key(timestamp: &DateTime<Utc>) -> String {
+    // Match the persisted fixed-width seconds/nanoseconds pair, including
+    // Chrono's nanosecond >= 1e9 representation of an RFC3339 leap second.
     format!(
-        "{}.{:09}",
-        timestamp.format("%Y-%m-%dT%H:%M:%S"),
+        "{:020}:{:010}",
+        timestamp.timestamp() + 10_000_000_000_000_i64,
         timestamp.timestamp_subsec_nanos()
     )
 }
@@ -161,7 +149,7 @@ impl EventStore for SqliteStore {
             ));
         };
         let mut query = QueryBuilder::<Sqlite>::new("SELECT event_id FROM events WHERE ");
-        let recorded_at_sort_key = sqlite_rfc3339_sort_key("recorded_at");
+        let recorded_at_sort_key = "recorded_at_sort_key";
         query
             .push("owner = ")
             .push_bind(owner_as_str(owner))
@@ -170,14 +158,14 @@ impl EventStore for SqliteStore {
         if let Some(recorded_after) = time_window.recorded_after {
             query
                 .push(" AND ")
-                .push(&recorded_at_sort_key)
+                .push(recorded_at_sort_key)
                 .push(" >= ")
                 .push_bind(utc_timestamp_sort_key(&recorded_after));
         }
         if let Some(recorded_before) = time_window.recorded_before {
             query
                 .push(" AND ")
-                .push(&recorded_at_sort_key)
+                .push(recorded_at_sort_key)
                 .push(" <= ")
                 .push_bind(utc_timestamp_sort_key(&recorded_before));
         }
@@ -188,7 +176,7 @@ impl EventStore for SqliteStore {
         }
         separated
             .push_unseparated(") ORDER BY ")
-            .push_unseparated(&recorded_at_sort_key)
+            .push_unseparated(recorded_at_sort_key)
             .push_unseparated(" DESC, rowid DESC");
 
         let rows = map_sqlite(query.build().fetch_all(&self.pool).await)?;
@@ -260,11 +248,19 @@ impl EventStore for SqliteStore {
     }
 }
 
-#[async_trait]
-impl MemoryReadStore for SqliteStore {
-    async fn query_event_records(
+// A union applies its final timestamp/type/id order before every per-type
+// LIMIT. Standalone browse methods retain their established ordering.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ReadOrdering {
+    Standalone,
+    Union,
+}
+
+impl SqliteStore {
+    async fn query_event_records_ordered(
         &self,
         query: EventRecordQuery,
+        ordering: ReadOrdering,
     ) -> Result<Vec<EventReadRecord>, AppError> {
         if !query.scope.is_explicitly_scoped() {
             return Err(AppError::InvalidParams(
@@ -299,9 +295,9 @@ impl MemoryReadStore for SqliteStore {
             .scope
             .namespace()
             .expect("explicit memory scope must have a namespace");
-        let recorded_at_sort_key = sqlite_rfc3339_sort_key("recorded_at");
+        let recorded_at_sort_key = "recorded_at_sort_key";
         let mut builder = QueryBuilder::<Sqlite>::new(
-            "SELECT event_id, recorded_at, owner, namespace, kind, summary, feedback_json FROM events WHERE owner = ",
+            "SELECT event_id, recorded_at, observed_at, owner, namespace, kind, summary, feedback_json FROM events WHERE owner = ",
         );
         builder
             .push_bind(owner_as_str(owner))
@@ -320,21 +316,25 @@ impl MemoryReadStore for SqliteStore {
         if let Some(after) = query.recorded_after {
             builder
                 .push(" AND ")
-                .push(&recorded_at_sort_key)
+                .push(recorded_at_sort_key)
                 .push(" >= ")
                 .push_bind(utc_timestamp_sort_key(&after));
         }
         if let Some(before) = query.recorded_before {
             builder
                 .push(" AND ")
-                .push(&recorded_at_sort_key)
+                .push(recorded_at_sort_key)
                 .push(" <= ")
                 .push_bind(utc_timestamp_sort_key(&before));
         }
         builder
             .push(" ORDER BY ")
-            .push(&recorded_at_sort_key)
-            .push(" DESC, rowid DESC LIMIT ")
+            .push(recorded_at_sort_key)
+            .push(if ordering == ReadOrdering::Union {
+                " DESC, event_id DESC LIMIT "
+            } else {
+                " DESC, rowid DESC LIMIT "
+            })
             .push_bind(i64::try_from(query.limit).map_err(|_| {
                 AppError::InvalidParams(
                     "event record query limit exceeds the supported maximum".to_string(),
@@ -371,10 +371,10 @@ impl MemoryReadStore for SqliteStore {
             })
             .collect())
     }
-
-    async fn query_episode_records(
+    async fn query_episode_records_ordered(
         &self,
         query: EpisodeRecordQuery,
+        ordering: ReadOrdering,
     ) -> Result<Vec<EpisodeReadRecord>, AppError> {
         if !query.scope.is_explicitly_scoped() {
             return Err(AppError::InvalidParams(
@@ -408,7 +408,7 @@ impl MemoryReadStore for SqliteStore {
             .scope
             .namespace()
             .expect("explicit memory scope must have a namespace");
-        let recorded_at_sort_key = sqlite_rfc3339_sort_key("e.recorded_at");
+        let recorded_at_sort_key = "e.recorded_at_sort_key";
         let mut builder = QueryBuilder::<Sqlite>::new(
             r#"
             WITH ranked_episode_events AS (
@@ -418,7 +418,7 @@ impl MemoryReadStore for SqliteStore {
             "#,
         );
         builder
-            .push(&recorded_at_sort_key)
+            .push(recorded_at_sort_key)
             .push(
                 r#" AS recorded_at_sort_key,
                     e.rowid AS event_rowid,
@@ -426,7 +426,7 @@ impl MemoryReadStore for SqliteStore {
                         PARTITION BY ee.episode_reference
                         ORDER BY "#,
             )
-            .push(&recorded_at_sort_key)
+            .push(recorded_at_sort_key)
             .push(
                 r#" DESC, e.rowid DESC
                     ) AS episode_rank
@@ -449,9 +449,13 @@ impl MemoryReadStore for SqliteStore {
             SELECT episode_reference, recorded_at, recorded_at_sort_key, event_rowid
             FROM ranked_episode_events
             WHERE episode_rank = 1
-            ORDER BY recorded_at_sort_key DESC, event_rowid DESC, episode_reference ASC
-            LIMIT "#,
+            ORDER BY recorded_at_sort_key DESC, "#,
             )
+            .push(if ordering == ReadOrdering::Union {
+                "episode_reference DESC LIMIT "
+            } else {
+                "event_rowid DESC, episode_reference ASC LIMIT "
+            })
             .push_bind(i64::try_from(query.limit).map_err(|_| {
                 AppError::InvalidParams(
                     "episode record query limit exceeds the supported maximum".to_string(),
@@ -502,10 +506,10 @@ impl MemoryReadStore for SqliteStore {
             })
             .collect())
     }
-
-    async fn query_reflection_records(
+    async fn query_reflection_records_ordered(
         &self,
         query: ReflectionRecordQuery,
+        ordering: ReadOrdering,
     ) -> Result<Vec<ReflectionReadRecord>, AppError> {
         if !query.scope.is_explicitly_scoped() {
             return Err(AppError::InvalidParams(
@@ -539,34 +543,30 @@ impl MemoryReadStore for SqliteStore {
             .scope
             .namespace()
             .expect("explicit memory scope must have a namespace");
-        // Reflections have no stored scope. Attribute a row only through a same-scope
-        // superseded Claim; hide the whole edge if a replacement Claim exists outside
-        // that scope. Record-only rows have no Claim anchor and stay invisible.
-        let recorded_at_sort_key = sqlite_rfc3339_sort_key("r.recorded_at");
-        let mut builder = QueryBuilder::<Sqlite>::new(
+        // Preserve both legacy endpoint checks. Targetless rows additionally need
+        // verified origin, safe affected scopes and complete normalized evidence.
+        let recorded_at_sort_key = "r.recorded_at_sort_key";
+        let mut builder = QueryBuilder::<Sqlite>::new(format!(
             "SELECT r.reflection_id, r.recorded_at, r.summary, r.superseded_claim_id, \
-             r.replacement_claim_id, r.supporting_evidence_event_ids \
+             r.replacement_claim_id, {} AS supporting_evidence_event_ids \
              FROM reflections r \
-             JOIN claims superseded ON superseded.claim_id = r.superseded_claim_id \
+             LEFT JOIN claims superseded ON superseded.claim_id = r.superseded_claim_id \
              LEFT JOIN claims replacement ON replacement.claim_id = r.replacement_claim_id \
-             WHERE superseded.owner = ",
-        );
-        builder
-            .push_bind(owner_as_str(owner))
-            .push(" AND superseded.namespace = ")
-            .push_bind(namespace.as_str())
-            .push(" AND (r.replacement_claim_id IS NULL OR (replacement.owner = ")
-            .push_bind(owner_as_str(owner))
-            .push(" AND replacement.namespace = ")
-            .push_bind(namespace.as_str())
-            .push("))");
+             WHERE ",
+            super::reflection_scope::evidence_ids_sql("r"),
+        ));
+        push_reflection_visibility(&mut builder, owner, namespace);
         if let Some(reference) = query.reflection_reference.as_deref() {
             builder.push(" AND r.reflection_id = ").push_bind(reference);
         }
         builder
             .push(" ORDER BY ")
-            .push(&recorded_at_sort_key)
-            .push(" DESC, r.rowid DESC LIMIT ")
+            .push(recorded_at_sort_key)
+            .push(if ordering == ReadOrdering::Union {
+                " DESC, r.reflection_id DESC LIMIT "
+            } else {
+                " DESC, r.rowid DESC LIMIT "
+            })
             .push_bind(i64::try_from(query.limit).map_err(|_| {
                 AppError::InvalidParams(
                     "reflection record query limit exceeds the supported maximum".to_string(),
@@ -601,7 +601,7 @@ impl MemoryReadStore for SqliteStore {
             namespace,
         )
         .await?;
-        Ok(unfiltered
+        let mut records: Vec<ReflectionReadRecord> = unfiltered
             .into_iter()
             .map(|record| {
                 let scoped = record.into_scoped_record(&scoped_evidence_ids);
@@ -619,7 +619,153 @@ impl MemoryReadStore for SqliteStore {
                     },
                 )
             })
+            .collect();
+        for record in &mut records {
+            record.scope =
+                super::reflection_scope::load_metadata(&self.pool, &record.reflection_id).await?;
+        }
+        Ok(records)
+    }
+    async fn query_claim_records_ordered(
+        &self,
+        query: ClaimRecordQuery,
+        ordering: ReadOrdering,
+    ) -> Result<Vec<ClaimReadRecord>, AppError> {
+        if !query.scope.is_explicitly_scoped() {
+            return Err(AppError::InvalidParams(
+                "claim record query requires an explicit namespace".to_string(),
+            ));
+        }
+        if query.limit == 0 {
+            return Err(AppError::InvalidParams(
+                "claim record query limit must be at least 1".to_string(),
+            ));
+        }
+        if query.limit > MAX_EVENT_RECORD_QUERY_LIMIT {
+            return Err(AppError::InvalidParams(format!(
+                "claim record query limit must be at most {MAX_EVENT_RECORD_QUERY_LIMIT}"
+            )));
+        }
+
+        let owner = query
+            .scope
+            .owner()
+            .expect("explicit memory scope must have an owner");
+        let namespace = query
+            .scope
+            .namespace()
+            .expect("explicit memory scope must have a namespace");
+        let mut builder = QueryBuilder::<Sqlite>::new(
+            "SELECT claim_id, owner, namespace, subject, predicate, object, mode, status, recorded_at, observed_at FROM claims WHERE owner = ",
+        );
+        builder
+            .push_bind(owner_as_str(owner))
+            .push(" AND namespace = ")
+            .push_bind(namespace.as_str());
+        if let Some(reference) = query.claim_reference.as_ref() {
+            builder
+                .push(" AND claim_id = ")
+                .push_bind(reference.claim_id());
+        }
+        if let Some(status) = query.status {
+            builder.push(" AND status = ").push_bind(status.as_str());
+        }
+        if let Some(mode) = query.mode {
+            builder.push(" AND mode = ").push_bind(mode_as_str(mode));
+        }
+        builder
+            .push(if ordering == ReadOrdering::Union {
+                " ORDER BY recorded_at_sort_key DESC, claim_id DESC LIMIT "
+            } else {
+                " ORDER BY claim_id ASC LIMIT "
+            })
+            .push_bind(i64::try_from(query.limit).map_err(|_| {
+                AppError::InvalidParams(
+                    "claim record query limit exceeds the supported maximum".to_string(),
+                )
+            })?);
+
+        let stored_claims = map_sqlite(builder.build().fetch_all(&self.pool).await)?
+            .iter()
+            .map(stored_claim_from_row)
+            .collect::<Result<Vec<_>, _>>()?;
+        if stored_claims.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let claim_ids = stored_claims
+            .iter()
+            .map(|claim| claim.claim_id.as_str())
+            .collect::<Vec<_>>();
+        let evidence =
+            load_claim_evidence_references(&self.pool, &claim_ids, owner, namespace).await?;
+        let episodes =
+            load_claim_episode_references(&self.pool, &claim_ids, owner, namespace).await?;
+        let revisions = load_claim_revision_links(&self.pool, &claim_ids, owner, namespace).await?;
+
+        Ok(stored_claims
+            .into_iter()
+            .map(|claim| {
+                let claim_id = claim.claim_id.clone();
+                ClaimReadRecord::new(
+                    claim,
+                    evidence.get(&claim_id).cloned().unwrap_or_default(),
+                    episodes.get(&claim_id).cloned().unwrap_or_default(),
+                    revisions.get(&claim_id).cloned().unwrap_or_default(),
+                )
+            })
             .collect())
+    }
+}
+
+#[async_trait]
+impl MemoryReadStore for SqliteStore {
+    async fn query_event_records(
+        &self,
+        query: EventRecordQuery,
+    ) -> Result<Vec<EventReadRecord>, AppError> {
+        self.query_event_records_ordered(query, ReadOrdering::Standalone)
+            .await
+    }
+
+    async fn query_event_records_for_union(
+        &self,
+        query: EventRecordQuery,
+    ) -> Result<Vec<EventReadRecord>, AppError> {
+        self.query_event_records_ordered(query, ReadOrdering::Union)
+            .await
+    }
+
+    async fn query_episode_records(
+        &self,
+        query: EpisodeRecordQuery,
+    ) -> Result<Vec<EpisodeReadRecord>, AppError> {
+        self.query_episode_records_ordered(query, ReadOrdering::Standalone)
+            .await
+    }
+
+    async fn query_episode_records_for_union(
+        &self,
+        query: EpisodeRecordQuery,
+    ) -> Result<Vec<EpisodeReadRecord>, AppError> {
+        self.query_episode_records_ordered(query, ReadOrdering::Union)
+            .await
+    }
+
+    async fn query_reflection_records(
+        &self,
+        query: ReflectionRecordQuery,
+    ) -> Result<Vec<ReflectionReadRecord>, AppError> {
+        self.query_reflection_records_ordered(query, ReadOrdering::Standalone)
+            .await
+    }
+
+    async fn query_reflection_records_for_union(
+        &self,
+        query: ReflectionRecordQuery,
+    ) -> Result<Vec<ReflectionReadRecord>, AppError> {
+        self.query_reflection_records_ordered(query, ReadOrdering::Union)
+            .await
     }
 
     async fn query_scoped_event_ids(
@@ -660,86 +806,16 @@ impl MemoryReadStore for SqliteStore {
         &self,
         query: ClaimRecordQuery,
     ) -> Result<Vec<ClaimReadRecord>, AppError> {
-        if !query.scope.is_explicitly_scoped() {
-            return Err(AppError::InvalidParams(
-                "claim record query requires an explicit namespace".to_string(),
-            ));
-        }
-        if query.limit == 0 {
-            return Err(AppError::InvalidParams(
-                "claim record query limit must be at least 1".to_string(),
-            ));
-        }
-        if query.limit > MAX_EVENT_RECORD_QUERY_LIMIT {
-            return Err(AppError::InvalidParams(format!(
-                "claim record query limit must be at most {MAX_EVENT_RECORD_QUERY_LIMIT}"
-            )));
-        }
+        self.query_claim_records_ordered(query, ReadOrdering::Standalone)
+            .await
+    }
 
-        let owner = query
-            .scope
-            .owner()
-            .expect("explicit memory scope must have an owner");
-        let namespace = query
-            .scope
-            .namespace()
-            .expect("explicit memory scope must have a namespace");
-        let mut builder = QueryBuilder::<Sqlite>::new(
-            "SELECT claim_id, owner, namespace, subject, predicate, object, mode, status FROM claims WHERE owner = ",
-        );
-        builder
-            .push_bind(owner_as_str(owner))
-            .push(" AND namespace = ")
-            .push_bind(namespace.as_str());
-        if let Some(reference) = query.claim_reference.as_ref() {
-            builder
-                .push(" AND claim_id = ")
-                .push_bind(reference.claim_id());
-        }
-        if let Some(status) = query.status {
-            builder.push(" AND status = ").push_bind(status.as_str());
-        }
-        if let Some(mode) = query.mode {
-            builder.push(" AND mode = ").push_bind(mode_as_str(mode));
-        }
-        builder.push(" ORDER BY claim_id ASC LIMIT ").push_bind(
-            i64::try_from(query.limit).map_err(|_| {
-                AppError::InvalidParams(
-                    "claim record query limit exceeds the supported maximum".to_string(),
-                )
-            })?,
-        );
-
-        let stored_claims = map_sqlite(builder.build().fetch_all(&self.pool).await)?
-            .iter()
-            .map(stored_claim_from_row)
-            .collect::<Result<Vec<_>, _>>()?;
-        if stored_claims.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        let claim_ids = stored_claims
-            .iter()
-            .map(|claim| claim.claim_id.as_str())
-            .collect::<Vec<_>>();
-        let evidence =
-            load_claim_evidence_references(&self.pool, &claim_ids, owner, namespace).await?;
-        let episodes =
-            load_claim_episode_references(&self.pool, &claim_ids, owner, namespace).await?;
-        let revisions = load_claim_revision_links(&self.pool, &claim_ids, owner, namespace).await?;
-
-        Ok(stored_claims
-            .into_iter()
-            .map(|claim| {
-                let claim_id = claim.claim_id.clone();
-                ClaimReadRecord::new(
-                    claim,
-                    evidence.get(&claim_id).cloned().unwrap_or_default(),
-                    episodes.get(&claim_id).cloned().unwrap_or_default(),
-                    revisions.get(&claim_id).cloned().unwrap_or_default(),
-                )
-            })
-            .collect())
+    async fn query_claim_records_for_union(
+        &self,
+        query: ClaimRecordQuery,
+    ) -> Result<Vec<ClaimReadRecord>, AppError> {
+        self.query_claim_records_ordered(query, ReadOrdering::Union)
+            .await
     }
 
     async fn query_claim_reflection_history(
@@ -770,21 +846,22 @@ impl MemoryReadStore for SqliteStore {
             .scope
             .namespace()
             .expect("explicit memory scope must have a namespace");
-        let recorded_at_sort_key = sqlite_rfc3339_sort_key("edge.recorded_at");
+        let recorded_at_sort_key = "edge.recorded_at_sort_key";
         let fetch_limit = query.limit + 1;
-        // Reflections have no stored scope of their own. Derive this read model only from a
-        // scoped superseded Claim and exclude the entire edge when a replacement Claim exists
+        // This claim graph still requires a scoped superseded Claim and excludes
+        // the entire edge when a replacement Claim exists
         // outside that same scope; returning a redacted edge would still leak its audit text.
-        let mut builder = QueryBuilder::<Sqlite>::new(
+        let mut builder = QueryBuilder::<Sqlite>::new(format!(
             "WITH RECURSIVE scoped_edges AS (\
-             SELECT r.rowid AS reflection_rowid, r.reflection_id, r.recorded_at, r.summary, \
+             SELECT r.rowid AS reflection_rowid, r.reflection_id, r.recorded_at, r.recorded_at_sort_key, r.summary, \
                     r.superseded_claim_id, r.replacement_claim_id, \
-                    r.supporting_evidence_event_ids \
+                    {} AS supporting_evidence_event_ids \
              FROM reflections r \
              JOIN claims superseded ON superseded.claim_id = r.superseded_claim_id \
              LEFT JOIN claims replacement ON replacement.claim_id = r.replacement_claim_id \
              WHERE superseded.owner = ",
-        );
+            super::reflection_scope::evidence_ids_sql("r"),
+        ));
         builder
             .push_bind(owner_as_str(owner))
             .push(" AND superseded.namespace = ")
@@ -824,7 +901,7 @@ impl MemoryReadStore for SqliteStore {
                 OR edge.replacement_claim_id IN (SELECT claim_id FROM reachable_claims) \
              ORDER BY ",
             )
-            .push(&recorded_at_sort_key)
+            .push(recorded_at_sort_key)
             .push(" DESC, edge.reflection_rowid DESC LIMIT ")
             .push_bind(i64::try_from(fetch_limit).map_err(|_| {
                 AppError::InvalidParams(
@@ -861,11 +938,15 @@ impl MemoryReadStore for SqliteStore {
             namespace,
         )
         .await?;
-        let records = unfiltered
+        let mut records: Vec<ClaimReflectionHistoryRecord> = unfiltered
             .into_iter()
             .map(|record| record.into_scoped_record(&scoped_evidence_ids))
             .collect();
 
+        for record in &mut records {
+            record.scope =
+                super::reflection_scope::load_metadata(&self.pool, &record.reflection_id).await?;
+        }
         Ok(ClaimReflectionHistoryPage { records, has_more })
     }
 
@@ -897,33 +978,28 @@ impl MemoryReadStore for SqliteStore {
             .scope
             .namespace()
             .expect("explicit memory scope must have a namespace");
-        let recorded_at_sort_key = sqlite_rfc3339_sort_key("r.recorded_at");
+        let recorded_at_sort_key = "r.recorded_at_sort_key";
         let fetch_limit = query.limit + 1;
         let audit_column = match query.history_kind {
             SelfModelHistoryKind::Identity => "r.requested_identity_update",
             SelfModelHistoryKind::Commitment => "r.requested_commitment_updates",
         };
-        let mut builder = QueryBuilder::<Sqlite>::new(
+        let mut builder = QueryBuilder::<Sqlite>::new(format!(
             "SELECT r.reflection_id, r.recorded_at, r.summary, r.superseded_claim_id, \
-             r.replacement_claim_id, r.supporting_evidence_event_ids, \
+             r.replacement_claim_id, {} AS supporting_evidence_event_ids, \
              r.requested_identity_update, r.requested_commitment_updates \
              FROM reflections r \
-             JOIN claims superseded ON superseded.claim_id = r.superseded_claim_id \
+             LEFT JOIN claims superseded ON superseded.claim_id = r.superseded_claim_id \
              LEFT JOIN claims replacement ON replacement.claim_id = r.replacement_claim_id \
-             WHERE superseded.owner = ",
-        );
+             WHERE ",
+            super::reflection_scope::evidence_ids_sql("r"),
+        ));
+        push_reflection_visibility(&mut builder, owner, namespace);
         builder
-            .push_bind(owner_as_str(owner))
-            .push(" AND superseded.namespace = ")
-            .push_bind(namespace.as_str())
-            .push(" AND (r.replacement_claim_id IS NULL OR (replacement.owner = ")
-            .push_bind(owner_as_str(owner))
-            .push(" AND replacement.namespace = ")
-            .push_bind(namespace.as_str())
-            .push(")) AND ")
+            .push(" AND ")
             .push(audit_column)
             .push(" IS NOT NULL ORDER BY ")
-            .push(&recorded_at_sort_key)
+            .push(recorded_at_sort_key)
             .push(" DESC, r.rowid DESC LIMIT ")
             .push_bind(i64::try_from(fetch_limit).map_err(|_| {
                 AppError::InvalidParams(
@@ -976,12 +1052,49 @@ impl MemoryReadStore for SqliteStore {
             namespace,
         )
         .await?;
-        let records = unfiltered
+        let mut records: Vec<SelfModelHistoryRecord> = unfiltered
             .into_iter()
             .map(|record| record.into_scoped_record(query.history_kind, &scoped_evidence_ids))
             .collect();
+        for record in &mut records {
+            record.scope =
+                super::reflection_scope::load_metadata(&self.pool, &record.reflection_id).await?;
+        }
         Ok(SelfModelHistoryPage { records, has_more })
     }
+}
+
+/// Existing endpoint attribution is retained independently of new scope metadata.
+/// A targetless row must satisfy all six scoped predicates in the shared helper.
+fn push_reflection_visibility<'a>(
+    builder: &mut QueryBuilder<'a, Sqlite>,
+    owner: Owner,
+    namespace: &'a Namespace,
+) {
+    builder
+        .push("((superseded.owner = ")
+        .push_bind(owner_as_str(owner))
+        .push(" AND superseded.namespace = ")
+        .push_bind(namespace.as_str())
+        .push(" AND (r.replacement_claim_id IS NULL OR (replacement.owner = ")
+        .push_bind(owner_as_str(owner))
+        .push(" AND replacement.namespace = ")
+        .push_bind(namespace.as_str())
+        .push("))) OR ");
+    let predicate = super::reflection_scope::targetless_visibility_sql("r");
+    let parts: Vec<_> = predicate.split('?').collect();
+    debug_assert_eq!(parts.len(), 7);
+    for (index, part) in parts.into_iter().enumerate() {
+        if index > 0 {
+            builder.push_bind(if index % 2 == 1 {
+                owner_as_str(owner)
+            } else {
+                namespace.as_str()
+            });
+        }
+        builder.push(part);
+    }
+    builder.push(")");
 }
 
 struct UnfilteredClaimReflectionHistoryRecord {
@@ -1007,6 +1120,7 @@ impl UnfilteredSelfModelHistoryRecord {
     ) -> SelfModelHistoryRecord {
         let scoped = self.base.into_scoped_record(scoped_evidence_ids);
         SelfModelHistoryRecord {
+            scope: scoped.scope,
             reflection_id: scoped.reflection_id,
             recorded_at: scoped.recorded_at,
             summary: scoped.summary,
@@ -1030,6 +1144,7 @@ impl UnfilteredClaimReflectionHistoryRecord {
     ) -> ClaimReflectionHistoryRecord {
         let mut seen = BTreeSet::new();
         ClaimReflectionHistoryRecord {
+            scope: Default::default(),
             reflection_id: self.reflection_id,
             recorded_at: self.recorded_at,
             summary: self.summary,
@@ -1133,7 +1248,7 @@ async fn load_episode_event_references(
     owner: Owner,
     namespace: &Namespace,
 ) -> Result<BTreeMap<String, Vec<EventReference>>, AppError> {
-    let recorded_at_sort_key = sqlite_rfc3339_sort_key("e.recorded_at");
+    let recorded_at_sort_key = "e.recorded_at_sort_key";
     let mut builder = QueryBuilder::<Sqlite>::new(
         "SELECT ee.episode_reference, e.event_id FROM episode_events ee INNER JOIN events e ON e.event_id = ee.event_id WHERE ee.episode_reference IN (",
     );
@@ -1147,7 +1262,7 @@ async fn load_episode_event_references(
         .push(" AND e.namespace = ")
         .push_bind(namespace.as_str())
         .push(" ORDER BY ee.episode_reference, ")
-        .push(&recorded_at_sort_key)
+        .push(recorded_at_sort_key)
         .push(" DESC, e.rowid DESC");
 
     let mut grouped = BTreeMap::<String, Vec<EventReference>>::new();
@@ -1204,7 +1319,7 @@ async fn load_claim_evidence_references(
     owner: Owner,
     namespace: &Namespace,
 ) -> Result<BTreeMap<String, Vec<EventReference>>, AppError> {
-    let recorded_at_sort_key = sqlite_rfc3339_sort_key("e.recorded_at");
+    let recorded_at_sort_key = "e.recorded_at_sort_key";
     let mut builder = QueryBuilder::<Sqlite>::new(
         "SELECT el.claim_id, e.event_id FROM evidence_links el JOIN events e ON e.event_id = el.event_id WHERE el.claim_id IN (",
     );
@@ -1218,7 +1333,7 @@ async fn load_claim_evidence_references(
         .push(" AND e.namespace = ")
         .push_bind(namespace.as_str())
         .push(" ORDER BY el.claim_id, ")
-        .push(&recorded_at_sort_key)
+        .push(recorded_at_sort_key)
         .push(" DESC, e.rowid DESC");
 
     let mut grouped = BTreeMap::<String, Vec<EventReference>>::new();
@@ -1267,7 +1382,7 @@ async fn load_claim_revision_links(
     owner: Owner,
     namespace: &Namespace,
 ) -> Result<BTreeMap<String, ClaimRevisionLinks>, AppError> {
-    let recorded_at_sort_key = sqlite_rfc3339_sort_key("r.recorded_at");
+    let recorded_at_sort_key = "r.recorded_at_sort_key";
     let mut builder = QueryBuilder::<Sqlite>::new(
         "SELECT r.reflection_id, r.superseded_claim_id, r.replacement_claim_id, \
          CASE WHEN superseded.owner = ",
@@ -1301,7 +1416,7 @@ async fn load_claim_revision_links(
     }
     replacement
         .push_unseparated(") ORDER BY ")
-        .push_unseparated(&recorded_at_sort_key)
+        .push_unseparated(recorded_at_sort_key)
         .push_unseparated(" DESC, r.rowid DESC");
 
     let mut grouped = BTreeMap::<String, ClaimRevisionLinks>::new();
@@ -1368,7 +1483,7 @@ async fn query_evidence_event_ids_with_limit(
     }
 
     let mut sql = String::from("SELECT event_id, recorded_at, owner, kind, summary FROM events");
-    let recorded_at_sort_key = sqlite_rfc3339_sort_key("recorded_at");
+    let recorded_at_sort_key = "recorded_at_sort_key";
     let mut predicates = Vec::new();
 
     if query.namespace.is_some() {
@@ -1401,7 +1516,7 @@ async fn query_evidence_event_ids_with_limit(
     }
 
     sql.push_str(" ORDER BY ");
-    sql.push_str(&recorded_at_sort_key);
+    sql.push_str(recorded_at_sort_key);
     sql.push_str(" DESC, rowid DESC");
     if query.limit.is_some() || default_limit.is_some() {
         sql.push_str(" LIMIT ?");
@@ -1467,7 +1582,7 @@ impl ClaimStore for SqliteStore {
             sqlx::query(
                 r#"
                 SELECT claim_id, owner, subject, predicate, object, mode, status
-                , namespace
+                , namespace, recorded_at, observed_at
                 FROM claims
                 WHERE status = ?
                 ORDER BY rowid
@@ -1493,7 +1608,7 @@ impl ClaimStore for SqliteStore {
         let rows = map_sqlite(
             sqlx::query(
                 r#"
-                SELECT claim_id, owner, subject, predicate, object, mode, status, namespace
+                SELECT claim_id, owner, subject, predicate, object, mode, status, namespace, recorded_at, observed_at
                 FROM claims
                 WHERE status = ? AND owner = ? AND namespace = ?
                 ORDER BY rowid
@@ -1633,7 +1748,7 @@ impl EpisodeStore for SqliteStore {
                 "snapshot time window requires an explicit namespace".to_string(),
             ));
         }
-        let recorded_at_sort_key = sqlite_rfc3339_sort_key("events.recorded_at");
+        let recorded_at_sort_key = "events.recorded_at_sort_key";
         let mut query = QueryBuilder::<Sqlite>::new(
             r#"
             WITH ranked_episode_events AS (
@@ -1642,7 +1757,7 @@ impl EpisodeStore for SqliteStore {
             "#,
         );
         query
-            .push(&recorded_at_sort_key)
+            .push(recorded_at_sort_key)
             .push(
                 r#" AS recorded_at_sort_key,
                     events.rowid AS event_rowid,
@@ -1650,7 +1765,7 @@ impl EpisodeStore for SqliteStore {
                         PARTITION BY episode_events.episode_reference
                         ORDER BY "#,
             )
-            .push(&recorded_at_sort_key)
+            .push(recorded_at_sort_key)
             .push(
                 r#" DESC, events.rowid DESC, episode_events.rowid DESC
                     ) AS episode_rank
@@ -1669,14 +1784,14 @@ impl EpisodeStore for SqliteStore {
         if let Some(recorded_after) = time_window.recorded_after {
             query
                 .push(" AND ")
-                .push(&recorded_at_sort_key)
+                .push(recorded_at_sort_key)
                 .push(" >= ")
                 .push_bind(utc_timestamp_sort_key(&recorded_after));
         }
         if let Some(recorded_before) = time_window.recorded_before {
             query
                 .push(" AND ")
-                .push(&recorded_at_sort_key)
+                .push(recorded_at_sort_key)
                 .push(" <= ")
                 .push_bind(utc_timestamp_sort_key(&recorded_before));
         }
@@ -1701,7 +1816,10 @@ impl EpisodeStore for SqliteStore {
 #[async_trait]
 impl ReflectionStore for SqliteStore {
     async fn append_reflection(&self, reflection: StoredReflection) -> Result<(), AppError> {
-        insert_reflection(&self.pool, &reflection).await
+        let mut transaction = map_sqlite(self.pool.begin_with("BEGIN IMMEDIATE").await)?;
+        insert_reflection(transaction.as_mut(), &reflection).await?;
+        map_sqlite(transaction.commit().await)?;
+        Ok(())
     }
 }
 
@@ -1849,7 +1967,7 @@ impl IngestTransaction for SqliteIngestTransaction<'_> {
         self.ensure_writable()?;
         let result = async {
             let transaction = self.transaction.as_mut().ok_or_else(|| AppError::Message("transaction already closed".to_string()))?;
-            let row = map_sqlite(sqlx::query("SELECT event_id, recorded_at, owner, namespace, kind, summary, feedback_json FROM events WHERE event_id = ?")
+            let row = map_sqlite(sqlx::query("SELECT event_id, recorded_at, observed_at, owner, namespace, kind, summary, feedback_json FROM events WHERE event_id = ?")
                 .bind(event_id).fetch_optional(transaction.as_mut()).await)?;
             row.as_ref().map(stored_event_from_row).transpose()
         }.await;
@@ -2100,7 +2218,7 @@ impl ReflectionTransaction for SqliteReflectionTransaction<'_> {
         self.ensure_writable()?;
         let result = async {
             let transaction = self.transaction.as_mut().ok_or_else(|| AppError::Message("transaction already closed".to_string()))?;
-            let row = map_sqlite(sqlx::query("SELECT claim_id, owner, namespace, subject, predicate, object, mode, status FROM claims WHERE claim_id = ?")
+            let row = map_sqlite(sqlx::query("SELECT claim_id, owner, namespace, subject, predicate, object, mode, status, recorded_at, observed_at FROM claims WHERE claim_id = ?")
                 .bind(claim_id).fetch_optional(transaction.as_mut()).await)?;
             row.as_ref().map(stored_claim_from_row).transpose()
         }.await;
@@ -2114,7 +2232,7 @@ impl ReflectionTransaction for SqliteReflectionTransaction<'_> {
         self.ensure_writable()?;
         let result = async {
             let transaction = self.transaction.as_mut().ok_or_else(|| AppError::Message("transaction already closed".to_string()))?;
-            let row = map_sqlite(sqlx::query("SELECT event_id, recorded_at, owner, namespace, kind, summary, feedback_json FROM events WHERE event_id = ?")
+            let row = map_sqlite(sqlx::query("SELECT event_id, recorded_at, observed_at, owner, namespace, kind, summary, feedback_json FROM events WHERE event_id = ?")
                 .bind(event_id).fetch_optional(transaction.as_mut()).await)?;
             row.as_ref().map(stored_event_from_row).transpose()
         }.await;
@@ -2328,12 +2446,13 @@ where
     map_sqlite(
         sqlx::query(
             r#"
-            INSERT INTO events (event_id, recorded_at, owner, namespace, kind, summary, feedback_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO events (event_id, recorded_at, observed_at, owner, namespace, kind, summary, feedback_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             "#,
         )
         .bind(&event.event_id)
         .bind(event.recorded_at.to_rfc3339())
+        .bind(&event.observed_at)
         .bind(owner_as_str(event.event.owner()))
         .bind(event.event.namespace().as_str())
         .bind(event_kind_as_str(event.event.kind()))
@@ -2354,11 +2473,13 @@ where
         AppError::Message(format!("invalid claim namespace mapping: {error:?}"))
     })?;
 
+    // Conflict updates preserve ledger creation provenance, including legacy NULL.
+    // Supplying a new clock value must not silently date an existing unknown row.
     map_sqlite(
         sqlx::query(
             r#"
-            INSERT INTO claims (claim_id, owner, namespace, subject, predicate, object, mode, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO claims (claim_id, owner, namespace, subject, predicate, object, mode, status, recorded_at, observed_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(claim_id) DO UPDATE SET
                 owner = excluded.owner,
                 namespace = excluded.namespace,
@@ -2377,6 +2498,8 @@ where
         .bind(claim.claim.object())
         .bind(mode_as_str(claim.claim.mode()))
         .bind(claim.status.as_str())
+        .bind(claim.recorded_at.map(|value| value.to_rfc3339()))
+        .bind(&claim.observed_at)
         .execute(executor)
         .await,
     )?;
@@ -2432,13 +2555,10 @@ where
     Ok(())
 }
 
-async fn insert_reflection<'e, E>(
-    executor: E,
+async fn insert_reflection(
+    connection: &mut sqlx::SqliteConnection,
     reflection: &StoredReflection,
-) -> Result<(), AppError>
-where
-    E: sqlx::Executor<'e, Database = Sqlite>,
-{
+) -> Result<(), AppError> {
     let supporting_evidence_event_ids = serialize_json(&reflection.supporting_evidence_event_ids)?;
     let requested_identity_update = serialize_optional_json(&reflection.requested_identity_update)?;
     let requested_commitment_updates =
@@ -2468,11 +2588,11 @@ where
         .bind(supporting_evidence_event_ids)
         .bind(requested_identity_update)
         .bind(requested_commitment_updates)
-        .execute(executor)
+        .execute(&mut *connection)
         .await,
     )?;
 
-    Ok(())
+    super::reflection_scope::persist_relations(connection, reflection).await
 }
 
 async fn insert_trigger_ledger_entry<'e, E>(
@@ -2904,6 +3024,10 @@ fn stored_claim_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<StoredClaim, A
         row.get("claim_id"),
         claim,
         parse_claim_status(&row.get::<String, _>("status"))?,
+    )
+    .with_temporal_metadata(
+        parse_optional_timestamp(row.get::<Option<String>, _>("recorded_at"))?,
+        row.get("observed_at"),
     ))
 }
 
@@ -2929,7 +3053,8 @@ fn stored_event_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<StoredEvent, A
         row.get("event_id"),
         parse_timestamp(&row.get::<String, _>("recorded_at"))?,
         event,
-    ))
+    )
+    .with_observed_at(row.get("observed_at")))
 }
 
 fn stored_trigger_ledger_entry_from_row(

@@ -50,6 +50,7 @@ pub struct GetReflectionHistoryResult {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ReflectionHistoryRecord {
+    pub scope: crate::domain::reflection_scope::ReflectionScopeMetadata,
     pub reflection_id: String,
     pub recorded_at: DateTime<Utc>,
     pub summary: String,
@@ -92,6 +93,7 @@ where
 impl From<ClaimReflectionHistoryRecord> for ReflectionHistoryRecord {
     fn from(value: ClaimReflectionHistoryRecord) -> Self {
         Self {
+            scope: value.scope,
             reflection_id: value.reflection_id,
             recorded_at: value.recorded_at,
             summary: value.summary,

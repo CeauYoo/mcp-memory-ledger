@@ -26,13 +26,15 @@ use super::{
 
 pub const CURRENT_DATABASE_SCHEMA_VERSION: i64 = CURRENT_SCHEMA_VERSION;
 
-const REQUIRED_TABLES: [&str; 16] = [
+const REQUIRED_TABLES: [&str; 18] = [
     "events",
     "claims",
     "evidence_links",
     "episode_events",
     "reflections",
     "reflection_trigger_ledger",
+    "reflection_scopes",
+    "reflection_evidence",
     "identity_claims",
     "commitments",
     "operation_log",
@@ -45,13 +47,15 @@ const REQUIRED_TABLES: [&str; 16] = [
     "schema_migrations",
 ];
 
-const PRESERVED_DATA_TABLES: [&str; 13] = [
+const PRESERVED_DATA_TABLES: [&str; 15] = [
     "events",
     "claims",
     "evidence_links",
     "episode_events",
     "reflections",
     "reflection_trigger_ledger",
+    "reflection_scopes",
+    "reflection_evidence",
     "operation_log",
     "feedback_candidates",
     "experience_episodes",
@@ -477,6 +481,7 @@ async fn run_migration_steps(
             3 => ensure_reflection_audit_columns(connection).await?,
             4 => ensure_event_feedback_column(connection).await?,
             5 => install_v5(connection).await?,
+            6 => install_v6(connection).await?,
             _ => {
                 return Err(AppError::Message(format!(
                     "missing migration implementation for version {version}"
@@ -526,6 +531,75 @@ async fn install_v5(connection: &mut SqliteConnection) -> Result<(), AppError> {
         }
     }
     execute(connection, "CREATE INDEX IF NOT EXISTS idx_feedback_target_version ON feedback_candidates(namespace, target_claim_id, expected_target_version)").await?;
+    super::retrieval_index::install_retrieval_index(connection).await
+}
+
+async fn install_v6_extensions(connection: &mut SqliteConnection) -> Result<(), AppError> {
+    for statement in super::reflection_scope::REFLECTION_RELATIONS_SCHEMA_SQL
+        .split(';')
+        .filter(|part| !part.trim().is_empty())
+    {
+        execute(connection, statement).await?;
+    }
+    super::reflection_scope::backfill_legacy(connection).await?;
+    super::temporal_schema::install(connection).await
+}
+
+async fn install_v6(connection: &mut SqliteConnection) -> Result<(), AppError> {
+    // Only derived retrieval objects are dropped. Ledger/evidence/receipts remain
+    // under the lifecycle's writer reservation and foreign-key readback.
+    for (name, ddl) in super::retrieval_index::RETRIEVAL_INDEX_DDL.iter().rev() {
+        let kind = if ddl.starts_with("CREATE TRIGGER") {
+            "TRIGGER"
+        } else if ddl.starts_with("CREATE INDEX") {
+            "INDEX"
+        } else {
+            "TABLE"
+        };
+        execute(connection, &format!("DROP {kind} IF EXISTS {name}")).await?;
+    }
+    for (name, ddl) in super::temporal_schema::ddl().into_iter().rev() {
+        let kind = if ddl.starts_with("CREATE TRIGGER") {
+            "TRIGGER"
+        } else {
+            "INDEX"
+        };
+        execute(connection, &format!("DROP {kind} IF EXISTS {name}")).await?;
+    }
+    for (table, ddl) in [
+        ("events", super::schema::events_table_sql(false)),
+        ("claims", super::schema::claims_table_sql(false)),
+        (
+            "reflections",
+            super::schema::REFLECTIONS_TABLE_SQL.to_string(),
+        ),
+    ] {
+        let old_columns = sqlx::query(&format!("PRAGMA table_info('{table}')"))
+            .fetch_all(&mut *connection)
+            .await
+            .map_err(sqlite_error)?
+            .into_iter()
+            .map(|row| row.get::<String, _>("name"))
+            .collect::<BTreeSet<_>>();
+        execute(
+            connection,
+            &format!("ALTER TABLE {table} RENAME TO {table}_temporal_legacy"),
+        )
+        .await?;
+        execute(connection, &ddl).await?;
+        let new_columns = sqlx::query(&format!("PRAGMA table_info('{table}')"))
+            .fetch_all(&mut *connection)
+            .await
+            .map_err(sqlite_error)?
+            .into_iter()
+            .map(|row| row.get::<String, _>("name"))
+            .filter(|name| old_columns.contains(name))
+            .collect::<Vec<_>>();
+        let columns = new_columns.join(", ");
+        execute(connection, &format!("INSERT INTO {table} ({columns}) SELECT {columns} FROM {table}_temporal_legacy ORDER BY rowid")).await?;
+        execute(connection, &format!("DROP TABLE {table}_temporal_legacy")).await?;
+    }
+    install_v6_extensions(connection).await?;
     super::retrieval_index::install_retrieval_index(connection).await
 }
 
@@ -1059,6 +1133,7 @@ async fn schema_structure_issues(
         .map_err(sqlite_error)?;
     execute_init_sql(&mut reference).await?;
     install_v5(&mut reference).await?;
+    install_v6_extensions(&mut reference).await?;
     let mut issues = Vec::new();
     for table in REQUIRED_TABLES {
         let expected = table_structure(&mut reference, table).await?;
@@ -1067,6 +1142,21 @@ async fn schema_structure_issues(
             issues.push(format!(
                 "{table}: columns, constraints, foreign keys, or indexes differ"
             ));
+        }
+    }
+    for (name, ddl) in super::temporal_schema::ddl() {
+        if !ddl.starts_with("CREATE TRIGGER") {
+            continue;
+        }
+        let actual = sqlx::query_scalar::<_, String>(
+            "SELECT sql FROM sqlite_master WHERE type='trigger' AND name=?",
+        )
+        .bind(&name)
+        .fetch_optional(&mut *connection)
+        .await
+        .map_err(sqlite_error)?;
+        if actual.as_deref().map(normalize_schema_ddl) != Some(normalize_schema_ddl(&ddl)) {
+            issues.push(format!("{name}: recording-time trigger differs"));
         }
     }
     reference.close().await.map_err(sqlite_error)?;

@@ -16,3 +16,5 @@ pub mod recall_memory;
 
 pub mod experience;
 pub mod feedback_candidate;
+
+pub mod export_memory;

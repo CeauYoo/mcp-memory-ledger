@@ -1569,3 +1569,11 @@ Run `cargo test --test sqlite_lifecycle` for canonical structural readback, weak
 - Final verification also requires fmt, all-target/all-feature Clippy, full test tier, status-sync and exact-head platform CI. Historical v4 counts above are not reused as v5 results.
 
 Windows fixture portability: `python -m unittest discover -s tests/fixtures/memory-evaluation -p "test_*.py"` also forces a cp1252 default decoder in a regression and requires both multilingual JSON fixtures to retain their UTF-8 content. Earlier archived two-test metric logs predate this additional encoding regression; they are historical evidence, not its result.
+
+## Schema v6 temporal, scope and export regressions
+
+- `cargo test --test temporal_metadata --test sqlite_temporal_store`: distinct caller observation/application recording time, historical null, old receipt/fingerprint compatibility, replay immutability, nanosecond/extreme-offset/leap-second ordering, union prelimit and standalone compatibility, real range-index query plans.
+- `cargo test --test reflection_scope_history --test scoped_ledger_export --test schema6_migration`: independent source/effect metadata, safe targetless history, normalized durable evidence FK/rollback, ambiguous-history quarantine, bounded snapshot export and no export diagnostics writes, real v5 migration/raw preservation/backup recovery.
+- `python3 scripts/temporal-scope-export-smoke.py --binary target/debug/agent_llm_mm --output target/reports/temporal-scope-export`: real provider-free stdio timestamp/replay/history/export journey; use `python` and `.exe` on Windows. No real user database or remote model is used.
+
+Earlier schema-v5 570-test/evaluation artifacts remain historical. New-stage results must carry matching source/binary manifests and exact-head CI; do not transfer old performance numbers to the new schema.

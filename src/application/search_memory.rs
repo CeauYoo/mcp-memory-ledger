@@ -162,7 +162,7 @@ impl SearchMemoryInput {
                     || self.reflection_reference.is_some() =>
             {
                 Err(AppError::InvalidParams(
-                    "event_reference, kind, recorded time filters, episode_reference, and reflection_reference require their matching record_type; claims do not have a stored recorded_at timestamp"
+                    "event_reference, kind, recorded time filters, episode_reference, and reflection_reference require their matching record_type; Claim recorded-time filtering is not supported; legacy recording times may be unknown"
                         .to_string(),
                 ))
             }
@@ -215,6 +215,7 @@ pub enum SearchMemoryRecord {
     Event {
         id: String,
         recorded_at: DateTime<Utc>,
+        observed_at: Option<String>,
         owner: Owner,
         namespace: String,
         kind: EventKind,
@@ -225,6 +226,8 @@ pub enum SearchMemoryRecord {
     },
     Claim {
         id: String,
+        recorded_at: Option<DateTime<Utc>>,
+        observed_at: Option<String>,
         owner: Owner,
         namespace: String,
         subject: String,
@@ -243,6 +246,7 @@ pub enum SearchMemoryRecord {
     },
     Reflection {
         id: String,
+        scope: crate::domain::reflection_scope::ReflectionScopeMetadata,
         recorded_at: DateTime<Utc>,
         owner: Owner,
         namespace: String,
@@ -323,51 +327,63 @@ where
     D: MemoryReadStore + Sync,
 {
     let records = match record_type {
-        MemoryRecordType::Event => deps
-            .query_event_records(EventRecordQuery {
+        MemoryRecordType::Event => {
+            let query = EventRecordQuery {
                 scope: scope.clone(),
                 event_reference: input.event_reference.clone(),
                 kind: input.kind,
                 recorded_after: input.recorded_after,
                 recorded_before: input.recorded_before,
                 limit: input.limit,
-            })
-            .await?
-            .into_iter()
-            .map(SearchMemoryRecord::from)
-            .collect(),
-        MemoryRecordType::Claim => deps
-            .query_claim_records(ClaimRecordQuery {
+            };
+            let records = if input.is_union() {
+                deps.query_event_records_for_union(query).await?
+            } else {
+                deps.query_event_records(query).await?
+            };
+            records.into_iter().map(SearchMemoryRecord::from).collect()
+        }
+        MemoryRecordType::Claim => {
+            let query = ClaimRecordQuery {
                 scope: scope.clone(),
                 claim_reference: input.claim_reference.clone(),
                 status: claim_query_status(input),
                 mode: input.mode,
                 limit: input.limit,
-            })
-            .await?
-            .into_iter()
-            .map(SearchMemoryRecord::from)
-            .collect(),
-        MemoryRecordType::Episode => deps
-            .query_episode_records(EpisodeRecordQuery {
+            };
+            let records = if input.is_union() {
+                deps.query_claim_records_for_union(query).await?
+            } else {
+                deps.query_claim_records(query).await?
+            };
+            records.into_iter().map(SearchMemoryRecord::from).collect()
+        }
+        MemoryRecordType::Episode => {
+            let query = EpisodeRecordQuery {
                 scope: scope.clone(),
                 episode_reference: input.episode_reference.clone(),
                 limit: input.limit,
-            })
-            .await?
-            .into_iter()
-            .map(SearchMemoryRecord::from)
-            .collect(),
-        MemoryRecordType::Reflection => deps
-            .query_reflection_records(ReflectionRecordQuery {
+            };
+            let records = if input.is_union() {
+                deps.query_episode_records_for_union(query).await?
+            } else {
+                deps.query_episode_records(query).await?
+            };
+            records.into_iter().map(SearchMemoryRecord::from).collect()
+        }
+        MemoryRecordType::Reflection => {
+            let query = ReflectionRecordQuery {
                 scope: scope.clone(),
                 reflection_reference: input.reflection_reference.clone(),
                 limit: input.limit,
-            })
-            .await?
-            .into_iter()
-            .map(SearchMemoryRecord::from)
-            .collect(),
+            };
+            let records = if input.is_union() {
+                deps.query_reflection_records_for_union(query).await?
+            } else {
+                deps.query_reflection_records(query).await?
+            };
+            records.into_iter().map(SearchMemoryRecord::from).collect()
+        }
     };
     Ok(records)
 }
@@ -394,7 +410,7 @@ fn union_recorded_at(record: &SearchMemoryRecord) -> Option<DateTime<Utc>> {
         SearchMemoryRecord::Event { recorded_at, .. }
         | SearchMemoryRecord::Episode { recorded_at, .. }
         | SearchMemoryRecord::Reflection { recorded_at, .. } => Some(*recorded_at),
-        SearchMemoryRecord::Claim { .. } => None,
+        SearchMemoryRecord::Claim { recorded_at, .. } => *recorded_at,
     }
 }
 
@@ -422,6 +438,7 @@ impl From<EventReadRecord> for SearchMemoryRecord {
         Self::Event {
             id: reference.clone(),
             recorded_at: value.event.recorded_at,
+            observed_at: value.event.observed_at.clone(),
             owner: value.event.event.owner(),
             namespace: value.event.event.namespace().as_str().to_string(),
             kind: value.event.event.kind(),
@@ -440,6 +457,8 @@ impl From<ClaimReadRecord> for SearchMemoryRecord {
     fn from(value: ClaimReadRecord) -> Self {
         Self::Claim {
             id: ClaimReference::from_claim_id(&value.claim.claim_id).canonical(),
+            recorded_at: value.claim.recorded_at,
+            observed_at: value.claim.observed_at.clone(),
             owner: value.claim.claim.owner(),
             namespace: value.claim.claim.namespace().as_str().to_string(),
             subject: value.claim.claim.subject().to_string(),
@@ -496,6 +515,7 @@ impl From<ReflectionReadRecord> for SearchMemoryRecord {
     fn from(value: ReflectionReadRecord) -> Self {
         Self::Reflection {
             id: value.reflection_id,
+            scope: value.scope,
             recorded_at: value.recorded_at,
             owner: value.owner,
             namespace: value.namespace.as_str().to_string(),

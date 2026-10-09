@@ -152,6 +152,7 @@ mod tests {
                     record: SearchMemoryRecord::Event {
                         id: format!("event:{i}"),
                         recorded_at: chrono::DateTime::from_timestamp(0, 0).unwrap(),
+                        observed_at: None,
                         owner: Owner::User,
                         namespace: "user/test".into(),
                         kind: EventKind::Observation,

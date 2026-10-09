@@ -1,6 +1,11 @@
+#[path = "legacy_schema6.rs"]
+mod version6;
+pub use version6::remove_v6_objects;
+
 // Test-only removal of additive v5 objects before constructing real old-version fixtures.
 // Never used by application migration or recovery.
 pub async fn remove_v5_objects(connection: &mut sqlx::SqliteConnection) {
+    remove_v6_objects(connection).await;
     for trigger in [
         "text_recall_events_ai",
         "text_recall_events_ad",

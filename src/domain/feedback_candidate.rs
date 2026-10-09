@@ -90,10 +90,22 @@ pub struct FeedbackCandidate {
     pub replacement_claim_id: Option<String>,
 }
 
-/// A content fingerprint, not a mutation counter: status and every Claim field
-/// are included because legacy adapters may overwrite a Claim under the same ID.
+/// Stable v1 content fingerprint of the original Claim identity, content and
+/// status fields. Additive provenance metadata is deliberately excluded: a
+/// schema migration must not invalidate already-persisted feedback candidates.
 pub fn claim_version(claim: &StoredClaim) -> Result<String, AppError> {
-    let bytes = serde_json::to_vec(claim).map_err(|e| AppError::Message(e.to_string()))?;
+    #[derive(Serialize)]
+    struct ClaimVersionV1<'a> {
+        claim_id: &'a str,
+        claim: &'a ClaimDraft,
+        status: ClaimStatus,
+    }
+    let payload = ClaimVersionV1 {
+        claim_id: &claim.claim_id,
+        claim: &claim.claim,
+        status: claim.status,
+    };
+    let bytes = serde_json::to_vec(&payload).map_err(|e| AppError::Message(e.to_string()))?;
     Ok(format!("claim-version:v1:{:x}", Sha256::digest(bytes)))
 }
 

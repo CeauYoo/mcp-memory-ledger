@@ -5,6 +5,7 @@ use crate::{
         event::EventReference,
         identity_core::IdentityCore,
         reflection::{Reflection, ReflectionIdentityUpdate},
+        reflection_scope::{ReflectionScopeMetadata, known_scope},
         rules::reflection_policy::{ReflectionDecision, ReflectionTrigger, classify_reflection},
         types::Owner,
     },
@@ -27,6 +28,8 @@ pub struct ReflectionInput {
     handled_trigger_ledger_entry: Option<StoredTriggerLedgerEntry>,
     #[serde(default)]
     strict_evidence_scope: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    origin_scope: Option<crate::domain::types::MemoryScope>,
     #[serde(skip)]
     write_receipt: Option<crate::ports::WriteReceiptRequest>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -50,6 +53,7 @@ impl ReflectionInput {
             commitment_updates: None,
             handled_trigger_ledger_entry: None,
             strict_evidence_scope: false,
+            origin_scope: None,
             write_receipt: None,
             feedback_candidate: None,
         }
@@ -69,9 +73,16 @@ impl ReflectionInput {
             commitment_updates: None,
             handled_trigger_ledger_entry: None,
             strict_evidence_scope: false,
+            origin_scope: None,
             write_receipt: None,
             feedback_candidate: None,
         }
+    }
+
+    /// Optional audit attribution. This grants no mutation or global-write authority.
+    pub fn with_origin_scope(mut self, scope: crate::domain::types::MemoryScope) -> Self {
+        self.origin_scope = Some(scope);
+        self
     }
 
     pub(crate) fn with_feedback_candidate(
@@ -151,6 +162,7 @@ where
         commitment_updates,
         handled_trigger_ledger_entry,
         strict_evidence_scope,
+        origin_scope,
         write_receipt,
         feedback_candidate,
     } = input;
@@ -170,7 +182,7 @@ where
     });
     let requires_supporting_evidence =
         replacement_claim.is_some() || identity_update.is_some() || commitment_updates.is_some();
-    let supporting_evidence_event_ids = if requires_supporting_evidence {
+    let supporting_evidence_event_ids = if requires_supporting_evidence || origin_scope.is_some() {
         resolve_evidence_event_ids(
             deps,
             replacement_evidence_query,
@@ -328,6 +340,7 @@ where
     } else {
         None
     };
+    let mut evidence_scopes = Vec::new();
     for event_id in &supporting_evidence_event_ids {
         let event = transaction
             .load_event_for_reflection(event_id)
@@ -337,6 +350,7 @@ where
                     "unknown replacement evidence event id: {event_id}"
                 ))
             })?;
+        evidence_scopes.push(known_scope(event.event.owner(), event.event.namespace()));
         if target.as_ref().is_some_and(|target| {
             let same_scope = event.event.owner() == target.claim.owner()
                 && event.event.namespace() == target.claim.namespace();
@@ -355,6 +369,15 @@ where
         }
     }
 
+    let scope = ReflectionScopeMetadata::resolve(
+        origin_scope,
+        target
+            .as_ref()
+            .and_then(|target| known_scope(target.claim.owner(), target.claim.namespace())),
+        &evidence_scopes,
+        identity_update.is_some() || commitment_updates.is_some(),
+    )?;
+
     let commitment_updates = if let Some(commitment_updates) = commitment_updates {
         let existing_commitments = transaction.load_commitments().await?;
         Some(preserve_baseline_commitments(
@@ -369,11 +392,10 @@ where
             claim.validate(supporting_evidence_event_ids.len())?;
             let claim_id = format!("{reflection_id}:replacement");
             transaction
-                .upsert_claim(StoredClaim::new(
-                    claim_id.clone(),
-                    claim,
-                    ClaimStatus::Active,
-                ))
+                .upsert_claim(
+                    StoredClaim::new(claim_id.clone(), claim, ClaimStatus::Active)
+                        .with_recorded_at(recorded_at),
+                )
                 .await?;
             for event_id in &supporting_evidence_event_ids {
                 transaction
@@ -412,6 +434,7 @@ where
                 target_claim_id.clone(),
                 replacement_claim_id.clone(),
             )
+            .with_scope(scope)
             .with_supporting_evidence_event_ids(supporting_evidence_event_ids)
             .with_requested_identity_update(identity_update)
             .with_requested_commitment_updates(commitment_updates),

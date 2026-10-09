@@ -1,0 +1,1 @@
+{"status":"passed","kind":"installed_binary_local_simulation","provider":"mock","remote_model_calls":0,"real_fresh_machine_evidence":false,"binary_sha256":"3045e57b2f1490fea5be62f2acf716f307f0841279298f40a094c81f15001a91","duration_seconds":0.915,"scope_leaks":0,"restart":true,"correction_replay":true,"backup_restore":true}

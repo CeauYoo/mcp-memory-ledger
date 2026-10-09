@@ -190,10 +190,9 @@ fn selection_query(
         sql.push(format!(" AND {id} IN (SELECT record_id FROM candidates)"));
     }
     sql.push(" AND matched_terms > 0 ORDER BY matched_terms DESC, ");
-    if group == 1 {
-        // RFC3339 offsets and subsecond precision are normalized before sorting.
-        sql.push(event_sort_key("recorded_at")).push(" DESC, ");
-    }
+    // Persisted UTC nanosecond keys keep offsets equivalent and unknown legacy
+    // Claim times last without inventing creation times from row order.
+    sql.push("recorded_at_sort_key DESC, ");
     sql.push("id ASC LIMIT ")
         .push_bind((query.limit + 1) as i64);
     sql
@@ -220,12 +219,6 @@ fn literal_match(sql: &mut QueryBuilder<'_, Sqlite>, columns: &[&str], term: &st
             .push(") > 0");
     }
     sql.push(")");
-}
-
-fn event_sort_key(column: &str) -> String {
-    format!(
-        "strftime('%Y-%m-%dT%H:%M:%S', substr({column}, 1, 19) || CASE WHEN upper(substr({column}, -1)) = 'Z' THEN 'Z' ELSE substr({column}, -6) END) || '.' || CASE WHEN substr({column}, 20, 1) = '.' THEN substr(substr({column}, 21, length({column}) - 20 - CASE WHEN upper(substr({column}, -1)) = 'Z' THEN 1 ELSE 6 END) || '000000000', 1, 9) ELSE '000000000' END"
-    )
 }
 
 #[cfg(test)]

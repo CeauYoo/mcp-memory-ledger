@@ -69,7 +69,7 @@ pub(super) const RETRIEVAL_INDEX_DDL: &[(&str, &str)] = &[
     ),
     (
         "text_recall_events_au",
-        "CREATE TRIGGER text_recall_events_au AFTER UPDATE ON events BEGIN DELETE FROM text_recall_documents WHERE record_type='event' AND record_id=old.event_id; INSERT INTO text_recall_documents(record_type, record_id, owner, namespace, summary, requires_literal_fallback) VALUES ('event', new.event_id, new.owner, new.namespace, substr(lower(new.summary),1), instr(new.summary,char(0))>0); END",
+        "CREATE TRIGGER text_recall_events_au AFTER UPDATE OF event_id, owner, namespace, summary ON events BEGIN DELETE FROM text_recall_documents WHERE record_type='event' AND record_id=old.event_id; INSERT INTO text_recall_documents(record_type, record_id, owner, namespace, summary, requires_literal_fallback) VALUES ('event', new.event_id, new.owner, new.namespace, substr(lower(new.summary),1), instr(new.summary,char(0))>0); END",
     ),
     (
         "text_recall_claims_ai",
@@ -81,7 +81,7 @@ pub(super) const RETRIEVAL_INDEX_DDL: &[(&str, &str)] = &[
     ),
     (
         "text_recall_claims_au",
-        "CREATE TRIGGER text_recall_claims_au AFTER UPDATE ON claims BEGIN DELETE FROM text_recall_documents WHERE record_type='claim' AND record_id=old.claim_id; INSERT INTO text_recall_documents(record_type, record_id, owner, namespace, subject, predicate, object, requires_literal_fallback) SELECT 'claim', new.claim_id, new.owner, new.namespace, substr(lower(new.subject),1), substr(lower(new.predicate),1), substr(lower(new.object),1), (instr(new.subject,char(0))>0 OR instr(new.predicate,char(0))>0 OR instr(new.object,char(0))>0) WHERE new.status='active'; END",
+        "CREATE TRIGGER text_recall_claims_au AFTER UPDATE OF claim_id, owner, namespace, subject, predicate, object, status ON claims BEGIN DELETE FROM text_recall_documents WHERE record_type='claim' AND record_id=old.claim_id; INSERT INTO text_recall_documents(record_type, record_id, owner, namespace, subject, predicate, object, requires_literal_fallback) SELECT 'claim', new.claim_id, new.owner, new.namespace, substr(lower(new.subject),1), substr(lower(new.predicate),1), substr(lower(new.object),1), (instr(new.subject,char(0))>0 OR instr(new.predicate,char(0))>0 OR instr(new.object,char(0))>0) WHERE new.status='active'; END",
     ),
 ];
 

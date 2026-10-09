@@ -337,7 +337,7 @@ impl Server {
     }
 
     #[tool(
-        description = "Search complete event, claim, scoped Episode, or scoped Reflection provenance records in one explicit local memory namespace. Omitted record_type preserves Event behavior. Additive record_types runs a scoped union of the requested types with a stable recorded_at / type / id order. Event queries support exact reference, kind, inclusive time range, and bounded recent-first results. Claim queries support exact reference, status, and mode; claims have no stored recorded_at timestamp. Episode queries support an exact persisted episode_reference. Reflection queries attribute rows only through same-scope Claim endpoints, hide mixed-scope edges, and exclude record-only reflections. Union queries reject type-specific filters.",
+        description = "Search complete event, claim, scoped Episode, or scoped Reflection provenance records in one explicit local memory namespace. Omitted record_type preserves Event behavior. Additive record_types runs a scoped union of the requested types with a stable recorded_at / type / id order. Event queries support exact reference, kind, inclusive time range, and bounded recent-first results. Claim queries support exact reference, status and mode, with nullable recording/observation metadata; explicit time-window filters remain Event-only. Episode queries support an exact persisted episode_reference. Reflection queries preserve same-scope Claim endpoint rules and additionally admit safely attributed targetless records; unknown or incompatible origin/effect/evidence scope stays hidden. Union queries reject type-specific filters.",
         input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<SearchMemoryParams>>()
     )]
     async fn search_memory(&self, raw_params: JsonObject) -> Result<CallToolResult, McpError> {
@@ -399,7 +399,7 @@ impl Server {
     }
 
     #[tool(
-        description = "Get one complete event, claim, scoped Episode, or scoped Reflection record by stable ID inside one explicit local memory namespace. Omitted record_type preserves Event behavior. Claim, Episode, and Reflection lookup require their explicit record_type. Episode and Reflection ids are opaque exact persisted references. Record-only reflections stay invisible. Canonical and raw Event/Claim IDs are supported. A missing or cross-scope record returns null without widening the query.",
+        description = "Get one complete event, claim, scoped Episode, or scoped Reflection record by stable ID inside one explicit local memory namespace. Omitted record_type preserves Event behavior. Claim, Episode, and Reflection lookup require their explicit record_type. Episode and Reflection ids are opaque exact persisted references. Safely attributed record-only reflections are readable; unknown or incompatible origin/effect/evidence scope stays hidden. Canonical and raw Event/Claim IDs are supported. A missing or cross-scope record returns null without widening the query.",
         input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<GetMemoryParams>>()
     )]
     async fn get_memory(&self, raw_params: JsonObject) -> Result<CallToolResult, McpError> {
@@ -516,7 +516,7 @@ impl Server {
     }
 
     #[tool(
-        description = "Read scoped identity or commitment revision audits persisted on reflections inside one explicit local memory namespace. Only claim-attributed reflections are visible. Record-only identity or commitment updates stay hidden. This first slice does not version identity_claims or commitments tables and does not provide rollback.",
+        description = "Read scoped identity or commitment revision audits persisted on reflections inside one explicit local memory namespace. Claim-attributed and safely source/effect-attributed targetless audits are visible; unknown or incompatible record-only scope stays hidden. This first slice does not version identity_claims or commitments tables and does not provide rollback.",
         input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<GetSelfModelHistoryParams>>()
     )]
     async fn get_self_model_history(
@@ -929,7 +929,7 @@ impl Server {
     }
 
     #[tool(
-        description = "Record a reflection that supersedes an existing claim. Scoped claim correction with explicit namespace uses supersede_memory.",
+        description = "Record a governed Claim correction, or evidence-backed targetless record-only history with explicit origin_namespace. Targetless MCP calls cannot change identity or commitments; scope metadata grants no authority. Scoped Claim correction also uses supersede_memory.",
         input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<RunReflectionParams>>()
     )]
     async fn run_reflection(&self, raw_params: JsonObject) -> Result<CallToolResult, McpError> {
@@ -1417,6 +1417,22 @@ impl Server {
     }
 
     #[tool(
+        description = "Export safe same-scope durable memory as bounded inspectable JSON from one read snapshot. No database writes or logs, including on failure. Excludes global identity/commitments, operation logs/receipts, feedback candidates and derived indexes. This is not a replayable backup, secret-redaction service or authorization boundary. Limits fail closed rather than produce dangling truncated graphs.",
+        input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<crate::domain::ledger_export::ExportMemoryRequest>>()
+    )]
+    async fn export_memory(&self, raw_params: JsonObject) -> Result<CallToolResult, McpError> {
+        // Export intentionally bypasses diagnostic wrappers too: a read-only
+        // extraction must not leave operation-log rows when it succeeds or fails.
+        let params =
+            decode_tool_params::<crate::domain::ledger_export::ExportMemoryRequest>(raw_params)
+                .map_err(|error| McpError::invalid_params(error.to_string(), None))?;
+        let result = crate::application::export_memory::export_memory(&self.runtime.store, params)
+            .await
+            .map_err(|error| McpError::invalid_params(error.to_string(), None))?;
+        structured(result)
+    }
+
+    #[tool(
         description = "Inspect the rebuildable local FTS index without writing. Checks source projection, postings, and trigger definitions; ledger facts remain authoritative."
     )]
     async fn inspect_retrieval_index(&self) -> Result<CallToolResult, McpError> {
@@ -1754,6 +1770,30 @@ impl EventStore for Runtime {
 
 #[async_trait]
 impl MemoryReadStore for Runtime {
+    async fn query_event_records_for_union(
+        &self,
+        query: EventRecordQuery,
+    ) -> Result<Vec<EventReadRecord>, AppError> {
+        self.store.query_event_records_for_union(query).await
+    }
+    async fn query_claim_records_for_union(
+        &self,
+        query: ClaimRecordQuery,
+    ) -> Result<Vec<ClaimReadRecord>, AppError> {
+        self.store.query_claim_records_for_union(query).await
+    }
+    async fn query_episode_records_for_union(
+        &self,
+        query: EpisodeRecordQuery,
+    ) -> Result<Vec<EpisodeReadRecord>, AppError> {
+        self.store.query_episode_records_for_union(query).await
+    }
+    async fn query_reflection_records_for_union(
+        &self,
+        query: ReflectionRecordQuery,
+    ) -> Result<Vec<ReflectionReadRecord>, AppError> {
+        self.store.query_reflection_records_for_union(query).await
+    }
     async fn query_event_records(
         &self,
         query: EventRecordQuery,

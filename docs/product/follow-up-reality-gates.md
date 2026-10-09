@@ -5,7 +5,7 @@ planning-only, or not-yet-merged status. It is intentionally stricter than the
 roadmap: a module is treated as complete only when the implementation, fresh
 evidence, and product wording all line up.
 
-Current baseline:
+Historical consolidation baseline (current runtime additions follow below):
 
 - consolidation baseline: `1f7390d`, derived from `dev-work@6fcbb5f`; the
   active work branch is intentionally not frozen in this status document, and
@@ -18,6 +18,14 @@ Current baseline:
   write path
 - Local Product Alpha is still in progress until every release gate has fresh,
   reviewable evidence and a human release decision
+
+## 2026-10-09 current runtime additions
+
+The current draft branch has implemented scoped corrections/retry receipts, schema-v5 feedback candidates, FTS5 retrieval and inert versioned experience candidates. Exact head9a9d3be passed all three platform jobs; the source-specific logs/manifests are linked from the draft PR and evaluation evidence. This is not Alpha approval.
+
+The schema-v6 slice further implements nullable historical Claim recording time, independent caller observation time, normalized nanosecond keys, durable Reflection origin/effect and evidence relations, safe targetless reads and bounded readonly export. Its fresh validation is tracked separately; prior v5 metrics do not certify the changed source. Export preserves complete safe Claim-source closure by omitting unsafe records and their dependent graph, not silently dropping half a Claim's evidence. Broader global self-model rollback, destructive retention policies, user-client/fresh-machine/package and real-model efficacy gates remain distinct.
+
+The older blocker lists below describe the original planning baseline where explicitly historical. They cannot be used to claim current scoped correction, record-only scope metadata, or inert experience candidates are absent.
 
 ## 2026-07-10 Replan Blockers
 
@@ -51,9 +59,7 @@ broader autonomy work even when an older productization slice is marked
   supporting-Episode counting is now scope-bound, Claim search/get hide
   mixed-scope revision edges in full, and new writes reject `Owner::Unknown` while
   read-only doctor inventories leftover Unknown rows. Evidence-relation runtime
-  read and a scoped cross-type union now exist. Identity/commitment history,
-  record-only reflection history, and audited
-  supersession/correction tools remain unimplemented.
+  read and a scoped cross-type union now exist. Scoped identity/commitment audit and correction tools are implemented; safely attributed record-only Reflection history is added in v6. A versioned global identity/commitment rollback ledger remains outside those contracts.
 - `partial`: Linux/macOS repository CI and end-to-end stderr tracing now exist,
   but executable packaging and real fresh-machine/Windows evidence remain
   incomplete.
@@ -106,8 +112,7 @@ tests, docs, fresh evidence, and review:
   reports missing binary / installer / service evidence, but installer, binary
   package, service manager, auto-updater, Windows/fresh-machine evidence,
   Beta/GA evidence, and production-ready claims remain blocked.
-- `partial`: Multi-layer memory; current support is read-only projection only,
-  including richer memory semantics status projection, not procedural memory,
+- `partial`: Multi-layer memory; legacy projections remain read-only, while v5/v6 provide explicit inert semantic/procedural candidates and richer Episodes. This does not establish procedural execution,
   slow variables, durable self-model writes, or complete multi-layer cognition.
 - `blocked claim`: Physics-informed runtime, solver/controller behavior,
   constraint optimizer, physical controller, and scientific validation claims

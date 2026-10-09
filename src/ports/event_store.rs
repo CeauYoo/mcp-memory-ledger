@@ -14,6 +14,9 @@ use crate::{
 pub struct StoredEvent {
     pub event_id: String,
     pub recorded_at: DateTime<Utc>,
+    /// Exact caller-supplied observation time, independent of recorded_at.
+    #[serde(default)]
+    pub observed_at: Option<String>,
     pub event: Event,
 }
 
@@ -34,8 +37,14 @@ impl StoredEvent {
         Self {
             event_id,
             recorded_at,
+            observed_at: None,
             event,
         }
+    }
+
+    pub fn with_observed_at(mut self, observed_at: Option<String>) -> Self {
+        self.observed_at = observed_at;
+        self
     }
 
     pub fn event_reference(&self) -> String {

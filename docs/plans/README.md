@@ -8,7 +8,7 @@
   - 状态：`active / M0 complete / M1 active / M1.0.1, M1.0.2, M1.0.3, M1.1.1, M1.1.2, M1.1.3, M1.1.4, M1.1.5, M1.1.6, M1.2.1, M1.2.2, M1.2.3, M1.2.4, M1.2.5, M1.2.6 and M1.2.7 complete`
   - 目标：把现有 technical MVP 收束为可信、可检索、可审计、可恢复的本地 MCP Memory Ledger
   - 当前里程碑：`M1 Trustworthy Recall`
-  - 下一领取顺序：`M1.3.0 Current-Schema Structural Readback Gate`
+  - 当前执行顺序：原方案 schema-v6 时间/独立范围/只读导出验证与发布 → 独立的 in-crate 模块拆分/上下文状态诊断；M1.3.0 与 M2.0.1 已完成，真实用户客户端/正式发布门另行保留
 
 ## 权威层级
 

@@ -9,6 +9,7 @@ use crate::{
         commitment::Commitment,
         event::EventReference,
         reflection::ReflectionIdentityUpdate,
+        reflection_scope::ReflectionScopeMetadata,
         types::{EventKind, MemoryScope, Mode, Namespace, Owner},
     },
     error::AppError,
@@ -93,6 +94,7 @@ pub struct ReflectionProvenanceLinks {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReflectionReadRecord {
+    pub scope: ReflectionScopeMetadata,
     pub reflection_id: String,
     pub recorded_at: DateTime<Utc>,
     pub owner: Owner,
@@ -111,6 +113,7 @@ impl ReflectionReadRecord {
         provenance: ReflectionProvenanceLinks,
     ) -> Self {
         Self {
+            scope: ReflectionScopeMetadata::default(),
             reflection_id,
             recorded_at,
             owner,
@@ -136,6 +139,7 @@ pub struct ClaimReflectionHistoryQuery {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClaimReflectionHistoryRecord {
+    pub scope: ReflectionScopeMetadata,
     pub reflection_id: String,
     pub recorded_at: DateTime<Utc>,
     pub summary: String,
@@ -202,6 +206,37 @@ impl EpisodeReadRecord {
 
 #[async_trait]
 pub trait MemoryReadStore {
+    /// Union candidate reads apply descending recording time and descending
+    /// stable ID before the per-type limit. Adapters should override these when
+    /// standalone browsing uses a different tie-break or has unknown times.
+    async fn query_event_records_for_union(
+        &self,
+        query: EventRecordQuery,
+    ) -> Result<Vec<EventReadRecord>, AppError> {
+        self.query_event_records(query).await
+    }
+
+    async fn query_claim_records_for_union(
+        &self,
+        query: ClaimRecordQuery,
+    ) -> Result<Vec<ClaimReadRecord>, AppError> {
+        self.query_claim_records(query).await
+    }
+
+    async fn query_episode_records_for_union(
+        &self,
+        query: EpisodeRecordQuery,
+    ) -> Result<Vec<EpisodeReadRecord>, AppError> {
+        self.query_episode_records(query).await
+    }
+
+    async fn query_reflection_records_for_union(
+        &self,
+        query: ReflectionRecordQuery,
+    ) -> Result<Vec<ReflectionReadRecord>, AppError> {
+        self.query_reflection_records(query).await
+    }
+
     async fn query_event_records(
         &self,
         query: EventRecordQuery,
@@ -262,6 +297,7 @@ pub struct SelfModelHistoryQuery {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SelfModelHistoryRecord {
+    pub scope: ReflectionScopeMetadata,
     pub reflection_id: String,
     pub recorded_at: DateTime<Utc>,
     pub summary: String,

@@ -29,6 +29,8 @@
 
 ## 2026-10-09 原方案续建
 
+继续实施原文明确的数据模型要求：schema v6 时间键、独立 Reflection origin/effect 与安全 targetless history、只读 scoped export。未知历史保持未知；不以“迁移复杂”作为权限阻塞。模块拆分在该阶段验证后独立提交，避免与数据语义变化混淆。
+
 本轮按原 A–E 讨论推进反馈候选、确定性支持合同、派生全文索引、离线对照/容量证据和有界经验候选。运行时边界与可复现入口见 [A–E 指南](memory-feedback-experience.md)；全量要求和遗留项见 [原文追踪矩阵](plans/2026-10-09-original-plan-traceability.md)。生命周期基础已通过后前移这组有限切片的理由写入唯一 active plan；不将 M2/M3 真实产品与模型效果门自动标成完成。
 
 ## 当前事实（历史切片说明；新 v5 入口见上）
@@ -90,15 +92,15 @@ M0 未通过前，不开始新 provider、daemon 写能力、remote/team 或正�
 
 目标：完成用户真正需要的本地记忆闭环。
 
-已完成十六片（截至 2026-08-13）：`M1.0.1`–`M1.0.3` 三项 Scope/Data-Integrity Gates、`M1.1.1` Event / `M1.1.2` Claim / `M1.1.3` Episode / `M1.1.4` Reflection scoped search、`M1.1.5` scoped evidence-relation runtime、`M1.1.6` 跨类型 union，以及 Event/Claim/Episode/Reflection lookup、Claim reflection history、identity/commitment revision audit 与 scoped Claim audited supersede。Event / Claim search 和 lookup 继续使用显式 namespace、SQL scope-first filtering、provider-free read 与跨 scope empty/null；Episode search 与 lookup 以同 scope Event membership 投影 Episode，并把 persisted reference 当作 opaque exact ID。Reflection search 与 lookup 只通过同 scope Claim 端点归属，隐藏 mixed-scope edge，并排除 record-only 行。additive `record_types` 在同一 scope 内合并已稳定的四类 tagged record，并按 recorded_at / type / id 收口。第 8 个 MCP 工具 `get_evidence_relation` 把既有只读 projection 收敛为 scoped trigger-window ∩ selected-subset 合同。第 10 个 MCP 工具 `supersede_memory` 把 Claim 纠错收敛为显式 namespace + evidence 的 `run_reflection` 门面，默认不 hard delete。完整 M1、versioned identity/commitment ledger、record-only reflection history 和真实客户端退出门仍开放。
+已完成十六片（截至 2026-08-13）：`M1.0.1`–`M1.0.3` 三项 Scope/Data-Integrity Gates、`M1.1.1` Event / `M1.1.2` Claim / `M1.1.3` Episode / `M1.1.4` Reflection scoped search、`M1.1.5` scoped evidence-relation runtime、`M1.1.6` 跨类型 union，以及 Event/Claim/Episode/Reflection lookup、Claim reflection history、identity/commitment revision audit 与 scoped Claim audited supersede。Event / Claim search 和 lookup 继续使用显式 namespace、SQL scope-first filtering、provider-free read 与跨 scope empty/null；Episode search 与 lookup 以同 scope Event membership 投影 Episode，并把 persisted reference 当作 opaque exact ID。Reflection search 与 lookup 只通过同 scope Claim 端点归属，隐藏 mixed-scope edge，并排除 record-only 行。additive `record_types` 在同一 scope 内合并已稳定的四类 tagged record，并按 recorded_at / type / id 收口。第 8 个 MCP 工具 `get_evidence_relation` 把既有只读 projection 收敛为 scoped trigger-window ∩ selected-subset 合同。第 10 个 MCP 工具 `supersede_memory` 把 Claim 纠错收敛为显式 namespace + evidence 的 `run_reflection` 门面，默认不 hard delete。完整 M1、versioned identity/commitment rollback ledger 和真实客户端退出门仍开放；v6 已新增安全归属的 record-only history。
 
 计划能力：
 
 - M1.0 前置门、四类 scoped search、evidence-relation runtime、跨类型 union、四类 lookup、identity/commitment revision audit 与 scoped Claim audited supersede 已通过；current-schema structural readback、exclusive lifecycle、可靠更正/重试、有界反馈、本地literal recall与context已实现；下一步精确提交的平台/用户闭环验证；
 - 已完成 scoped Episode / Reflection provenance search、evidence-relation runtime、跨类型 union、Episode / Reflection lookup、self-model history 与 Claim supersede 首片；current-schema structural readback、exclusive lifecycle、可靠更正/重试、有界反馈、本地literal recall与context已实现；下一步精确提交的平台/用户闭环验证；
 - `search_memory`；
-- `get_memory`：当前 Event / Claim / Episode / scoped Reflection；record-only Reflection 仍不可见；
-- `get_reflection_history`：已完成 Claim-linked 首片；record-only history 仍开放；
+- `get_memory`：当前 Event / Claim / Episode / scoped Reflection；安全归属的 record-only Reflection 已有 v6 读取；unknown/mixed 历史仍隔离；
+- `get_reflection_history`：已完成 Claim-linked 首片；Claim history 仍沿修订链；独立 record-only 通过 v6 scoped search/get 读取；
 - `get_self_model_history`：已完成 scoped identity/commitment revision audit 首片；不是 versioned ledger 或 rollback；
 - `supersede_memory`：已完成 scoped Claim audited supersede 首片；复用 `run_reflection`，默认不 hard delete；
 - 已完成 current-schema structural readback gate；同版本但约束被削弱的数据库不能报告 `current`；

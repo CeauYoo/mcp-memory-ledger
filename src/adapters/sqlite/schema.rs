@@ -1,12 +1,13 @@
 pub(super) const OWNER_NAMESPACE_SCOPE_CONSTRAINT_NAME: &str = "owner_namespace_scope";
-pub(super) const CURRENT_SCHEMA_VERSION: i64 = 5;
+pub(super) const CURRENT_SCHEMA_VERSION: i64 = 6;
 
-pub(super) const SCHEMA_MIGRATIONS: [(i64, &str); 5] = [
+pub(super) const SCHEMA_MIGRATIONS: [(i64, &str); 6] = [
     (1, "baseline_schema"),
     (2, "owner_namespace_scope"),
     (3, "reflection_audit_columns"),
     (4, "event_feedback_metadata"),
     (5, "feedback_experience_and_retrieval"),
+    (6, "temporal_metadata_and_reflection_scope"),
 ];
 
 const OWNER_NAMESPACE_SCOPE_CONSTRAINT_SQL: &str = r#"    CONSTRAINT owner_namespace_scope CHECK (
@@ -33,7 +34,7 @@ CREATE TABLE IF NOT EXISTS episode_events (
     FOREIGN KEY (event_id) REFERENCES events(event_id)
 )"#;
 
-const REFLECTIONS_TABLE_SQL: &str = r#"
+pub(super) const REFLECTIONS_TABLE_SQL: &str = r#"
 CREATE TABLE IF NOT EXISTS reflections (
     reflection_id TEXT PRIMARY KEY,
     recorded_at TEXT NOT NULL,
@@ -42,7 +43,12 @@ CREATE TABLE IF NOT EXISTS reflections (
     replacement_claim_id TEXT,
     supporting_evidence_event_ids TEXT NOT NULL DEFAULT '[]',
     requested_identity_update TEXT,
-    requested_commitment_updates TEXT
+    requested_commitment_updates TEXT,
+    recorded_at_seconds INTEGER,
+    recorded_at_nanos INTEGER,
+    recorded_at_sort_key TEXT,
+    scope_status TEXT NOT NULL DEFAULT 'unknown' CHECK (scope_status IN ('unknown', 'verified', 'legacy_unambiguous')),
+    evidence_normalized INTEGER NOT NULL DEFAULT 0 CHECK (evidence_normalized IN (0, 1))
 )"#;
 
 const REFLECTION_TRIGGER_LEDGER_TABLE_SQL: &str = r#"
@@ -152,6 +158,10 @@ CREATE TABLE{if_not_exists_clause} events (
     kind TEXT NOT NULL,
     summary TEXT NOT NULL,
     feedback_json TEXT,
+    observed_at TEXT,
+    recorded_at_seconds INTEGER,
+    recorded_at_nanos INTEGER,
+    recorded_at_sort_key TEXT,
 {owner_namespace_scope_constraint}
 )"#,
         owner_namespace_scope_constraint = OWNER_NAMESPACE_SCOPE_CONSTRAINT_SQL,
@@ -176,6 +186,11 @@ CREATE TABLE{if_not_exists_clause} claims (
     object TEXT NOT NULL,
     mode TEXT NOT NULL,
     status TEXT NOT NULL,
+    recorded_at TEXT,
+    observed_at TEXT,
+    recorded_at_seconds INTEGER,
+    recorded_at_nanos INTEGER,
+    recorded_at_sort_key TEXT,
 {owner_namespace_scope_constraint}
 )"#,
         owner_namespace_scope_constraint = OWNER_NAMESPACE_SCOPE_CONSTRAINT_SQL,

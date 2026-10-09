@@ -1,3 +1,5 @@
+Schema v6: 記録時刻と観測時刻を区別し、過去の不明な Claim 時刻は null を保持します。独立した Reflection scope、安全な targetless history、読み取り専用の bounded export を追加しました。[時間契約](temporal-metadata.md)、[scope](reflection-scope-history.md)、[export](scoped-export.md)を参照してください。
+
 # MCP Memory Ledger
 
 SQLite と証拠ベースの自己修正で支える、ローカル AI Agent 向け MCP memory layer。
@@ -17,8 +19,8 @@ MCP Memory Ledger は、ローカル AI クライアント向けの Rust 製 MCP
 ## Features
 
 - **Local MCP memory service**: MCP `stdio` 経由で `ingest_interaction`、`search_memory`、`get_memory`、`get_reflection_history`、`get_self_model_history`、`get_evidence_relation`、`supersede_memory`、`build_self_snapshot`、`decide_with_snapshot`、`run_reflection` の 12 ツールを提供します。
-- **Scoped Event / Claim / Episode / Reflection recall**: `search_memory` は明示的な namespace を必須とします。型を省略すると bounded recent-first Event を返します。`record_type = Claim / Episode / Reflection` はそれぞれ scoped Claim、同一 scope の Event から投影した Episode、同一 scope の Claim 端点だけに帰属する Reflection を返します。record-only Reflection は見えません。additive `record_types` で既存 tagged record の scoped union を要求できます。deterministic read は provider 非依存です。mixed-scope Claim revision edge は辺ごと隠します。
-- **Scoped stable-ID lookup**: `get_memory(namespace, id, record_type?)` は Event、Claim、Episode、または scoped Reflection を 1 件返します。`record_type` 省略時は Event 互換です。missing / 別 namespace / record-only Reflection は `record: null` で、クエリを広げません。
+- **Scoped Event / Claim / Episode / Reflection recall**: `search_memory` は明示的な namespace を必須とします。型を省略すると bounded recent-first Event を返します。`record_type = Claim / Episode / Reflection` はそれぞれ scoped Claim、同一 scope の Event から投影した Episode、同一 scope の Claim 端点だけに帰属する Reflection を返します。v6 は安全に帰属できる record-only Reflection を読み取れます。unknown/mixed な履歴は非表示のままです。additive `record_types` で既存 tagged record の scoped union を要求できます。deterministic read は provider 非依存です。mixed-scope Claim revision edge は辺ごと隠します。
+- **Scoped stable-ID lookup**: `get_memory(namespace, id, record_type?)` は Event、Claim、Episode、または scoped Reflection を 1 件返します。`record_type` 省略時は Event 互換です。missing / 別 namespace / 帰属不明または安全でない record-only Reflection は `record: null` で、クエリを広げません。
 - **Claim reflection history**: `get_reflection_history` は 1 件の exact scoped Claim から newest-first の双方向 revision chain を返します。
 - **identity/commitment revision audit**: `get_self_model_history` は claim-attributed reflection に残った identity / commitment patch を読みます。versioned ledger ではありません。
 - **Evidence-relation runtime**: `get_evidence_relation` は caller の trigger window と同一 scope Event の intersect-only です。ranking も widening もしません。
@@ -129,7 +131,7 @@ Partially implemented:
 Not implemented:
 
 - Full memory layering
-- Versioned identity/commitment ledger、record-only Reflection history、Event / Episode / Reflection の訂正
+- Versioned identity/commitment rollback ledger、曖昧な履歴の帰属修復、Event / Episode / Reflection の訂正
 - M1.3.0 current-schema structural readback と M1.3.1 real-client exit gate
 - Richer evidence ranking / weighting
 - Production-grade remote, team, or multi-tenant mode

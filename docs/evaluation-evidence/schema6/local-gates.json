@@ -1,0 +1,18 @@
+{
+  "schema_version": 6,
+  "full_rust_tests": 613,
+  "full_rust_failures": 0,
+  "commands": {
+    "cargo test --all-features": "passed",
+    "cargo fmt --all -- --check": "passed",
+    "cargo clippy --all-targets --all-features -- -D warnings": "passed",
+    "./scripts/status-sync-check.sh": "passed: 32 completed gates",
+    "git diff --check": "passed"
+  },
+  "scope": "Synthetic isolated local data; exact-head CI is separate",
+  "logs_sha256": {
+    "ledger-v6-full-final.log": "2c5e6727bfc86df58ecfc34f4eb18204e90fe0fd271785d562053aa86e58efa4",
+    "ledger-v6-clippy-final.log": "544ec6aaefb9bb9b614ca133a9bbf2b19d3ec76742df05f7ebbfa0fd0faf8f28",
+    "ledger-v6-status-publish.log": "0eb2cac4cd5b8142fe96bdb7be84837459e6f93f0e4f2164059677dc9a32559a"
+  }
+}
