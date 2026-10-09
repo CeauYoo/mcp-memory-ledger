@@ -50,6 +50,9 @@ pub struct TextMemoryHit {
 pub struct TextMemoryPage {
     pub hits: Vec<TextMemoryHit>,
     pub has_more: bool,
+    pub strategy: &'static str,
+    /// Present only when the derived index could not safely be used.
+    pub index_warning: Option<String>,
 }
 
 #[async_trait]

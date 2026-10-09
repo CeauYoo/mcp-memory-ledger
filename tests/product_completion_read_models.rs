@@ -482,6 +482,17 @@ async fn doctor_memory_layer_exposes_read_only_classification_diagnostics() {
         .collect();
     assert!(diagnostic_keys.contains(&"layered_projection_classification"));
     assert!(diagnostic_keys.contains(&"self_model_durable_writes"));
+    let experience = memory_layer
+        .diagnostics
+        .iter()
+        .find(|item| item.key == "experience_candidate_runtime")
+        .unwrap();
+    assert_eq!(experience.status, "implemented");
+    assert!(
+        experience
+            .detail
+            .contains("activation grants no execution or permission")
+    );
 
     let self_model_diagnostic = memory_layer
         .diagnostics
@@ -832,6 +843,10 @@ fn memory_layer_projection_is_read_only_and_keeps_self_model_durable_writes_bloc
         episode_projection_count: 1,
     });
 
+    assert_eq!(
+        projection.capability_scope,
+        "legacy_snapshot_projection_only_not_v5_experience_inventory"
+    );
     assert!(projection.read_only);
     assert!(!projection.writes_performed);
     assert_eq!(projection.durable_self_model_write_path, "run_reflection");

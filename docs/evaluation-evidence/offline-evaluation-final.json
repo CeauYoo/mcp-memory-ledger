@@ -1,0 +1,317 @@
+{
+  "kind": "deterministic_offline_proxy",
+  "recorded_at_utc": "2026-10-09T10:20:48.425399+00:00",
+  "remote_model_calls": 0,
+  "same_model_experiment": false,
+  "correction_path": "feedback_candidate",
+  "experience_lifecycle": {
+    "semantic": {
+      "final_version": 5,
+      "final_status": "pending",
+      "historical_active_preserved": true
+    },
+    "procedural": {
+      "final_version": 5,
+      "final_status": "pending",
+      "historical_active_preserved": true
+    }
+  },
+  "unsupported_feedback_checks": {
+    "missing_evidence": {
+      "blocked": true,
+      "commit_denied": true,
+      "rejected": true,
+      "target_unchanged": true,
+      "validation_codes": [
+        "insufficient_evidence"
+      ]
+    },
+    "limited_evidence": {
+      "blocked": true,
+      "commit_denied": true,
+      "rejected": true,
+      "target_unchanged": true,
+      "validation_codes": [
+        "limitations_require_review"
+      ]
+    }
+  },
+  "token_cost_evidence": false,
+  "binary_sha256": "af3f3ecd62a36655101048f20111b22c4eaa9e68639027c8ffcfa9129f42d44a",
+  "fixture_sha256": "838a90312625786a8800212ef9abfa73dcda0e9cf6bf4c5eb18338fd596a14da",
+  "query_scenario_sha256": "dc0aa8366b8904df6ad3138f69d539b1d799c26959781fcf0adce920642b9400",
+  "query_scenario_count": 50,
+  "query_scenario_selection": "Fifty fixed query scenarios across ten existing tasks; not fifty independent tasks. Added after initial ten-task implementation as contract coverage, not held-out quality evidence. Preserve all failures and categories.",
+  "query_scenario_categories": {
+    "full_literal": {
+      "cases": 10,
+      "expected_hits": 10,
+      "actual_hits": 10,
+      "negative_false_positives": 0,
+      "mean_reciprocal_rank_positive_cases": 1.0
+    },
+    "no_literal_match": {
+      "cases": 10,
+      "expected_hits": 0,
+      "actual_hits": 0,
+      "negative_false_positives": 0,
+      "mean_reciprocal_rank_positive_cases": null
+    },
+    "or_missing_term": {
+      "cases": 10,
+      "expected_hits": 10,
+      "actual_hits": 10,
+      "negative_false_positives": 0,
+      "mean_reciprocal_rank_positive_cases": 1.0
+    },
+    "partial_literal": {
+      "cases": 10,
+      "expected_hits": 10,
+      "actual_hits": 10,
+      "negative_false_positives": 0,
+      "mean_reciprocal_rank_positive_cases": 1.0
+    },
+    "quotes_are_literal": {
+      "cases": 10,
+      "expected_hits": 0,
+      "actual_hits": 0,
+      "negative_false_positives": 0,
+      "mean_reciprocal_rank_positive_cases": null
+    }
+  },
+  "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+  "selection": "Fixed synthetic bilingual diagnostic cases chosen before retrieval tuning. Not a random sample of real agent tasks. Literal and deliberately unsupported paraphrase queries remain separate strata.",
+  "k": 5,
+  "max_context_bytes": 1800,
+  "summary": {
+    "A_no_memory": {
+      "task_count": 10,
+      "mean_recall_at_k": 0.0,
+      "mean_reciprocal_rank": 0,
+      "mean_stale_conclusion_used_proxy": 0,
+      "mean_exact_answer_proxy": 0,
+      "mean_stale_claim_exposure_count": 0,
+      "mean_scope_leak_count": 0,
+      "mean_provenance_missing_count": 0,
+      "mean_context_bytes": 0,
+      "mean_observed_latency_ms": 0.0011598007404245436
+    },
+    "B_recall": {
+      "task_count": 10,
+      "mean_recall_at_k": 0.8,
+      "mean_reciprocal_rank": 0.8,
+      "mean_stale_conclusion_used_proxy": 0.8,
+      "mean_exact_answer_proxy": 0,
+      "mean_stale_claim_exposure_count": 0.8,
+      "mean_scope_leak_count": 0,
+      "mean_provenance_missing_count": 0,
+      "mean_context_bytes": 1447.4,
+      "mean_observed_latency_ms": 3.9292045010370202
+    },
+    "C_feedback_corrected": {
+      "task_count": 10,
+      "mean_recall_at_k": 0.8,
+      "mean_reciprocal_rank": 0.8,
+      "mean_stale_conclusion_used_proxy": 0,
+      "mean_exact_answer_proxy": 0.8,
+      "mean_stale_claim_exposure_count": 0,
+      "mean_scope_leak_count": 0,
+      "mean_provenance_missing_count": 0,
+      "mean_context_bytes": 1085.9,
+      "mean_observed_latency_ms": 3.8611298965406604
+    },
+    "C_minus_byte_budget": {
+      "task_count": 10,
+      "mean_recall_at_k": 0.8,
+      "mean_reciprocal_rank": 0.8,
+      "mean_stale_conclusion_used_proxy": 0,
+      "mean_exact_answer_proxy": 0.8,
+      "mean_stale_claim_exposure_count": 0,
+      "mean_scope_leak_count": 0,
+      "mean_provenance_missing_count": 0,
+      "mean_context_bytes": 2463.7,
+      "mean_observed_latency_ms": 3.8508829020429403
+    },
+    "C_minus_correction": {
+      "task_count": 10,
+      "mean_recall_at_k": 0.8,
+      "mean_reciprocal_rank": 0.8,
+      "mean_stale_conclusion_used_proxy": 0.8,
+      "mean_exact_answer_proxy": 0,
+      "mean_stale_claim_exposure_count": 0.8,
+      "mean_scope_leak_count": 0,
+      "mean_provenance_missing_count": 0,
+      "mean_context_bytes": 1447.4,
+      "mean_observed_latency_ms": 3.5972351994132623
+    },
+    "C_minus_retrieval": {
+      "task_count": 10,
+      "mean_recall_at_k": 0.0,
+      "mean_reciprocal_rank": 0,
+      "mean_stale_conclusion_used_proxy": 0,
+      "mean_exact_answer_proxy": 0,
+      "mean_stale_claim_exposure_count": 0,
+      "mean_scope_leak_count": 0,
+      "mean_provenance_missing_count": 0,
+      "mean_context_bytes": 0,
+      "mean_observed_latency_ms": 0.000711999018676579
+    }
+  },
+  "by_stratum": {
+    "literal": {
+      "A_no_memory": {
+        "task_count": 8,
+        "mean_recall_at_k": 0.0,
+        "mean_reciprocal_rank": 0,
+        "mean_stale_conclusion_used_proxy": 0,
+        "mean_exact_answer_proxy": 0,
+        "mean_stale_claim_exposure_count": 0,
+        "mean_scope_leak_count": 0,
+        "mean_provenance_missing_count": 0,
+        "mean_context_bytes": 0,
+        "mean_observed_latency_ms": 0.0013245007721707225
+      },
+      "B_recall": {
+        "task_count": 8,
+        "mean_recall_at_k": 1.0,
+        "mean_reciprocal_rank": 1.0,
+        "mean_stale_conclusion_used_proxy": 1,
+        "mean_exact_answer_proxy": 0,
+        "mean_stale_claim_exposure_count": 1,
+        "mean_scope_leak_count": 0,
+        "mean_provenance_missing_count": 0,
+        "mean_context_bytes": 1694.375,
+        "mean_observed_latency_ms": 4.234166250171256
+      },
+      "C_feedback_corrected": {
+        "task_count": 8,
+        "mean_recall_at_k": 1.0,
+        "mean_reciprocal_rank": 1.0,
+        "mean_stale_conclusion_used_proxy": 0,
+        "mean_exact_answer_proxy": 1,
+        "mean_stale_claim_exposure_count": 0,
+        "mean_scope_leak_count": 0,
+        "mean_provenance_missing_count": 0,
+        "mean_context_bytes": 1242.5,
+        "mean_observed_latency_ms": 4.4173333717481
+      },
+      "C_minus_byte_budget": {
+        "task_count": 8,
+        "mean_recall_at_k": 1.0,
+        "mean_reciprocal_rank": 1.0,
+        "mean_stale_conclusion_used_proxy": 0,
+        "mean_exact_answer_proxy": 1,
+        "mean_stale_claim_exposure_count": 0,
+        "mean_scope_leak_count": 0,
+        "mean_provenance_missing_count": 0,
+        "mean_context_bytes": 2964.25,
+        "mean_observed_latency_ms": 4.472723750950536
+      },
+      "C_minus_correction": {
+        "task_count": 8,
+        "mean_recall_at_k": 1.0,
+        "mean_reciprocal_rank": 1.0,
+        "mean_stale_conclusion_used_proxy": 1,
+        "mean_exact_answer_proxy": 0,
+        "mean_stale_claim_exposure_count": 1,
+        "mean_scope_leak_count": 0,
+        "mean_provenance_missing_count": 0,
+        "mean_context_bytes": 1694.375,
+        "mean_observed_latency_ms": 4.1937563746614615
+      },
+      "C_minus_retrieval": {
+        "task_count": 8,
+        "mean_recall_at_k": 0.0,
+        "mean_reciprocal_rank": 0,
+        "mean_stale_conclusion_used_proxy": 0,
+        "mean_exact_answer_proxy": 0,
+        "mean_stale_claim_exposure_count": 0,
+        "mean_scope_leak_count": 0,
+        "mean_provenance_missing_count": 0,
+        "mean_context_bytes": 0,
+        "mean_observed_latency_ms": 0.0008024981070775539
+      }
+    },
+    "unsupported_paraphrase": {
+      "A_no_memory": {
+        "task_count": 2,
+        "mean_recall_at_k": 0.0,
+        "mean_reciprocal_rank": 0,
+        "mean_stale_conclusion_used_proxy": 0,
+        "mean_exact_answer_proxy": 0,
+        "mean_stale_claim_exposure_count": 0,
+        "mean_scope_leak_count": 0,
+        "mean_provenance_missing_count": 0,
+        "mean_context_bytes": 0,
+        "mean_observed_latency_ms": 0.0005010006134398282
+      },
+      "B_recall": {
+        "task_count": 2,
+        "mean_recall_at_k": 0.0,
+        "mean_reciprocal_rank": 0,
+        "mean_stale_conclusion_used_proxy": 0,
+        "mean_exact_answer_proxy": 0,
+        "mean_stale_claim_exposure_count": 0,
+        "mean_scope_leak_count": 0,
+        "mean_provenance_missing_count": 0,
+        "mean_context_bytes": 459.5,
+        "mean_observed_latency_ms": 2.709357504500076
+      },
+      "C_feedback_corrected": {
+        "task_count": 2,
+        "mean_recall_at_k": 0.0,
+        "mean_reciprocal_rank": 0,
+        "mean_stale_conclusion_used_proxy": 0,
+        "mean_exact_answer_proxy": 0,
+        "mean_stale_claim_exposure_count": 0,
+        "mean_scope_leak_count": 0,
+        "mean_provenance_missing_count": 0,
+        "mean_context_bytes": 459.5,
+        "mean_observed_latency_ms": 1.636315995710902
+      },
+      "C_minus_byte_budget": {
+        "task_count": 2,
+        "mean_recall_at_k": 0.0,
+        "mean_reciprocal_rank": 0,
+        "mean_stale_conclusion_used_proxy": 0,
+        "mean_exact_answer_proxy": 0,
+        "mean_stale_claim_exposure_count": 0,
+        "mean_scope_leak_count": 0,
+        "mean_provenance_missing_count": 0,
+        "mean_context_bytes": 461.5,
+        "mean_observed_latency_ms": 1.3635195064125583
+      },
+      "C_minus_correction": {
+        "task_count": 2,
+        "mean_recall_at_k": 0.0,
+        "mean_reciprocal_rank": 0,
+        "mean_stale_conclusion_used_proxy": 0,
+        "mean_exact_answer_proxy": 0,
+        "mean_stale_claim_exposure_count": 0,
+        "mean_scope_leak_count": 0,
+        "mean_provenance_missing_count": 0,
+        "mean_context_bytes": 459.5,
+        "mean_observed_latency_ms": 1.2111504984204657
+      },
+      "C_minus_retrieval": {
+        "task_count": 2,
+        "mean_recall_at_k": 0.0,
+        "mean_reciprocal_rank": 0,
+        "mean_stale_conclusion_used_proxy": 0,
+        "mean_exact_answer_proxy": 0,
+        "mean_stale_claim_exposure_count": 0,
+        "mean_scope_leak_count": 0,
+        "mean_provenance_missing_count": 0,
+        "mean_context_bytes": 0,
+        "mean_observed_latency_ms": 0.0003500026650726795
+      }
+    }
+  },
+  "limitations": [
+    "Synthetic preselected fixtures; not real task distribution or model gains.",
+    "Correction is supplied by harness; this run does not evaluate a model producing a justified correction.",
+    "C_minus_correction has feedback observations but retains old claims; C_minus_retrieval removes recall; C_minus_byte_budget uses the API maximum, not unlimited memory.",
+    "Timing includes local MCP round trip, no model inference; bytes are not tokens.",
+    "A uses an empty-context deterministic selector and therefore cannot measure a model's prior knowledge."
+  ]
+}

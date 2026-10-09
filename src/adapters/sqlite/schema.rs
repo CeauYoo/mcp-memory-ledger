@@ -1,11 +1,12 @@
 pub(super) const OWNER_NAMESPACE_SCOPE_CONSTRAINT_NAME: &str = "owner_namespace_scope";
-pub(super) const CURRENT_SCHEMA_VERSION: i64 = 4;
+pub(super) const CURRENT_SCHEMA_VERSION: i64 = 5;
 
-pub(super) const SCHEMA_MIGRATIONS: [(i64, &str); 4] = [
+pub(super) const SCHEMA_MIGRATIONS: [(i64, &str); 5] = [
     (1, "baseline_schema"),
     (2, "owner_namespace_scope"),
     (3, "reflection_audit_columns"),
     (4, "event_feedback_metadata"),
+    (5, "feedback_experience_and_retrieval"),
 ];
 
 const OWNER_NAMESPACE_SCOPE_CONSTRAINT_SQL: &str = r#"    CONSTRAINT owner_namespace_scope CHECK (

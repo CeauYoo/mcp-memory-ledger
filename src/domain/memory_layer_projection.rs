@@ -9,6 +9,7 @@ pub struct MemoryLayerProjectionInput {
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct MemoryLayerProjection {
     pub read_only: bool,
+    pub capability_scope: String,
     pub writes_performed: bool,
     pub durable_self_model_write_path: String,
     pub layers: Vec<MemoryLayerStatus>,
@@ -35,6 +36,7 @@ pub fn build_memory_layer_projection(input: MemoryLayerProjectionInput) -> Memor
     let snapshot = input.snapshot;
     MemoryLayerProjection {
         read_only: true,
+        capability_scope: "legacy_snapshot_projection_only_not_v5_experience_inventory".into(),
         writes_performed: false,
         durable_self_model_write_path: SELF_REVISION_DURABLE_WRITE_PATH.to_string(),
         layers: vec![

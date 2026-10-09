@@ -1,0 +1,304 @@
+{
+  "kind": "synthetic_local_capacity_observation",
+  "recorded_at_utc": "2026-10-09T10:17:15.341641+00:00",
+  "label": "exact-e14a59e-debug",
+  "binary_sha256": "da522b8a50961dd7fa7dba016343f800c20607b93cf3b6af3350d9208bc1fead",
+  "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+  "python_sqlite_version": "3.53.1",
+  "warmup_requests_per_query": 2,
+  "percentile_definition": "p95 nearest-rank; p50 median",
+  "remote_model_calls": 0,
+  "limitations": [
+    "Local MCP timings include transport/serialization/provenance reads; no throughput SLA.",
+    "Warm cache, one hardware/runtime session; compare only matching data hashes, build profiles and conditions.",
+    "RSS is a Linux process snapshot, not peak memory; null means unavailable.",
+    "Lock probe request delay includes work beyond lock waiting; internal lock wait is not instrumented.",
+    "Dashboard-like browse means search_memory union; no browser/dashboard rendering measured.",
+    "EXPLAIN primitives use Python SQLite, which can differ from the binary bundled SQLite/planner.",
+    "Dataset has N/2 events + N/2 claims and 99 reflection rows; extra relation/index rows are not included in N."
+  ],
+  "sizes": {
+    "10000": {
+      "dataset": {
+        "event_claim_records": 10000,
+        "namespaces": 20,
+        "revision_chain_claims": 100,
+        "seed_seconds": 0.05778793200443033,
+        "data_sha256": "6c27ec14ab82c2cf72dc6c5b362ff7e0856f09e74f9c0580b336de72e1244b0a",
+        "writes": "Direct synthetic bulk SQL, not application write-throughput evidence"
+      },
+      "database_bytes_before_reads": 2486272,
+      "queries": {
+        "selective_ascii": {
+          "query": "target_004980",
+          "mcp_latency_ms": {
+            "samples": 20,
+            "p50": 6.352563505060971,
+            "p95": 7.128586992621422,
+            "min": 5.778881997684948,
+            "max": 7.200724998256192
+          },
+          "response_bytes": {
+            "samples": 20,
+            "p50": 1068.0,
+            "p95": 1068,
+            "min": 1068,
+            "max": 1068
+          },
+          "strategy": "literal_substring_ascii_case_insensitive_or_claims_first_v1",
+          "returned_records": 2,
+          "observed_server_rss_bytes": 28368896
+        },
+        "common_short_cjk": {
+          "query": "北京",
+          "mcp_latency_ms": {
+            "samples": 20,
+            "p50": 37.83482600556454,
+            "p95": 39.72815799352247,
+            "min": 34.72131100716069,
+            "max": 40.89392500463873
+          },
+          "response_bytes": {
+            "samples": 20,
+            "p50": 8210.0,
+            "p95": 8210,
+            "min": 8210,
+            "max": 8210
+          },
+          "strategy": "literal_substring_ascii_case_insensitive_or_claims_first_v1",
+          "returned_records": 20,
+          "observed_server_rss_bytes": 30011392
+        },
+        "revision_chain": {
+          "query": "revision_chain",
+          "mcp_latency_ms": {
+            "samples": 20,
+            "p50": 37.88497950154124,
+            "p95": 40.63174000475556,
+            "min": 35.17473400279414,
+            "max": 41.64684998977464
+          },
+          "response_bytes": {
+            "samples": 20,
+            "p50": 8333.0,
+            "p95": 8333,
+            "min": 8333,
+            "max": 8333
+          },
+          "strategy": "literal_substring_ascii_case_insensitive_or_claims_first_v1",
+          "returned_records": 20,
+          "observed_server_rss_bytes": 30109696
+        },
+        "absent": {
+          "query": "missing_needle",
+          "mcp_latency_ms": {
+            "samples": 20,
+            "p50": 2.988289503264241,
+            "p95": 3.2076750067062676,
+            "min": 2.7787189901573583,
+            "max": 3.7028160004410893
+          },
+          "response_bytes": {
+            "samples": 20,
+            "p50": 190.0,
+            "p95": 190,
+            "min": 190,
+            "max": 190
+          },
+          "strategy": "literal_substring_ascii_case_insensitive_or_claims_first_v1",
+          "returned_records": 0,
+          "observed_server_rss_bytes": 30121984
+        }
+      },
+      "query_plans": [
+        {
+          "name": "literal_claim_primitive",
+          "sql": "SELECT claim_id FROM claims WHERE owner='world' AND namespace=? AND status='active' AND instr(lower(subject),?)>0",
+          "parameters": [
+            "project/capacity-00",
+            "target_004980"
+          ],
+          "plan": [
+            [
+              2,
+              0,
+              216,
+              "SCAN claims"
+            ]
+          ]
+        }
+      ],
+      "concurrent_mcp_latency_ms": {
+        "write": {
+          "samples": 10,
+          "p50": 17.196022003190592,
+          "p95": 21.471758009283803,
+          "min": 13.519660002202727,
+          "max": 21.471758009283803
+        },
+        "recall": {
+          "samples": 10,
+          "p50": 47.570659502525814,
+          "p95": 57.01403100101743,
+          "min": 39.67638000904117,
+          "max": 57.01403100101743
+        },
+        "dashboard_like_browse": {
+          "samples": 10,
+          "p50": 20.808597502764314,
+          "p95": 27.43468599510379,
+          "min": 18.820291006704792,
+          "max": 27.43468599510379
+        }
+      },
+      "lock_probe": {
+        "held_reservation_ms": 50.13851900002919,
+        "write_request_ms": 66.31127899163403,
+        "result": "committed"
+      },
+      "database_bytes_after_reads_and_writes": 2498560,
+      "observed_server_rss_bytes_after": 30199808
+    },
+    "100000": {
+      "dataset": {
+        "event_claim_records": 100000,
+        "namespaces": 20,
+        "revision_chain_claims": 100,
+        "seed_seconds": 0.6593836480024038,
+        "data_sha256": "d62818e7e5550baa5cdb1f18a7f1d30e34745e2521557925efe62fb4a44d0acc",
+        "writes": "Direct synthetic bulk SQL, not application write-throughput evidence"
+      },
+      "database_bytes_before_reads": 24522752,
+      "queries": {
+        "selective_ascii": {
+          "query": "target_049980",
+          "mcp_latency_ms": {
+            "samples": 20,
+            "p50": 45.83403599826852,
+            "p95": 49.31489800219424,
+            "min": 42.98045400355477,
+            "max": 66.3724609912606
+          },
+          "response_bytes": {
+            "samples": 20,
+            "p50": 1072.0,
+            "p95": 1072,
+            "min": 1072,
+            "max": 1072
+          },
+          "strategy": "literal_substring_ascii_case_insensitive_or_claims_first_v1",
+          "returned_records": 2,
+          "observed_server_rss_bytes": 32370688
+        },
+        "common_short_cjk": {
+          "query": "北京",
+          "mcp_latency_ms": {
+            "samples": 20,
+            "p50": 272.69513600185746,
+            "p95": 283.04393599682953,
+            "min": 257.9177099978551,
+            "max": 283.17948601034004
+          },
+          "response_bytes": {
+            "samples": 20,
+            "p50": 8210.0,
+            "p95": 8210,
+            "min": 8210,
+            "max": 8210
+          },
+          "strategy": "literal_substring_ascii_case_insensitive_or_claims_first_v1",
+          "returned_records": 20,
+          "observed_server_rss_bytes": 35753984
+        },
+        "revision_chain": {
+          "query": "revision_chain",
+          "mcp_latency_ms": {
+            "samples": 20,
+            "p50": 255.19611499476014,
+            "p95": 264.72288099466823,
+            "min": 245.98530599905644,
+            "max": 265.5696319998242
+          },
+          "response_bytes": {
+            "samples": 20,
+            "p50": 8333.0,
+            "p95": 8333,
+            "min": 8333,
+            "max": 8333
+          },
+          "strategy": "literal_substring_ascii_case_insensitive_or_claims_first_v1",
+          "returned_records": 20,
+          "observed_server_rss_bytes": 39682048
+        },
+        "absent": {
+          "query": "missing_needle",
+          "mcp_latency_ms": {
+            "samples": 20,
+            "p50": 25.04646099259844,
+            "p95": 27.07742700295057,
+            "min": 23.964333988260478,
+            "max": 27.314414008287713
+          },
+          "response_bytes": {
+            "samples": 20,
+            "p50": 190.0,
+            "p95": 190,
+            "min": 190,
+            "max": 190
+          },
+          "strategy": "literal_substring_ascii_case_insensitive_or_claims_first_v1",
+          "returned_records": 0,
+          "observed_server_rss_bytes": 36548608
+        }
+      },
+      "query_plans": [
+        {
+          "name": "literal_claim_primitive",
+          "sql": "SELECT claim_id FROM claims WHERE owner='world' AND namespace=? AND status='active' AND instr(lower(subject),?)>0",
+          "parameters": [
+            "project/capacity-00",
+            "target_049980"
+          ],
+          "plan": [
+            [
+              2,
+              0,
+              216,
+              "SCAN claims"
+            ]
+          ]
+        }
+      ],
+      "concurrent_mcp_latency_ms": {
+        "write": {
+          "samples": 10,
+          "p50": 136.20320100017125,
+          "p95": 226.70404599921312,
+          "min": 116.210279011284,
+          "max": 226.70404599921312
+        },
+        "recall": {
+          "samples": 10,
+          "p50": 336.44131300388835,
+          "p95": 436.261178998393,
+          "min": 302.38125899631996,
+          "max": 436.261178998393
+        },
+        "dashboard_like_browse": {
+          "samples": 10,
+          "p50": 143.7985589946038,
+          "p95": 218.01527299976442,
+          "min": 126.73745800566394,
+          "max": 218.01527299976442
+        }
+      },
+      "lock_probe": {
+        "held_reservation_ms": 50.113424003939144,
+        "write_request_ms": 141.59660300356336,
+        "result": "committed"
+      },
+      "database_bytes_after_reads_and_writes": 24535040,
+      "observed_server_rss_bytes_after": 36155392
+    }
+  }
+}

@@ -28,6 +28,7 @@ pub struct DoctorReport {
     pub transport: TransportKind,
     pub database_url: String,
     pub database_lifecycle: DatabaseLifecycleReport,
+    pub retrieval_index: Option<crate::adapters::sqlite::RetrievalIndexReport>,
     pub provider: ModelProviderKind,
     pub base_url: Option<String>,
     pub model: Option<String>,
@@ -223,6 +224,10 @@ async fn run_doctor_with_bootstrap(
     let operation_log = match config.transport {
         TransportKind::Stdio => open_read_only_current_database(&config.database_url).await?,
     };
+    let retrieval_index = match operation_log.as_ref() {
+        Some(store) => Some(store.inspect_retrieval_index().await?),
+        None => None,
+    };
     let daemon_observe_only =
         build_daemon_observe_only_diagnostics(&config, operation_log.as_ref()).await;
     let provider_matrix = build_provider_matrix(&config);
@@ -234,12 +239,17 @@ async fn run_doctor_with_bootstrap(
     Ok(DoctorReport {
         transport: config.transport,
         database_url: config.database_url,
-        status: if database_lifecycle.is_current() {
+        status: if database_lifecycle.is_current()
+            && retrieval_index
+                .as_ref()
+                .is_none_or(|index| index.is_usable())
+        {
             "ok"
         } else {
             "attention_required"
         },
         database_lifecycle,
+        retrieval_index,
         provider: config.model_provider,
         base_url,
         model,
@@ -344,14 +354,19 @@ fn build_system_layer_report(
                 "derived claims, snapshots, episode projections, and read-only memory-layer labels",
                 ["build_self_snapshot", "memory_layer_projection"],
                 [
-                    "memory layering is partial; procedural memory and durable new layer writes are not implemented",
+                    "memory layering is partial; legacy snapshot projection does not include the separate v5 inert experience-candidate runtime",
                     "future memory layers need migration, lifecycle, and evidence-link gates",
                 ],
                 [
                     system_layer_diagnostic(
                         "layered_projection_classification",
                         "partial",
-                        "working / episodic / semantic / self_model report partial when read-only evidence exists; procedural stays not_implemented",
+                        "legacy snapshot-only working / episodic / semantic / self_model labels report partial with evidence; its procedural label does not describe the separate v5 experience candidate API",
+                    ),
+                    system_layer_diagnostic(
+                        "experience_candidate_runtime",
+                        "implemented",
+                        "schema-v5 explicit Episode and semantic/procedural candidate tools support scoped evidence, versioned reject/revise/rollback and active-only recall; activation grants no execution or permission",
                     ),
                     system_layer_diagnostic(
                         "self_model_durable_writes",
@@ -425,7 +440,7 @@ fn build_system_layer_report(
             "remote/team behavior is blocked and not implemented".to_string(),
             daemon_writes_blocker,
             remote_writes_blocker,
-            "memory layering remains partial; procedural memory and durable new layer writes are not implemented".to_string(),
+            "memory layering remains partial; v5 experience candidates are inert and separate from legacy snapshot projections".to_string(),
         ],
         non_claims: vec![
             "not a physics solver".to_string(),
@@ -812,7 +827,7 @@ fn system_phase_coverage() -> Vec<SystemPhaseCoverage> {
             "read-only episode and layered memory projections",
             ["episode_summary_projection", "memory_layer_projection"],
             [
-                "procedural memory is not implemented",
+                "procedural execution is not implemented; v5 procedural candidates remain inert data",
                 "durable self-model writes require migration, lifecycle, and rollback gates",
             ],
             [

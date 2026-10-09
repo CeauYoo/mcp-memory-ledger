@@ -19,10 +19,20 @@ fn ci_covers_linux_and_macos_quality_gates() {
     }
     assert!(workflow.contains("windows-latest"));
     assert!(workflow.contains("scripts/local-memory-smoke.py"));
-    assert!(
-        workflow
-            .contains("--test correction_atomicity --test feedback_provenance --test mcp_stdio")
-    );
+    for suite in [
+        "correction_atomicity",
+        "feedback_provenance",
+        "feedback_candidates",
+        "experience_workflow",
+        "indexed_text_recall",
+        "mcp_stdio",
+    ] {
+        assert!(
+            workflow.contains(&format!("--test {suite}")),
+            "missing native CI suite {suite}"
+        );
+    }
+    assert!(workflow.contains("scripts/evaluate-memory-loop.py"));
 }
 
 #[test]

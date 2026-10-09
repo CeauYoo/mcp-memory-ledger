@@ -1,0 +1,722 @@
+[
+  {
+    "id": "en-city/full_literal",
+    "task_id": "en-city",
+    "category": "full_literal",
+    "query": "deployment_city",
+    "expected_hit": true,
+    "actual_hit": true,
+    "returned_ids": [
+      "claim:86d3b242-ca04-4782-af57-f6654f87427b:replacement",
+      "event:b5aa124c-fb4f-422b-bcee-ef6d5e4a0a7a",
+      "event:3d1021f7-cf1f-4344-9ae9-248d6e179b1c"
+    ],
+    "reciprocal_rank": 1.0,
+    "observed_latency_ms": 4.222561998176388,
+    "response_bytes": 2793
+  },
+  {
+    "id": "en-city/partial_literal",
+    "task_id": "en-city",
+    "category": "partial_literal",
+    "query": "deployment",
+    "expected_hit": true,
+    "actual_hit": true,
+    "returned_ids": [
+      "claim:86d3b242-ca04-4782-af57-f6654f87427b:replacement",
+      "event:b5aa124c-fb4f-422b-bcee-ef6d5e4a0a7a",
+      "event:3d1021f7-cf1f-4344-9ae9-248d6e179b1c"
+    ],
+    "reciprocal_rank": 1.0,
+    "observed_latency_ms": 4.314922000048682,
+    "response_bytes": 2773
+  },
+  {
+    "id": "en-city/or_missing_term",
+    "task_id": "en-city",
+    "category": "or_missing_term",
+    "query": "deployment_city absent_or_operand_947",
+    "expected_hit": true,
+    "actual_hit": true,
+    "returned_ids": [
+      "claim:86d3b242-ca04-4782-af57-f6654f87427b:replacement",
+      "event:b5aa124c-fb4f-422b-bcee-ef6d5e4a0a7a",
+      "event:3d1021f7-cf1f-4344-9ae9-248d6e179b1c"
+    ],
+    "reciprocal_rank": 1.0,
+    "observed_latency_ms": 4.036081998492591,
+    "response_bytes": 2815
+  },
+  {
+    "id": "en-city/quotes_are_literal",
+    "task_id": "en-city",
+    "category": "quotes_are_literal",
+    "query": "\"deployment_city\"",
+    "expected_hit": false,
+    "actual_hit": false,
+    "returned_ids": [],
+    "reciprocal_rank": 0,
+    "observed_latency_ms": 1.4080719993216917,
+    "response_bytes": 290
+  },
+  {
+    "id": "en-city/no_literal_match",
+    "task_id": "en-city",
+    "category": "no_literal_match",
+    "query": "unseen_phrase_en-city",
+    "expected_hit": false,
+    "actual_hit": false,
+    "returned_ids": [],
+    "reciprocal_rank": 0,
+    "observed_latency_ms": 1.043953001499176,
+    "response_bytes": 292
+  },
+  {
+    "id": "en-code/full_literal",
+    "task_id": "en-code",
+    "category": "full_literal",
+    "query": "retry_timeout_ms",
+    "expected_hit": true,
+    "actual_hit": true,
+    "returned_ids": [
+      "claim:32905a9b-dfe4-40b3-8346-ae2c2f27580a:replacement",
+      "event:ff3e1f4d-a1ea-4490-b1c4-6dfdbf396669",
+      "event:4a2ed91e-0b85-42a4-becc-e8435fbc8f80"
+    ],
+    "reciprocal_rank": 1.0,
+    "observed_latency_ms": 3.9420789980795234,
+    "response_bytes": 2793
+  },
+  {
+    "id": "en-code/partial_literal",
+    "task_id": "en-code",
+    "category": "partial_literal",
+    "query": "timeout",
+    "expected_hit": true,
+    "actual_hit": true,
+    "returned_ids": [
+      "claim:32905a9b-dfe4-40b3-8346-ae2c2f27580a:replacement",
+      "event:ff3e1f4d-a1ea-4490-b1c4-6dfdbf396669",
+      "event:4a2ed91e-0b85-42a4-becc-e8435fbc8f80"
+    ],
+    "reciprocal_rank": 1.0,
+    "observed_latency_ms": 3.666374002932571,
+    "response_bytes": 2757
+  },
+  {
+    "id": "en-code/or_missing_term",
+    "task_id": "en-code",
+    "category": "or_missing_term",
+    "query": "retry_timeout_ms absent_or_operand_947",
+    "expected_hit": true,
+    "actual_hit": true,
+    "returned_ids": [
+      "claim:32905a9b-dfe4-40b3-8346-ae2c2f27580a:replacement",
+      "event:ff3e1f4d-a1ea-4490-b1c4-6dfdbf396669",
+      "event:4a2ed91e-0b85-42a4-becc-e8435fbc8f80"
+    ],
+    "reciprocal_rank": 1.0,
+    "observed_latency_ms": 3.8834610022604465,
+    "response_bytes": 2815
+  },
+  {
+    "id": "en-code/quotes_are_literal",
+    "task_id": "en-code",
+    "category": "quotes_are_literal",
+    "query": "\"retry_timeout_ms\"",
+    "expected_hit": false,
+    "actual_hit": false,
+    "returned_ids": [],
+    "reciprocal_rank": 0,
+    "observed_latency_ms": 1.2984159984625876,
+    "response_bytes": 291
+  },
+  {
+    "id": "en-code/no_literal_match",
+    "task_id": "en-code",
+    "category": "no_literal_match",
+    "query": "unseen_phrase_en-code",
+    "expected_hit": false,
+    "actual_hit": false,
+    "returned_ids": [],
+    "reciprocal_rank": 0,
+    "observed_latency_ms": 1.0789249936351553,
+    "response_bytes": 292
+  },
+  {
+    "id": "en-punctuation/full_literal",
+    "task_id": "en-punctuation",
+    "category": "full_literal",
+    "query": "release%_tag",
+    "expected_hit": true,
+    "actual_hit": true,
+    "returned_ids": [
+      "claim:5c489919-303b-4d76-8295-c8e227ff7357:replacement",
+      "event:437b7d7f-99fb-41de-a386-7066fa29a4db",
+      "event:d9dbe5fb-b78f-44ae-8237-5d8a0a28ddd6"
+    ],
+    "reciprocal_rank": 1.0,
+    "observed_latency_ms": 4.016352002508938,
+    "response_bytes": 2776
+  },
+  {
+    "id": "en-punctuation/partial_literal",
+    "task_id": "en-punctuation",
+    "category": "partial_literal",
+    "query": "%_",
+    "expected_hit": true,
+    "actual_hit": true,
+    "returned_ids": [
+      "claim:5c489919-303b-4d76-8295-c8e227ff7357:replacement",
+      "event:437b7d7f-99fb-41de-a386-7066fa29a4db",
+      "event:d9dbe5fb-b78f-44ae-8237-5d8a0a28ddd6"
+    ],
+    "reciprocal_rank": 1.0,
+    "observed_latency_ms": 3.771953997784294,
+    "response_bytes": 2743
+  },
+  {
+    "id": "en-punctuation/or_missing_term",
+    "task_id": "en-punctuation",
+    "category": "or_missing_term",
+    "query": "release%_tag absent_or_operand_947",
+    "expected_hit": true,
+    "actual_hit": true,
+    "returned_ids": [
+      "claim:5c489919-303b-4d76-8295-c8e227ff7357:replacement",
+      "event:437b7d7f-99fb-41de-a386-7066fa29a4db",
+      "event:d9dbe5fb-b78f-44ae-8237-5d8a0a28ddd6"
+    ],
+    "reciprocal_rank": 1.0,
+    "observed_latency_ms": 5.07068500155583,
+    "response_bytes": 2798
+  },
+  {
+    "id": "en-punctuation/quotes_are_literal",
+    "task_id": "en-punctuation",
+    "category": "quotes_are_literal",
+    "query": "\"release%_tag\"",
+    "expected_hit": false,
+    "actual_hit": false,
+    "returned_ids": [],
+    "reciprocal_rank": 0,
+    "observed_latency_ms": 1.3389070081757382,
+    "response_bytes": 287
+  },
+  {
+    "id": "en-punctuation/no_literal_match",
+    "task_id": "en-punctuation",
+    "category": "no_literal_match",
+    "query": "unseen_phrase_en-punctuation",
+    "expected_hit": false,
+    "actual_hit": false,
+    "returned_ids": [],
+    "reciprocal_rank": 0,
+    "observed_latency_ms": 1.498598008765839,
+    "response_bytes": 299
+  },
+  {
+    "id": "en-case/full_literal",
+    "task_id": "en-case",
+    "category": "full_literal",
+    "query": "CachePolicy",
+    "expected_hit": true,
+    "actual_hit": true,
+    "returned_ids": [
+      "claim:868aea56-0a14-4ff0-9a4f-423d3f6d6b60:replacement",
+      "event:adc4d9b8-b3bf-4905-b638-70fdaeaed57b",
+      "event:8fdf0608-3a4f-466e-b05f-28963faca65b"
+    ],
+    "reciprocal_rank": 1.0,
+    "observed_latency_ms": 3.5840600030496716,
+    "response_bytes": 2794
+  },
+  {
+    "id": "en-case/partial_literal",
+    "task_id": "en-case",
+    "category": "partial_literal",
+    "query": "Policy",
+    "expected_hit": true,
+    "actual_hit": true,
+    "returned_ids": [
+      "claim:868aea56-0a14-4ff0-9a4f-423d3f6d6b60:replacement",
+      "event:adc4d9b8-b3bf-4905-b638-70fdaeaed57b",
+      "event:8fdf0608-3a4f-466e-b05f-28963faca65b"
+    ],
+    "reciprocal_rank": 1.0,
+    "observed_latency_ms": 3.785733992117457,
+    "response_bytes": 2774
+  },
+  {
+    "id": "en-case/or_missing_term",
+    "task_id": "en-case",
+    "category": "or_missing_term",
+    "query": "CachePolicy absent_or_operand_947",
+    "expected_hit": true,
+    "actual_hit": true,
+    "returned_ids": [
+      "claim:868aea56-0a14-4ff0-9a4f-423d3f6d6b60:replacement",
+      "event:adc4d9b8-b3bf-4905-b638-70fdaeaed57b",
+      "event:8fdf0608-3a4f-466e-b05f-28963faca65b"
+    ],
+    "reciprocal_rank": 1.0,
+    "observed_latency_ms": 3.7887579965172336,
+    "response_bytes": 2816
+  },
+  {
+    "id": "en-case/quotes_are_literal",
+    "task_id": "en-case",
+    "category": "quotes_are_literal",
+    "query": "\"CachePolicy\"",
+    "expected_hit": false,
+    "actual_hit": false,
+    "returned_ids": [],
+    "reciprocal_rank": 0,
+    "observed_latency_ms": 1.3253770011942834,
+    "response_bytes": 286
+  },
+  {
+    "id": "en-case/no_literal_match",
+    "task_id": "en-case",
+    "category": "no_literal_match",
+    "query": "unseen_phrase_en-case",
+    "expected_hit": false,
+    "actual_hit": false,
+    "returned_ids": [],
+    "reciprocal_rank": 0,
+    "observed_latency_ms": 1.2868589983554557,
+    "response_bytes": 292
+  },
+  {
+    "id": "zh-short/full_literal",
+    "task_id": "zh-short",
+    "category": "full_literal",
+    "query": "咖啡",
+    "expected_hit": true,
+    "actual_hit": true,
+    "returned_ids": [
+      "claim:194ade80-4d0e-4bcc-b403-fb501ebba86b:replacement",
+      "event:581fa2c2-3848-4642-a7d9-7fb86ddb6a5d",
+      "event:cb2e5b97-593a-4578-a889-86e9a99128be"
+    ],
+    "reciprocal_rank": 1.0,
+    "observed_latency_ms": 3.3533019886817783,
+    "response_bytes": 2743
+  },
+  {
+    "id": "zh-short/partial_literal",
+    "task_id": "zh-short",
+    "category": "partial_literal",
+    "query": "咖",
+    "expected_hit": true,
+    "actual_hit": true,
+    "returned_ids": [
+      "claim:194ade80-4d0e-4bcc-b403-fb501ebba86b:replacement",
+      "event:581fa2c2-3848-4642-a7d9-7fb86ddb6a5d",
+      "event:cb2e5b97-593a-4578-a889-86e9a99128be"
+    ],
+    "reciprocal_rank": 1.0,
+    "observed_latency_ms": 3.6988739884691313,
+    "response_bytes": 2731
+  },
+  {
+    "id": "zh-short/or_missing_term",
+    "task_id": "zh-short",
+    "category": "or_missing_term",
+    "query": "咖啡 absent_or_operand_947",
+    "expected_hit": true,
+    "actual_hit": true,
+    "returned_ids": [
+      "claim:194ade80-4d0e-4bcc-b403-fb501ebba86b:replacement",
+      "event:581fa2c2-3848-4642-a7d9-7fb86ddb6a5d",
+      "event:cb2e5b97-593a-4578-a889-86e9a99128be"
+    ],
+    "reciprocal_rank": 1.0,
+    "observed_latency_ms": 4.243843999574892,
+    "response_bytes": 2786
+  },
+  {
+    "id": "zh-short/quotes_are_literal",
+    "task_id": "zh-short",
+    "category": "quotes_are_literal",
+    "query": "\"咖啡\"",
+    "expected_hit": false,
+    "actual_hit": false,
+    "returned_ids": [],
+    "reciprocal_rank": 0,
+    "observed_latency_ms": 1.2162929924670607,
+    "response_bytes": 281
+  },
+  {
+    "id": "zh-short/no_literal_match",
+    "task_id": "zh-short",
+    "category": "no_literal_match",
+    "query": "unseen_phrase_zh-short",
+    "expected_hit": false,
+    "actual_hit": false,
+    "returned_ids": [],
+    "reciprocal_rank": 0,
+    "observed_latency_ms": 1.1773440055549145,
+    "response_bytes": 293
+  },
+  {
+    "id": "zh-long/full_literal",
+    "task_id": "zh-long",
+    "category": "full_literal",
+    "query": "数据库备份周期",
+    "expected_hit": true,
+    "actual_hit": true,
+    "returned_ids": [
+      "claim:860b0181-4d20-47b4-aeb5-70194ff9994a:replacement",
+      "event:f65d7497-fff4-4f20-a977-9deec751c398",
+      "event:eed83343-b30d-432f-9d59-ab45ce3f77e5"
+    ],
+    "reciprocal_rank": 1.0,
+    "observed_latency_ms": 3.5385410010349005,
+    "response_bytes": 2838
+  },
+  {
+    "id": "zh-long/partial_literal",
+    "task_id": "zh-long",
+    "category": "partial_literal",
+    "query": "备份",
+    "expected_hit": true,
+    "actual_hit": true,
+    "returned_ids": [
+      "claim:860b0181-4d20-47b4-aeb5-70194ff9994a:replacement",
+      "event:f65d7497-fff4-4f20-a977-9deec751c398",
+      "event:eed83343-b30d-432f-9d59-ab45ce3f77e5"
+    ],
+    "reciprocal_rank": 1.0,
+    "observed_latency_ms": 3.4015250130323693,
+    "response_bytes": 2785
+  },
+  {
+    "id": "zh-long/or_missing_term",
+    "task_id": "zh-long",
+    "category": "or_missing_term",
+    "query": "数据库备份周期 absent_or_operand_947",
+    "expected_hit": true,
+    "actual_hit": true,
+    "returned_ids": [
+      "claim:860b0181-4d20-47b4-aeb5-70194ff9994a:replacement",
+      "event:f65d7497-fff4-4f20-a977-9deec751c398",
+      "event:eed83343-b30d-432f-9d59-ab45ce3f77e5"
+    ],
+    "reciprocal_rank": 1.0,
+    "observed_latency_ms": 3.6824990093009546,
+    "response_bytes": 2860
+  },
+  {
+    "id": "zh-long/quotes_are_literal",
+    "task_id": "zh-long",
+    "category": "quotes_are_literal",
+    "query": "\"数据库备份周期\"",
+    "expected_hit": false,
+    "actual_hit": false,
+    "returned_ids": [],
+    "reciprocal_rank": 0,
+    "observed_latency_ms": 1.231936999829486,
+    "response_bytes": 296
+  },
+  {
+    "id": "zh-long/no_literal_match",
+    "task_id": "zh-long",
+    "category": "no_literal_match",
+    "query": "unseen_phrase_zh-long",
+    "expected_hit": false,
+    "actual_hit": false,
+    "returned_ids": [],
+    "reciprocal_rank": 0,
+    "observed_latency_ms": 1.182011008495465,
+    "response_bytes": 292
+  },
+  {
+    "id": "zh-city/full_literal",
+    "task_id": "zh-city",
+    "category": "full_literal",
+    "query": "北京",
+    "expected_hit": true,
+    "actual_hit": true,
+    "returned_ids": [
+      "claim:1315ffa3-c9aa-4017-9dca-adb38eed437b:replacement",
+      "event:36a08c39-39c7-4503-bb9b-e4c5010e4112",
+      "event:a9ba4668-1b75-44bb-9841-749fa18769c3"
+    ],
+    "reciprocal_rank": 1.0,
+    "observed_latency_ms": 4.118289987673052,
+    "response_bytes": 2740
+  },
+  {
+    "id": "zh-city/partial_literal",
+    "task_id": "zh-city",
+    "category": "partial_literal",
+    "query": "京",
+    "expected_hit": true,
+    "actual_hit": true,
+    "returned_ids": [
+      "claim:1315ffa3-c9aa-4017-9dca-adb38eed437b:replacement",
+      "event:36a08c39-39c7-4503-bb9b-e4c5010e4112",
+      "event:a9ba4668-1b75-44bb-9841-749fa18769c3"
+    ],
+    "reciprocal_rank": 1.0,
+    "observed_latency_ms": 3.605606994824484,
+    "response_bytes": 2728
+  },
+  {
+    "id": "zh-city/or_missing_term",
+    "task_id": "zh-city",
+    "category": "or_missing_term",
+    "query": "北京 absent_or_operand_947",
+    "expected_hit": true,
+    "actual_hit": true,
+    "returned_ids": [
+      "claim:1315ffa3-c9aa-4017-9dca-adb38eed437b:replacement",
+      "event:36a08c39-39c7-4503-bb9b-e4c5010e4112",
+      "event:a9ba4668-1b75-44bb-9841-749fa18769c3"
+    ],
+    "reciprocal_rank": 1.0,
+    "observed_latency_ms": 4.379984995466657,
+    "response_bytes": 2783
+  },
+  {
+    "id": "zh-city/quotes_are_literal",
+    "task_id": "zh-city",
+    "category": "quotes_are_literal",
+    "query": "\"北京\"",
+    "expected_hit": false,
+    "actual_hit": false,
+    "returned_ids": [],
+    "reciprocal_rank": 0,
+    "observed_latency_ms": 1.1084399884566665,
+    "response_bytes": 281
+  },
+  {
+    "id": "zh-city/no_literal_match",
+    "task_id": "zh-city",
+    "category": "no_literal_match",
+    "query": "unseen_phrase_zh-city",
+    "expected_hit": false,
+    "actual_hit": false,
+    "returned_ids": [],
+    "reciprocal_rank": 0,
+    "observed_latency_ms": 1.2892029917566106,
+    "response_bytes": 292
+  },
+  {
+    "id": "zh-mixed/full_literal",
+    "task_id": "zh-mixed",
+    "category": "full_literal",
+    "query": "API重试策略",
+    "expected_hit": true,
+    "actual_hit": true,
+    "returned_ids": [
+      "claim:c5ca78e6-3d41-4ba6-8da6-f7c3537e1de1:replacement",
+      "event:9701266d-096a-4479-b9fe-dca157f2b36e",
+      "event:c220c17b-e75f-4380-b16c-3f63bd021988"
+    ],
+    "reciprocal_rank": 1.0,
+    "observed_latency_ms": 4.08120900101494,
+    "response_bytes": 2829
+  },
+  {
+    "id": "zh-mixed/partial_literal",
+    "task_id": "zh-mixed",
+    "category": "partial_literal",
+    "query": "API",
+    "expected_hit": true,
+    "actual_hit": true,
+    "returned_ids": [
+      "claim:c5ca78e6-3d41-4ba6-8da6-f7c3537e1de1:replacement",
+      "event:9701266d-096a-4479-b9fe-dca157f2b36e",
+      "event:c220c17b-e75f-4380-b16c-3f63bd021988"
+    ],
+    "reciprocal_rank": 1.0,
+    "observed_latency_ms": 3.731913006049581,
+    "response_bytes": 2781
+  },
+  {
+    "id": "zh-mixed/or_missing_term",
+    "task_id": "zh-mixed",
+    "category": "or_missing_term",
+    "query": "API重试策略 absent_or_operand_947",
+    "expected_hit": true,
+    "actual_hit": true,
+    "returned_ids": [
+      "claim:c5ca78e6-3d41-4ba6-8da6-f7c3537e1de1:replacement",
+      "event:9701266d-096a-4479-b9fe-dca157f2b36e",
+      "event:c220c17b-e75f-4380-b16c-3f63bd021988"
+    ],
+    "reciprocal_rank": 1.0,
+    "observed_latency_ms": 4.110965004656464,
+    "response_bytes": 2851
+  },
+  {
+    "id": "zh-mixed/quotes_are_literal",
+    "task_id": "zh-mixed",
+    "category": "quotes_are_literal",
+    "query": "\"API重试策略\"",
+    "expected_hit": false,
+    "actual_hit": false,
+    "returned_ids": [],
+    "reciprocal_rank": 0,
+    "observed_latency_ms": 1.1986960016656667,
+    "response_bytes": 290
+  },
+  {
+    "id": "zh-mixed/no_literal_match",
+    "task_id": "zh-mixed",
+    "category": "no_literal_match",
+    "query": "unseen_phrase_zh-mixed",
+    "expected_hit": false,
+    "actual_hit": false,
+    "returned_ids": [],
+    "reciprocal_rank": 0,
+    "observed_latency_ms": 1.2242049997439608,
+    "response_bytes": 293
+  },
+  {
+    "id": "en-paraphrase/full_literal",
+    "task_id": "en-paraphrase",
+    "category": "full_literal",
+    "query": "retention_days",
+    "expected_hit": true,
+    "actual_hit": true,
+    "returned_ids": [
+      "claim:523a568d-4d5d-4ad0-b585-091a0be4da30:replacement",
+      "event:8b03cd1f-9fef-4490-8148-85c21e3df0f0",
+      "event:6794bd27-c1d1-4227-8259-62e4373e8cd8"
+    ],
+    "reciprocal_rank": 1.0,
+    "observed_latency_ms": 3.7886990030528978,
+    "response_bytes": 2785
+  },
+  {
+    "id": "en-paraphrase/partial_literal",
+    "task_id": "en-paraphrase",
+    "category": "partial_literal",
+    "query": "retention",
+    "expected_hit": true,
+    "actual_hit": true,
+    "returned_ids": [
+      "claim:523a568d-4d5d-4ad0-b585-091a0be4da30:replacement",
+      "event:8b03cd1f-9fef-4490-8148-85c21e3df0f0",
+      "event:6794bd27-c1d1-4227-8259-62e4373e8cd8"
+    ],
+    "reciprocal_rank": 1.0,
+    "observed_latency_ms": 3.783501000725664,
+    "response_bytes": 2765
+  },
+  {
+    "id": "en-paraphrase/or_missing_term",
+    "task_id": "en-paraphrase",
+    "category": "or_missing_term",
+    "query": "retention_days absent_or_operand_947",
+    "expected_hit": true,
+    "actual_hit": true,
+    "returned_ids": [
+      "claim:523a568d-4d5d-4ad0-b585-091a0be4da30:replacement",
+      "event:8b03cd1f-9fef-4490-8148-85c21e3df0f0",
+      "event:6794bd27-c1d1-4227-8259-62e4373e8cd8"
+    ],
+    "reciprocal_rank": 1.0,
+    "observed_latency_ms": 4.226217992254533,
+    "response_bytes": 2807
+  },
+  {
+    "id": "en-paraphrase/quotes_are_literal",
+    "task_id": "en-paraphrase",
+    "category": "quotes_are_literal",
+    "query": "\"retention_days\"",
+    "expected_hit": false,
+    "actual_hit": false,
+    "returned_ids": [],
+    "reciprocal_rank": 0,
+    "observed_latency_ms": 1.0655749938450754,
+    "response_bytes": 289
+  },
+  {
+    "id": "en-paraphrase/no_literal_match",
+    "task_id": "en-paraphrase",
+    "category": "no_literal_match",
+    "query": "expiration schedule",
+    "expected_hit": false,
+    "actual_hit": false,
+    "returned_ids": [],
+    "reciprocal_rank": 0,
+    "observed_latency_ms": 1.0370119998697191,
+    "response_bytes": 290
+  },
+  {
+    "id": "zh-paraphrase/full_literal",
+    "task_id": "zh-paraphrase",
+    "category": "full_literal",
+    "query": "开会地点",
+    "expected_hit": true,
+    "actual_hit": true,
+    "returned_ids": [
+      "claim:5efd394b-9bee-43f6-8beb-1eb9250e5da2:replacement",
+      "event:ab7d2a1d-4a3e-48a1-9e7a-deac07706c0e",
+      "event:c1400a18-0dac-4970-9ff9-79a7a8e93911"
+    ],
+    "reciprocal_rank": 1.0,
+    "observed_latency_ms": 3.41111900343094,
+    "response_bytes": 2838
+  },
+  {
+    "id": "zh-paraphrase/partial_literal",
+    "task_id": "zh-paraphrase",
+    "category": "partial_literal",
+    "query": "开会",
+    "expected_hit": true,
+    "actual_hit": true,
+    "returned_ids": [
+      "claim:5efd394b-9bee-43f6-8beb-1eb9250e5da2:replacement",
+      "event:ab7d2a1d-4a3e-48a1-9e7a-deac07706c0e",
+      "event:c1400a18-0dac-4970-9ff9-79a7a8e93911"
+    ],
+    "reciprocal_rank": 1.0,
+    "observed_latency_ms": 3.3319299982395023,
+    "response_bytes": 2821
+  },
+  {
+    "id": "zh-paraphrase/or_missing_term",
+    "task_id": "zh-paraphrase",
+    "category": "or_missing_term",
+    "query": "开会地点 absent_or_operand_947",
+    "expected_hit": true,
+    "actual_hit": true,
+    "returned_ids": [
+      "claim:5efd394b-9bee-43f6-8beb-1eb9250e5da2:replacement",
+      "event:ab7d2a1d-4a3e-48a1-9e7a-deac07706c0e",
+      "event:c1400a18-0dac-4970-9ff9-79a7a8e93911"
+    ],
+    "reciprocal_rank": 1.0,
+    "observed_latency_ms": 3.2170169870369136,
+    "response_bytes": 2860
+  },
+  {
+    "id": "zh-paraphrase/quotes_are_literal",
+    "task_id": "zh-paraphrase",
+    "category": "quotes_are_literal",
+    "query": "\"开会地点\"",
+    "expected_hit": false,
+    "actual_hit": false,
+    "returned_ids": [],
+    "reciprocal_rank": 0,
+    "observed_latency_ms": 1.2665389949688688,
+    "response_bytes": 287
+  },
+  {
+    "id": "zh-paraphrase/no_literal_match",
+    "task_id": "zh-paraphrase",
+    "category": "no_literal_match",
+    "query": "讨论场所",
+    "expected_hit": false,
+    "actual_hit": false,
+    "returned_ids": [],
+    "reciprocal_rank": 0,
+    "observed_latency_ms": 1.2432240037014708,
+    "response_bytes": 283
+  }
+]

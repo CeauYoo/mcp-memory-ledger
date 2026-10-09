@@ -1,6 +1,12 @@
 # 当前实现状态
 
-## 2026-10-09 可用性候选实现与验证范围
+## 2026-10-09 原方案 A–E 续建
+
+已新增 schema v5、持久反馈候选与原子确定性提交、FTS5 可重建派生召回（短中文精确 fallback）、完整响应预算/解释，以及持久 Episode 和版本化语义/流程候选。新工具合同与保守边界见 [A–E 运行指南](memory-feedback-experience.md)。候选激活只改变可召回状态，不增加权限。本地最终完整测试 570 项、fmt、all-target/all-feature Clippy、status-sync 均通过，新增 stdio 闭环与备份恢复验证通过。三平台 CI 仍须读取草稿 PR 的最终精确提交结果；下方 e14a59e 结果仅是历史基线。
+
+固定离线 A/B/C+消融与 10k/100k 容量工具已加入；实际结果以可复现报告为准。真实模型效果、token成本、完整数据模型规范化及旧大模块拆分仍明确未完成，见 [完整追踪矩阵](plans/2026-10-09-original-plan-traceability.md) 与 [续建增量映射](plans/2026-10-09-continuation-results.md)。
+
+## 2026-10-09 早期可用性候选（e14a59e 历史基线）
 
 新增第 11/12 个 MCP 工具 `recall_memory` / `build_task_context`：本地 literal 中英文文本召回、active Claim 优先、完整 provenance，以及 compact JSON UTF-8 硬字节预算。历史 `search_memory` 保持原合同；不声称 semantic retrieval、全文索引或大库性能。
 

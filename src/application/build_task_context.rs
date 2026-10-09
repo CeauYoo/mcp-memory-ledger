@@ -23,6 +23,10 @@ pub struct ContextOmissions {
     pub byte_budget: usize,
     /// Further matching records exist beyond the bounded retrieval candidate limit.
     pub candidate_limit: bool,
+    /// Candidate changed/disappeared while its full scoped record was loaded.
+    pub unavailable_after_retrieval: usize,
+    /// This policy excludes obsolete claims; historical events remain explicitly labelled.
+    pub claim_status_policy: &'static str,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct BuildTaskContextResult {
@@ -33,6 +37,9 @@ pub struct BuildTaskContextResult {
     pub max_bytes: usize,
     pub serialized_bytes: usize,
     pub candidate_limit: usize,
+    pub retrieval_strategy: &'static str,
+    pub selection_policy: &'static str,
+    pub index_warning: Option<String>,
     pub omissions: ContextOmissions,
     pub records: Vec<RecallMatch>,
 }
@@ -85,9 +92,14 @@ fn pack(
         max_bytes,
         serialized_bytes: 0,
         candidate_limit: recalled.limit,
+        retrieval_strategy: recalled.strategy,
+        selection_policy: recalled.selection_policy,
+        index_warning: recalled.index_warning,
         omissions: ContextOmissions {
             byte_budget: recalled.records.len(),
             candidate_limit: recalled.has_more,
+            unavailable_after_retrieval: recalled.unavailable_after_retrieval,
+            claim_status_policy: "active_only",
         },
         records: Vec::new(),
     };
@@ -124,11 +136,19 @@ mod tests {
             namespace: "user/test".into(),
             query: "北京 咖啡 记忆 \"\\".into(),
             strategy: "test",
+            selection_policy: recall_memory::RECALL_SELECTION_POLICY,
+            index_warning: None,
+            unavailable_after_retrieval: 0,
             limit: 20,
             has_more: true,
             records: (0..12)
                 .map(|i| RecallMatch {
                     matched_terms: 1,
+                    explanation: recall_memory::RecallExplanation {
+                        matched_query_terms: vec!["北京".into()],
+                        validity: "historical_event_not_a_current_conclusion",
+                        time_basis: "event_recorded_at_desc_after_term_count",
+                    },
                     record: SearchMemoryRecord::Event {
                         id: format!("event:{i}"),
                         recorded_at: chrono::DateTime::from_timestamp(0, 0).unwrap(),
@@ -173,7 +193,7 @@ mod tests {
         if let SearchMemoryRecord::Event { summary, .. } = &mut recalled.records[0].record {
             *summary = "北京".repeat(10000);
         }
-        let context = pack(recalled, 1000).unwrap();
+        let context = pack(recalled, 1600).unwrap();
         assert_eq!(context.records.len(), 1);
         assert_eq!(context.omissions.byte_budget, 1);
         assert!(

@@ -1990,6 +1990,74 @@ struct SqliteReflectionTransaction<'a> {
 
 #[async_trait]
 impl ReflectionTransaction for SqliteReflectionTransaction<'_> {
+    async fn load_feedback_candidate(
+        &mut self,
+        namespace: &Namespace,
+        candidate_id: &str,
+    ) -> Result<Option<crate::domain::feedback_candidate::FeedbackCandidate>, AppError> {
+        self.ensure_writable()?;
+        let result = super::feedback_candidate::load(
+            self.transaction
+                .as_mut()
+                .ok_or_else(|| AppError::Message("transaction already closed".into()))?
+                .as_mut(),
+            namespace,
+            candidate_id,
+        )
+        .await;
+        self.note_result(result)
+    }
+    async fn list_feedback_candidates_for_target(
+        &mut self,
+        namespace: &Namespace,
+        target: &str,
+        version: &str,
+    ) -> Result<Vec<crate::domain::feedback_candidate::FeedbackCandidate>, AppError> {
+        self.ensure_writable()?;
+        let result = super::feedback_candidate::list_for_target(
+            self.transaction
+                .as_mut()
+                .ok_or_else(|| AppError::Message("transaction already closed".into()))?
+                .as_mut(),
+            namespace,
+            target,
+            version,
+        )
+        .await;
+        self.note_result(result)
+    }
+    async fn insert_feedback_candidate(
+        &mut self,
+        candidate: &crate::domain::feedback_candidate::FeedbackCandidate,
+    ) -> Result<(), AppError> {
+        self.ensure_writable()?;
+        let result = super::feedback_candidate::insert(
+            self.transaction
+                .as_mut()
+                .ok_or_else(|| AppError::Message("transaction already closed".into()))?
+                .as_mut(),
+            candidate,
+        )
+        .await;
+        self.note_result(result)
+    }
+    async fn update_feedback_candidate(
+        &mut self,
+        candidate: &crate::domain::feedback_candidate::FeedbackCandidate,
+        expected_revision: u64,
+    ) -> Result<(), AppError> {
+        self.ensure_writable()?;
+        let result = super::feedback_candidate::update(
+            self.transaction
+                .as_mut()
+                .ok_or_else(|| AppError::Message("transaction already closed".into()))?
+                .as_mut(),
+            candidate,
+            expected_revision,
+        )
+        .await;
+        self.note_result(result)
+    }
     async fn load_write_receipt(
         &mut self,
         operation_id: &str,

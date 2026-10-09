@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "selection": "Fixed synthetic bilingual diagnostic cases chosen before retrieval tuning. Not a random sample of real agent tasks. Literal and deliberately unsupported paraphrase queries remain separate strata.",
+  "k": 5,
+  "max_context_bytes": 1800,
+  "tasks": [
+    {"id":"en-city","language":"en","stratum":"literal","namespace":"project/eval-en","subject":"deployment_city","query":"deployment_city","prompt":"Which city currently hosts the deployment?","before":"London","after":"Paris"},
+    {"id":"en-code","language":"en","stratum":"literal","namespace":"project/eval-en","subject":"retry_timeout_ms","query":"retry_timeout_ms","prompt":"What retry timeout should the client use?","before":"1000","after":"2500"},
+    {"id":"en-punctuation","language":"en","stratum":"literal","namespace":"project/eval-en","subject":"release%_tag","query":"release%_tag","prompt":"Which literal release%_tag is current?","before":"v1","after":"v2"},
+    {"id":"en-case","language":"en","stratum":"literal","namespace":"project/eval-en","subject":"CachePolicy","query":"CACHEPOLICY","prompt":"What is the current cache policy?","before":"write-through","after":"write-back"},
+    {"id":"zh-short","language":"zh","stratum":"literal","namespace":"project/eval-zh","subject":"咖啡","query":"咖啡","prompt":"当前采购的咖啡是什么？","before":"深烘","after":"浅烘"},
+    {"id":"zh-long","language":"zh","stratum":"literal","namespace":"project/eval-zh","subject":"数据库备份周期","query":"数据库备份周期","prompt":"数据库现在多久备份一次？","before":"每周","after":"每天"},
+    {"id":"zh-city","language":"zh","stratum":"literal","namespace":"project/eval-zh","subject":"北京","query":"北京","prompt":"北京项目的当前仓库在哪？","before":"海淀","after":"朝阳"},
+    {"id":"zh-mixed","language":"zh","stratum":"literal","namespace":"project/eval-zh","subject":"API重试策略","query":"API重试策略","prompt":"当前 API 重试策略是什么？","before":"固定间隔","after":"指数退避"},
+    {"id":"en-paraphrase","language":"en","stratum":"unsupported_paraphrase","namespace":"project/eval-en","subject":"retention_days","query":"expiration schedule","prompt":"How long do we keep archived logs?","before":"7","after":"30"},
+    {"id":"zh-paraphrase","language":"zh","stratum":"unsupported_paraphrase","namespace":"project/eval-zh","subject":"开会地点","query":"讨论场所","prompt":"团队下次讨论在哪里？","before":"一号会议室","after":"二号会议室"}
+  ]
+}

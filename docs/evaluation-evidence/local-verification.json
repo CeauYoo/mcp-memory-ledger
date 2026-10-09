@@ -1,0 +1,48 @@
+{
+  "kind": "local_frozen_source_verification",
+  "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+  "source_manifest": "final-indexed-build-manifest.json",
+  "full_test_passed": 570,
+  "failed": 0,
+  "ignored": 0,
+  "status_sync_completed_gates": 32,
+  "checks": [
+    {
+      "gate": "fmt",
+      "exit_code": 0,
+      "log": "local-final-fmt.log.gz",
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "gate": "clippy",
+      "exit_code": 0,
+      "log": "local-final-clippy.log.gz",
+      "uncompressed_sha256": "f4403412cb20dc7d8a0a94c08c9c8853e4bac9b3e8489158834f30512311ed97"
+    },
+    {
+      "gate": "full",
+      "exit_code": 0,
+      "log": "local-final-full.log.gz",
+      "uncompressed_sha256": "dd33840ba55809a463d00db1a1f3d4042953ea3e90c8ef0ccd439f4a0268ee8b"
+    },
+    {
+      "gate": "status",
+      "exit_code": 0,
+      "log": "local-final-status.log.gz",
+      "uncompressed_sha256": "0eb2cac4cd5b8142fe96bdb7be84837459e6f93f0e4f2164059677dc9a32559a"
+    },
+    {
+      "gate": "diff",
+      "exit_code": 0,
+      "log": "local-final-diff.log.gz",
+      "uncompressed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "installed_copy_smoke": {
+    "passed": true,
+    "binary_sha256": "af3f3ecd62a36655101048f20111b22c4eaa9e68639027c8ffcfa9129f42d44a",
+    "provider": "mock",
+    "remote_model_calls": 0
+  },
+  "exact_head_ci": "check draft PR after publication; not implied by this record"
+}

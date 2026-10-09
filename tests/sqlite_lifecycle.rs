@@ -1,3 +1,5 @@
+#[path = "support/legacy_schema.rs"]
+mod legacy_schema;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -340,6 +342,7 @@ async fn ledger_rows_match_declared_versions_after_migration() {
             (2, "owner_namespace_scope".to_string()),
             (3, "reflection_audit_columns".to_string()),
             (4, "event_feedback_metadata".to_string()),
+            (5, "feedback_experience_and_retrieval".to_string()),
         ]
     );
     connection.close().await.expect("close migrated");
@@ -512,6 +515,7 @@ async fn version_two_reflection_alter_migration_matches_canonical_structure() {
     let url = sqlite_url(&path);
     initialize_database(&url).await.expect("init");
     let mut connection = SqliteConnection::connect(&url).await.expect("connect");
+    legacy_schema::remove_v5_objects(&mut connection).await;
     sqlx::raw_sql(
         "ALTER TABLE reflections DROP COLUMN supporting_evidence_event_ids;
          ALTER TABLE reflections DROP COLUMN requested_identity_update;
@@ -653,4 +657,112 @@ async fn migration_waits_for_existing_reader_before_commit() {
             .expect("current readback")
             .is_current()
     );
+}
+
+#[tokio::test]
+async fn version_four_to_five_preserves_facts_and_builds_recoverable_index() {
+    let temp = tempdir().unwrap();
+    let path = temp.path().join("version-four.sqlite");
+    let url = sqlite_url(&path);
+    initialize_database(&url).await.unwrap();
+    let mut connection = SqliteConnection::connect(&url).await.unwrap();
+    sqlx::raw_sql("INSERT INTO events(event_id,recorded_at,owner,namespace,kind,summary,feedback_json) VALUES ('legacy-feedback','2026-01-01T01:02:03.123456789Z','world','project/a','observation','中文 deployment observation',NULL);
+      INSERT INTO claims(claim_id,owner,namespace,subject,predicate,object,mode,status) VALUES ('legacy-claim','world','project/a','service','setting','deployment','observed','active');
+      INSERT INTO evidence_links(claim_id,event_id) VALUES ('legacy-claim','legacy-feedback');
+      INSERT INTO episode_events(episode_reference,event_id) VALUES ('legacy-episode','legacy-feedback');")
+        .execute(&mut connection).await.unwrap();
+    legacy_schema::remove_v5_objects(&mut connection).await;
+    sqlx::raw_sql("DELETE FROM schema_migrations WHERE version > 4; PRAGMA user_version = 4;")
+        .execute(&mut connection)
+        .await
+        .unwrap();
+    connection.close().await.unwrap();
+    let before = inspect_database(&url).await.unwrap();
+    assert_eq!(before.schema_version, Some(4));
+    assert_eq!(before.status, "migration_required");
+    let report = migrate_database(&url).await.unwrap();
+    assert!(report.is_current());
+    assert!(report.schema_structure_valid && report.preserved_row_counts);
+    let store = agent_llm_mm::adapters::sqlite::open_current_database(&url)
+        .await
+        .unwrap();
+    let index = store.inspect_retrieval_index().await.unwrap();
+    assert!(index.is_usable(), "{index:?}");
+    assert_eq!(index.ledger_documents, Some(2));
+    let mut connection = SqliteConnection::connect(&url).await.unwrap();
+    let values: (String, String) =
+        sqlx::query_as("SELECT recorded_at,summary FROM events WHERE event_id='legacy-feedback'")
+            .fetch_one(&mut connection)
+            .await
+            .unwrap();
+    assert_eq!(
+        values,
+        (
+            "2026-01-01T01:02:03.123456789Z".into(),
+            "中文 deployment observation".into()
+        )
+    );
+    let links: i64 = sqlx::query_scalar("SELECT count(*) FROM evidence_links WHERE claim_id='legacy-claim' AND event_id='legacy-feedback'")
+        .fetch_one(&mut connection).await.unwrap();
+    assert_eq!(links, 1);
+    connection.close().await.unwrap();
+    // Restore the PRE-migration anchor to a distinct path, then migrate it independently.
+    let restored_path = temp.path().join("restored-v4.sqlite");
+    fs::copy(report.backup_path.unwrap(), &restored_path).unwrap();
+    let restored_url = sqlite_url(&restored_path);
+    assert_eq!(
+        inspect_database(&restored_url)
+            .await
+            .unwrap()
+            .schema_version,
+        Some(4)
+    );
+    assert!(migrate_database(&restored_url).await.unwrap().is_current());
+    let restored = agent_llm_mm::adapters::sqlite::open_current_database(&restored_url)
+        .await
+        .unwrap();
+    assert!(
+        restored
+            .inspect_retrieval_index()
+            .await
+            .unwrap()
+            .is_usable()
+    );
+}
+
+#[tokio::test]
+async fn doctor_reports_broken_derived_index_without_mutating_and_rebuild_recovers() {
+    let temp = tempdir().unwrap();
+    let path = temp.path().join("broken-derived.sqlite");
+    let url = sqlite_url(&path);
+    initialize_database(&url).await.unwrap();
+    let mut connection = SqliteConnection::connect(&url).await.unwrap();
+    sqlx::query("DROP TRIGGER text_recall_events_ai")
+        .execute(&mut connection)
+        .await
+        .unwrap();
+    connection.close().await.unwrap();
+    let before = fs::read(&path).unwrap();
+    let report = agent_llm_mm::run_doctor(AppConfig {
+        database_url: url.clone(),
+        ..Default::default()
+    })
+    .await
+    .unwrap();
+    assert!(report.database_lifecycle.is_current());
+    assert_eq!(report.status, "attention_required");
+    assert!(!report.retrieval_index.unwrap().is_usable());
+    assert_eq!(fs::read(&path).unwrap(), before);
+    let store = agent_llm_mm::adapters::sqlite::open_current_database(&url)
+        .await
+        .unwrap();
+    assert!(store.rebuild_retrieval_index().await.unwrap().is_usable());
+    let healthy = agent_llm_mm::run_doctor(AppConfig {
+        database_url: url,
+        ..Default::default()
+    })
+    .await
+    .unwrap();
+    assert_eq!(healthy.status, "ok");
+    assert!(healthy.retrieval_index.unwrap().is_usable());
 }

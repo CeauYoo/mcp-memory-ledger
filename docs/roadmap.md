@@ -27,7 +27,11 @@
 
 当前仓库仍是 local-first technical MVP，不是 Local Alpha、Beta、GA 或生产级自治平台。
 
-## 当前事实
+## 2026-10-09 原方案续建
+
+本轮按原 A–E 讨论推进反馈候选、确定性支持合同、派生全文索引、离线对照/容量证据和有界经验候选。运行时边界与可复现入口见 [A–E 指南](memory-feedback-experience.md)；全量要求和遗留项见 [原文追踪矩阵](plans/2026-10-09-original-plan-traceability.md)。生命周期基础已通过后前移这组有限切片的理由写入唯一 active plan；不将 M2/M3 真实产品与模型效果门自动标成完成。
+
+## 当前事实（历史切片说明；新 v5 入口见上）
 
 已实现：
 

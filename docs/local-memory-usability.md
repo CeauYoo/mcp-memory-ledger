@@ -1,4 +1,6 @@
-# Bounded offline memory workflow
+# Bounded offline memory workflow (e14a59e baseline)
+
+This page preserves the earlier v4 candidate contract. The current additive v5 workflow, FTS index, balanced recall and feedback/experience lifecycle are documented in [the A–E runtime guide](memory-feedback-experience.md). Where this historical page says scans/no FTS or procedural expansion deferred, the newer guide supersedes that specific boundary. Legacy retry/scope and installation cautions continue to apply.
 
 This is a local-first technical MVP candidate, not a production release or autonomous controller. A model is not needed for recording, recall, correction, history, or context packing. The configured owner/namespace boundaries are data isolation, not authentication between hostile local clients.
 

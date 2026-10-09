@@ -91,6 +91,42 @@ pub trait IngestTransactionRunner {
 
 #[async_trait]
 pub trait ReflectionTransaction {
+    async fn load_feedback_candidate(
+        &mut self,
+        _namespace: &crate::domain::types::Namespace,
+        _candidate_id: &str,
+    ) -> Result<Option<crate::domain::feedback_candidate::FeedbackCandidate>, AppError> {
+        Err(AppError::Message(
+            "transaction does not support feedback candidates".into(),
+        ))
+    }
+    async fn list_feedback_candidates_for_target(
+        &mut self,
+        _namespace: &crate::domain::types::Namespace,
+        _target: &str,
+        _version: &str,
+    ) -> Result<Vec<crate::domain::feedback_candidate::FeedbackCandidate>, AppError> {
+        Err(AppError::Message(
+            "transaction does not support feedback candidates".into(),
+        ))
+    }
+    async fn insert_feedback_candidate(
+        &mut self,
+        _candidate: &crate::domain::feedback_candidate::FeedbackCandidate,
+    ) -> Result<(), AppError> {
+        Err(AppError::Message(
+            "transaction does not support feedback candidates".into(),
+        ))
+    }
+    async fn update_feedback_candidate(
+        &mut self,
+        _candidate: &crate::domain::feedback_candidate::FeedbackCandidate,
+        _expected_revision: u64,
+    ) -> Result<(), AppError> {
+        Err(AppError::Message(
+            "transaction does not support feedback candidates".into(),
+        ))
+    }
     async fn load_write_receipt(
         &mut self,
         _operation_id: &str,
@@ -171,3 +207,6 @@ pub trait ReflectionTransactionRunner {
 }
 
 pub mod text_memory_store;
+
+pub mod experience_store;
+pub mod feedback_candidate_store;

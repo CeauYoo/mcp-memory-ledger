@@ -1,0 +1,13 @@
+{
+  "kind": "exact_source_build_manifest",
+  "source_commit": "e14a59e77554891d5bfb03a88390713f07193102",
+  "source_tree": "5067bbd118e134235cdde9c4d39ecbbb3b8c1423",
+  "source_materialization": "git archive of exact commit into fresh directory; no source edits",
+  "source_archive_sha256": "5f9c6f316c687c0c1246d9e0c8dcfb51c59bbeb6653bdcea75371e65b78fc383",
+  "cargo_lock_sha256": "8580bb3247defe1a37472e0a3e005c36e87538d86ead09b2e30796b260f17226",
+  "rustc": "rustc 1.95.0 (59807616e 2026-04-14)\nbinary: rustc\ncommit-hash: 59807616e1fa2540724bfbac14d7976d7e4a3860\ncommit-date: 2026-04-14\nhost: x86_64-unknown-linux-gnu\nrelease: 1.95.0\nLLVM version: 22.1.2",
+  "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+  "build_command": "CARGO_TARGET_DIR=<shared-target> cargo build --offline --manifest-path <fresh-archive>/Cargo.toml --bin agent_llm_mm",
+  "build_profile": "dev (unoptimized + debuginfo), default features",
+  "binary_sha256": "da522b8a50961dd7fa7dba016343f800c20607b93cf3b6af3350d9208bc1fead"
+}

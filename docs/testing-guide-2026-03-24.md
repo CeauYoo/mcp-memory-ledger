@@ -1559,3 +1559,11 @@ Run `cargo test --test sqlite_lifecycle` for canonical structural readback, weak
 ### Migration reader-lock regression
 
 `migration_waits_for_existing_reader_before_commit` deterministically reproduced SQLITE_BUSY before the fix. Migration admission still fails fast when another writer owns the database; after its own reservation, SQLite waits at most five seconds for transient reader locks so rollback-journal COMMIT can complete. DELETE/WAL writer-resumption tests remain enabled on Windows. Exhausting the bound returns an error and preserves the backup rather than silently retrying or deleting data.
+
+## Original-plan continuation regressions (schema v5)
+
+- `cargo test --test feedback_candidates --test correction_atomicity`: target-content version conflict, evidence support alignment, model/inconclusive/missing rejection, candidate immutability, no-new-evidence stop, commit/reject races and all-or-nothing receipts/history.
+- `cargo test --test experience_workflow`: same-scope source links, expected_version race, inspect/reject/activation, immutable versions and pending rollback, complete JSON-byte budget, no authority mutation, recovery.
+- `cargo test --test indexed_text_recall --test sqlite_lifecycle --test feedback_provenance`: explicit v0/v2/v3/v4→v5 migration, canonical readback, original-record preservation and restore rehearsal; FTS/CJK/punctuation/legacy IDs, trigger synchronization, missing/corrupt index detection and explicit rebuild, VACUUM/restore.
+- `python3 scripts/evaluate-memory-loop.py --help` and `python3 scripts/benchmark-memory-capacity.py --help`: fixed offline mechanism comparisons, ablations and reproducible capacity/query-plan reports. Read [methodology](evaluation-methodology.md); proxy success is not real LLM success, bytes are not tokens, and query variants are not independent tasks.
+- Final verification also requires fmt, all-target/all-feature Clippy, full test tier, status-sync and exact-head platform CI. Historical v4 counts above are not reused as v5 results.

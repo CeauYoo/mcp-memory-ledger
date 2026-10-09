@@ -10,11 +10,17 @@ Local Alpha remains a local MCP memory service plus governed self-revision. It
 is not a complete multi-layer cognitive architecture, not a production
 self-governing system, and not a remote/team memory product.
 
-Current implemented slice: the episode summary read model can project
+Historical projection slice: the episode summary read model can project
 objective, outcome, `lesson`, and linked evidence ids together. This is
 projection-only local metadata over existing episode events. It does not add a
 durable episode table, schema migration, procedural memory, slow variables,
 semantic memory, lifecycle policy, or durable self-model write path.
+
+## 2026-10-09 bounded runtime continuation
+
+The [original-plan continuation](../memory-feedback-experience.md) adds schema-v5 richer immutable Episodes and caller-authored semantic/procedural candidates, source-relation tables, versioned reject/revise/rollback, explicit activation and bounded active-only recall. This implements bounded runtime subsets of Phases 1–3, not complete cognitive memory or every phase exit. The old snapshot projection remains legacy-snapshot-only; its absent procedural label is not an inventory of the separate v5 tools. No candidate activation changes identity, commitments, action permissions or executes a procedure.
+
+Foundation decision: explicit migration/backup/rehearsal/restore and atomic receipts are implemented and tested. For this additive append-only slice, lifecycle retention is deliberately retain-all: no pruning/compaction/delete API is introduced, whole-database SQLite backup/restore remains the supported portable recovery/export unit, and all history/receipts stay together. Selective export, privacy-aware retention/deletion and automatic compaction remain open and must not be added without their own source/reference/replay consistency contracts. This bounded choice permits the user's requested experience-candidate work without pretending the broader lifecycle roadmap is complete.
 
 ## Product Wording Boundary
 
@@ -30,8 +36,9 @@ Use conservative stage wording until the matching gates pass:
 
 ## Prerequisites
 
-The multi-layer memory roadmap must not begin runtime implementation until these
-foundation contracts are stable and tested:
+Broader multi-layer runtime implementation remains gated on stable, tested
+foundation contracts. The bounded v5 slice uses the explicit retain-all and
+whole-database recovery decision above; it does not waive the remaining gates:
 
 - evidence semantics stable: evidence ids, evidence queries, projections, and
   redaction rules have stable meanings.
@@ -51,9 +58,9 @@ foundation contracts are stable and tested:
 | Layer | Future Role | Local Alpha Status | First Gate |
 | --- | --- | --- | --- |
 | Working memory | Short-lived task context, active goals, temporary constraints, and current evidence handles | Not implemented as a distinct layer | Define expiry, visibility, and no-durable-commit rules |
-| Episodic memory | Structured records of tasks, outcomes, lessons, and linked evidence | First read-only projection slice exposes objective, outcome, lesson, and linked evidence ids; richer durable episode records remain incomplete | Add richer episode semantics behind tests without adding ungoverned durable writes |
-| Semantic memory | Stable distilled concepts, project facts, domain rules, and cross-episode summaries | Not implemented as a distinct layer | Prove evidence-backed extraction and contradiction handling |
-| Procedural memory | Reusable workflows, policies, checklists, and operational playbooks | Current docs and scripts are human-facing, not a runtime layer | Define approval, versioning, and rollback rules |
+| Episodic memory | Structured records of tasks, outcomes, lessons, and linked evidence | Legacy read-only projection plus separate v5 immutable durable Episodes; v5 records are not included in the legacy snapshot inventory | Complete broader snapshot integration and lifecycle contracts |
+| Semantic memory | Stable distilled concepts, project facts, domain rules, and cross-episode summaries | v5 caller-authored, evidence-linked, versioned candidates with explicit activation and current-active recall; no automatic extraction or truth proof | Prove evidence-backed extraction and contradiction handling |
+| Procedural memory | Reusable workflows, policies, checklists, and operational playbooks | v5 inspectable, rejectable, versioned candidates and rollback; steps remain inert text | Any execution needs its own authority and safety contract |
 | Slow variables | Long-horizon preferences, calibrated thresholds, trust levels, and policy weights | Not implemented | Define governance, review cadence, and bounded update paths |
 | Self-model layering | Explicit model of agent capabilities, limits, commitments, and known failure modes | Current self-revision diagnostics are partial evidence only; durable self-model writes remain blocked outside `run_reflection` | Define read-only projection before any durable self-model writes |
 
@@ -77,12 +84,13 @@ tested without relying on demo-only assumptions.
 Goal: turn task history into structured episodes without introducing a full
 semantic or self-model layer.
 
-The first implemented local-safe slice is the read-only lesson projection in
+The first historical local-safe slice was the read-only lesson projection in
 the existing episode summary read model. It allows objective, outcome,
 `lesson`, and linked evidence ids to be inspected together without creating a
-new durable write path. The complete richer episode record remains future work.
+new durable write path. The separate v5 runtime now persists richer immutable
+records; it does not silently redefine this projection or complete every phase gate.
 
-Minimum future episode fields:
+Full-phase episode expectations:
 
 - `goal`: what the task attempted to accomplish.
 - `outcome`: what actually happened, including success, partial success,
@@ -102,8 +110,9 @@ Acceptance expectations for a complete durable episode layer:
 - The feature remains local-only and does not imply semantic memory,
   procedural memory, slow variables, or self-model writes are implemented.
 
-Current slice exit: the projection is test-covered and read-only. It has no
-migration because no durable table or storage contract changed.
+Historical projection-only slice exit: the projection is test-covered and
+read-only; that slice added no durable table or migration. The separate v5 slice
+adds explicit migration, durable richer Episodes and dedicated detail/list reads.
 
 Full phase exit: richer episode records are test-covered, migration-covered, and
 projected read-only before any later layer consumes them.

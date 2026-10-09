@@ -1,0 +1,23 @@
+{
+  "offline-final-results.json.gz": {
+    "encoding": "gzip of UTF-8 JSON",
+    "uncompressed_sha256": "295211511b91649028b204ba58f14f454f7ded83c2e4796d72cf2d5bf8c09134",
+    "compressed_sha256": "7b04a6dc95511f8d41237e4f72ed55834d02ecbe845dd7ed998fabbd1784a721",
+    "uncompressed_bytes": 94982,
+    "compressed_bytes": 6061
+  },
+  "offline-final-mcp-transcript.json.gz": {
+    "encoding": "gzip of UTF-8 JSON",
+    "uncompressed_sha256": "46c4922c2ca256db82e0aa00e434265d26dd06634c4412e077195ea07b508e30",
+    "compressed_sha256": "e7c6a9f6f0de7f31c56cdb8bc66f40d8fc9ecfae7da8028ed2d179eb672eb5d1",
+    "uncompressed_bytes": 336990,
+    "compressed_bytes": 20634
+  },
+  "offline-final-adapter-requests.json.gz": {
+    "encoding": "gzip of UTF-8 JSON",
+    "uncompressed_sha256": "c536cbb4d8ad7887341ad3e0d98bd82c0651d9f95e52938efad2d88aad225d9b",
+    "compressed_sha256": "c547a268f15c8941b122006b828f69aae2cbbbd56ad5caa6dd7e5c5091b1ff80",
+    "uncompressed_bytes": 80110,
+    "compressed_bytes": 5077
+  }
+}

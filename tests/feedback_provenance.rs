@@ -1,3 +1,5 @@
+#[path = "support/legacy_schema.rs"]
+mod legacy_schema;
 use agent_llm_mm::{
     adapters::sqlite::{SqliteStore, inspect_database, migrate_database},
     application::{
@@ -216,7 +218,11 @@ async fn version_three_migration_preserves_events_and_canonical_structure() {
     .execute(&pool)
     .await
     .unwrap();
-    sqlx::raw_sql("ALTER TABLE events DROP COLUMN feedback_json; DELETE FROM schema_migrations WHERE version = 4; PRAGMA user_version = 3;").execute(&pool).await.unwrap();
+    {
+        let mut connection = pool.acquire().await.unwrap();
+        legacy_schema::remove_v5_objects(&mut connection).await;
+    }
+    sqlx::raw_sql("ALTER TABLE events DROP COLUMN feedback_json; DELETE FROM schema_migrations WHERE version >= 4; PRAGMA user_version = 3;").execute(&pool).await.unwrap();
     pool.close().await;
     drop(deps);
     let before = inspect_database(&url).await.unwrap();

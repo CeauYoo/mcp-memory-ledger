@@ -29,6 +29,8 @@ pub struct ReflectionInput {
     strict_evidence_scope: bool,
     #[serde(skip)]
     write_receipt: Option<crate::ports::WriteReceiptRequest>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    feedback_candidate: Option<(crate::domain::types::Namespace, String)>,
 }
 
 impl ReflectionInput {
@@ -49,6 +51,7 @@ impl ReflectionInput {
             handled_trigger_ledger_entry: None,
             strict_evidence_scope: false,
             write_receipt: None,
+            feedback_candidate: None,
         }
     }
 
@@ -67,7 +70,17 @@ impl ReflectionInput {
             handled_trigger_ledger_entry: None,
             strict_evidence_scope: false,
             write_receipt: None,
+            feedback_candidate: None,
         }
+    }
+
+    pub(crate) fn with_feedback_candidate(
+        mut self,
+        namespace: crate::domain::types::Namespace,
+        candidate_id: String,
+    ) -> Self {
+        self.feedback_candidate = Some((namespace, candidate_id));
+        self
     }
 
     pub(crate) fn with_write_receipt(mut self, request: crate::ports::WriteReceiptRequest) -> Self {
@@ -139,6 +152,7 @@ where
         handled_trigger_ledger_entry,
         strict_evidence_scope,
         write_receipt,
+        feedback_candidate,
     } = input;
     let replacement_evidence_event_ids = normalize_event_ids(replacement_evidence_event_ids)?;
 
@@ -179,6 +193,72 @@ where
         transaction.commit().await?;
         return Ok(result);
     }
+    // Candidate lifecycle and Claim correction share this writer transaction.
+    // Revalidation is mandatory even after an earlier successful validation.
+    let mut guarded_candidate = if let Some((namespace, candidate_id)) = &feedback_candidate {
+        let candidate = super::feedback_candidate::load_candidate(
+            transaction.as_mut(),
+            namespace,
+            candidate_id,
+        )
+        .await?;
+        if identity_update.is_some()
+            || commitment_updates.is_some()
+            || handled_trigger_ledger_entry.is_some()
+            || target_claim_id.as_deref()
+                != Some(candidate.proposal.target_claim_reference.claim_id())
+            || replacement_claim.as_ref() != Some(&candidate.proposal.replacement_claim)
+            || reflection.summary() != candidate.proposal.summary
+            || supporting_evidence_event_ids
+                != candidate
+                    .proposal
+                    .evidence_event_ids
+                    .iter()
+                    .map(|id| id.event_id().to_string())
+                    .collect::<Vec<_>>()
+        {
+            return Err(AppError::InvalidParams("feedback candidate commit does not match its immutable proposal or attempts a global patch".into()));
+        }
+        use crate::domain::feedback_candidate::FeedbackCandidateState;
+        if candidate.state == FeedbackCandidateState::Committed {
+            let result = ReflectionResult {
+                reflection_id: candidate.reflection_id.clone().ok_or_else(|| {
+                    AppError::Message("committed candidate has no reflection".into())
+                })?,
+                replacement_claim_id: candidate.replacement_claim_id.clone(),
+            };
+            let request = write_receipt.as_ref().ok_or_else(|| {
+                AppError::InvalidParams("feedback candidate commit requires request_id".into())
+            })?;
+            transaction
+                .append_write_receipt(
+                    request,
+                    crate::ports::write_receipt::receipt_result(request, &result)?,
+                    recorded_at,
+                )
+                .await?;
+            transaction.commit().await?;
+            return Ok(result);
+        }
+        if candidate.state != FeedbackCandidateState::Validated {
+            return Err(AppError::InvalidParams("feedback candidate must be explicitly validated before commit; rejected candidates cannot commit".into()));
+        }
+        let validation = super::feedback_candidate::validate_in_transaction(
+            transaction.as_mut(),
+            &candidate.proposal,
+        )
+        .await?;
+        if !validation.passed {
+            return Err(AppError::InvalidParams(format!(
+                "feedback candidate commit revalidation failed: {}",
+                serde_json::to_string(&validation.reasons)
+                    .map_err(|e| AppError::Message(e.to_string()))?
+            )));
+        }
+        Some(candidate)
+    } else {
+        None
+    };
     if (identity_update.is_some() || commitment_updates.is_some())
         && supporting_evidence_event_ids.is_empty()
     {
@@ -377,6 +457,17 @@ where
         reflection_id,
         replacement_claim_id,
     };
+    if let Some(candidate) = &mut guarded_candidate {
+        let previous_revision = candidate.revision;
+        candidate.revision += 1;
+        candidate.updated_at = recorded_at;
+        candidate.state = crate::domain::feedback_candidate::FeedbackCandidateState::Committed;
+        candidate.reflection_id = Some(result.reflection_id.clone());
+        candidate.replacement_claim_id = result.replacement_claim_id.clone();
+        transaction
+            .update_feedback_candidate(candidate, previous_revision)
+            .await?;
+    }
     let request = match write_receipt {
         Some(request) => request,
         None => crate::ports::WriteReceiptRequest::new(

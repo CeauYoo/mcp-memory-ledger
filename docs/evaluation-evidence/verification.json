@@ -1,0 +1,29 @@
+{
+  "commands": [
+    {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests/fixtures/memory-evaluation -p test_*.py",
+      "result": "2 tests passed"
+    },
+    {
+      "command": "python3 scripts/evaluate-memory-loop.py --binary target/tools/agent_llm_mm-final-evaluation --output target/reports/evaluation-final-frozen",
+      "result": "passed: 60 variant-task rows, 50 raw query scenarios, two unsupported feedback cases, both experience lifecycle cases"
+    },
+    {
+      "command": "python3 scripts/benchmark-memory-capacity.py --binary target/tools/agent_llm_mm-final-evaluation --sizes 10000 100000 --repeats 20 --label final-indexed-af3f3ecd-debug-quiet-local-builders --output target/reports/capacity-final-frozen",
+      "result": "completed both sizes with correctness assertions; no performance gate"
+    },
+    {
+      "command": "python3 scripts/benchmark-memory-capacity.py --binary target/tools/agent_llm_mm-baseline-e14a59e --sizes 10000 100000 --repeats 20 --label exact-e14a59e-debug-quiet-local-builders --output target/reports/capacity-exact-e14a59e-quiet",
+      "result": "completed both sizes, same event/Claim dataset hashes"
+    },
+    {
+      "command": "cargo test --offline --lib indexed_query_plan_materializes_match_before_scope_lookup -- --nocapture",
+      "result": "1 passed; exact runtime SQLite 3.46.0 plans captured"
+    }
+  ],
+  "harness_scripts_at_verification": {
+    "scripts/evaluate-memory-loop.py": "25754d09fb5b2d1b9eb1c3bee575ef6ac81bf3603122ea97757d30bb091d2ce8",
+    "scripts/benchmark-memory-capacity.py": "273c84a63638de2b82d25b0b5cdf539a86b244aee9c837b152387483b39aae04"
+  },
+  "compressed_artifacts_roundtrip_and_hashes": "verified"
+}

@@ -975,6 +975,476 @@ impl Server {
             .await;
         structured(result)
     }
+    #[tool(description = "Record a bounded, immutable scoped episode linked to existing same-scope events. Requires request_id for safe retry; observations and lessons are caller reports, not authenticated truth.",
+        input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<crate::domain::experience::CreateEpisodeRequest>>()
+    )]
+    async fn record_episode(&self, raw_params: JsonObject) -> Result<CallToolResult, McpError> {
+        let params = map_tool_error(
+            &self.runtime,
+            "record_episode",
+            None,
+            None,
+            decode_tool_params::<crate::domain::experience::CreateEpisodeRequest>(raw_params),
+        )
+        .await?;
+        let namespace = Some(params.namespace.clone());
+        let result = map_tool_error(
+            &self.runtime,
+            "record_episode",
+            namespace,
+            None,
+            crate::application::experience::create_episode(&self.runtime.store, params).await,
+        )
+        .await?;
+        structured(result)
+    }
+
+    #[tool(description = "Read one scoped persisted rich episode including objective, actions, observations, result, lesson and source references.",
+        input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<crate::domain::experience::GetEpisodeRequest>>()
+    )]
+    async fn get_episode_detail(&self, raw_params: JsonObject) -> Result<CallToolResult, McpError> {
+        let params = map_tool_error(
+            &self.runtime,
+            "get_episode_detail",
+            None,
+            None,
+            decode_tool_params::<crate::domain::experience::GetEpisodeRequest>(raw_params),
+        )
+        .await?;
+        let namespace = Some(params.namespace.clone());
+        let result = map_tool_error(
+            &self.runtime,
+            "get_episode_detail",
+            namespace,
+            None,
+            crate::application::experience::get_episode(&self.runtime.store, params).await,
+        )
+        .await?;
+        structured(result)
+    }
+
+    #[tool(description = "List scoped persisted rich episodes with a bounded result limit.",
+        input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<crate::domain::experience::ListEpisodesRequest>>()
+    )]
+    async fn list_episode_details(
+        &self,
+        raw_params: JsonObject,
+    ) -> Result<CallToolResult, McpError> {
+        let params = map_tool_error(
+            &self.runtime,
+            "list_episode_details",
+            None,
+            None,
+            decode_tool_params::<crate::domain::experience::ListEpisodesRequest>(raw_params),
+        )
+        .await?;
+        let namespace = Some(params.namespace.clone());
+        let result = map_tool_error(
+            &self.runtime,
+            "list_episode_details",
+            namespace,
+            None,
+            crate::application::experience::list_episodes(&self.runtime.store, params).await,
+        )
+        .await?;
+        structured(result)
+    }
+
+    #[tool(description = "Persist an inspectable pending semantic or procedural candidate linked to scoped episodes. Procedure steps remain inert data; this never grants authority.",
+        input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<crate::domain::experience::CreateCandidateRequest>>()
+    )]
+    async fn propose_experience_candidate(
+        &self,
+        raw_params: JsonObject,
+    ) -> Result<CallToolResult, McpError> {
+        let params = map_tool_error(
+            &self.runtime,
+            "propose_experience_candidate",
+            None,
+            None,
+            decode_tool_params::<crate::domain::experience::CreateCandidateRequest>(raw_params),
+        )
+        .await?;
+        let namespace = Some(params.namespace.clone());
+        let result = map_tool_error(
+            &self.runtime,
+            "propose_experience_candidate",
+            namespace,
+            None,
+            crate::application::experience::create_candidate(&self.runtime.store, params).await,
+        )
+        .await?;
+        structured(result)
+    }
+
+    #[tool(description = "Read a scoped experience candidate current version or explicit historical version.",
+        input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<crate::domain::experience::GetCandidateRequest>>()
+    )]
+    async fn get_experience_candidate(
+        &self,
+        raw_params: JsonObject,
+    ) -> Result<CallToolResult, McpError> {
+        let params = map_tool_error(
+            &self.runtime,
+            "get_experience_candidate",
+            None,
+            None,
+            decode_tool_params::<crate::domain::experience::GetCandidateRequest>(raw_params),
+        )
+        .await?;
+        let namespace = Some(params.namespace.clone());
+        let result = map_tool_error(
+            &self.runtime,
+            "get_experience_candidate",
+            namespace,
+            None,
+            crate::application::experience::get_candidate(&self.runtime.store, params).await,
+        )
+        .await?;
+        structured(result)
+    }
+
+    #[tool(description = "List scoped current experience candidates and their lifecycle states.",
+        input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<crate::domain::experience::ListCandidatesRequest>>()
+    )]
+    async fn list_experience_candidates(
+        &self,
+        raw_params: JsonObject,
+    ) -> Result<CallToolResult, McpError> {
+        let params = map_tool_error(
+            &self.runtime,
+            "list_experience_candidates",
+            None,
+            None,
+            decode_tool_params::<crate::domain::experience::ListCandidatesRequest>(raw_params),
+        )
+        .await?;
+        let namespace = Some(params.namespace.clone());
+        let result = map_tool_error(
+            &self.runtime,
+            "list_experience_candidates",
+            namespace,
+            None,
+            crate::application::experience::list_candidates(&self.runtime.store, params).await,
+        )
+        .await?;
+        structured(result)
+    }
+
+    #[tool(description = "Explicitly activate, reject or supersede experience with expected_version conflict protection. Activation only permits knowledge recall, never actions or permissions.",
+        input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<crate::domain::experience::UpdateCandidateStatusRequest>>()
+    )]
+    async fn set_experience_candidate_status(
+        &self,
+        raw_params: JsonObject,
+    ) -> Result<CallToolResult, McpError> {
+        let params = map_tool_error(
+            &self.runtime,
+            "set_experience_candidate_status",
+            None,
+            None,
+            decode_tool_params::<crate::domain::experience::UpdateCandidateStatusRequest>(
+                raw_params,
+            ),
+        )
+        .await?;
+        let namespace = Some(params.namespace.clone());
+        let result = map_tool_error(
+            &self.runtime,
+            "set_experience_candidate_status",
+            namespace,
+            None,
+            crate::application::experience::update_candidate_status(&self.runtime.store, params)
+                .await,
+        )
+        .await?;
+        structured(result)
+    }
+
+    #[tool(description = "Append a new pending experience version using expected_version. Previous versions remain inspectable; activation is a separate explicit step.",
+        input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<crate::domain::experience::ReviseCandidateRequest>>()
+    )]
+    async fn revise_experience_candidate(
+        &self,
+        raw_params: JsonObject,
+    ) -> Result<CallToolResult, McpError> {
+        let params = map_tool_error(
+            &self.runtime,
+            "revise_experience_candidate",
+            None,
+            None,
+            decode_tool_params::<crate::domain::experience::ReviseCandidateRequest>(raw_params),
+        )
+        .await?;
+        let namespace = Some(params.namespace.clone());
+        let result = map_tool_error(
+            &self.runtime,
+            "revise_experience_candidate",
+            namespace,
+            None,
+            crate::application::experience::revise_candidate(&self.runtime.store, params).await,
+        )
+        .await?;
+        structured(result)
+    }
+
+    #[tool(description = "Copy an earlier experience version into a new pending version after expected_version check. Preserves history and requires separate reactivation.",
+        input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<crate::domain::experience::RollbackCandidateRequest>>()
+    )]
+    async fn rollback_experience_candidate(
+        &self,
+        raw_params: JsonObject,
+    ) -> Result<CallToolResult, McpError> {
+        let params = map_tool_error(
+            &self.runtime,
+            "rollback_experience_candidate",
+            None,
+            None,
+            decode_tool_params::<crate::domain::experience::RollbackCandidateRequest>(raw_params),
+        )
+        .await?;
+        let namespace = Some(params.namespace.clone());
+        let result = map_tool_error(
+            &self.runtime,
+            "rollback_experience_candidate",
+            namespace,
+            None,
+            crate::application::experience::rollback_candidate(&self.runtime.store, params).await,
+        )
+        .await?;
+        structured(result)
+    }
+
+    #[tool(description = "Recall active current semantic/procedural experience within namespace and exact response-byte budget, with source episodes. Never executes procedures.",
+        input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<crate::domain::experience::RecallCandidatesRequest>>()
+    )]
+    async fn recall_experience_candidates(
+        &self,
+        raw_params: JsonObject,
+    ) -> Result<CallToolResult, McpError> {
+        let params = map_tool_error(
+            &self.runtime,
+            "recall_experience_candidates",
+            None,
+            None,
+            decode_tool_params::<crate::domain::experience::RecallCandidatesRequest>(raw_params),
+        )
+        .await?;
+        let namespace = Some(params.namespace.clone());
+        let result = map_tool_error(
+            &self.runtime,
+            "recall_experience_candidates",
+            namespace,
+            None,
+            crate::application::experience::recall_candidates(&self.runtime.store, params).await,
+        )
+        .await?;
+        structured(result)
+    }
+
+    #[tool(description = "Read current scoped Claim fingerprint, status and object for an evidence-bound feedback correction.",
+        input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<crate::application::feedback_candidate::FeedbackTargetInput>>()
+    )]
+    async fn get_feedback_target_version(
+        &self,
+        raw_params: JsonObject,
+    ) -> Result<CallToolResult, McpError> {
+        let params = map_tool_error(
+            &self.runtime,
+            "get_feedback_target_version",
+            None,
+            None,
+            decode_tool_params::<crate::application::feedback_candidate::FeedbackTargetInput>(
+                raw_params,
+            ),
+        )
+        .await?;
+        let namespace = Some(params.namespace.as_str().to_string());
+        let result = map_tool_error(
+            &self.runtime,
+            "get_feedback_target_version",
+            namespace,
+            None,
+            crate::application::feedback_candidate::get_target_version(&self.runtime, params).await,
+        )
+        .await?;
+        structured(result)
+    }
+
+    #[tool(description = "Persist a pending object-only Claim revision candidate linked to structured feedback events. Does not commit the correction or authenticate tool reports.",
+        input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<crate::application::feedback_candidate::ProposeFeedbackCandidateInput>>()
+    )]
+    async fn propose_feedback_candidate(
+        &self,
+        raw_params: JsonObject,
+    ) -> Result<CallToolResult, McpError> {
+        let params = map_tool_error(
+            &self.runtime,
+            "propose_feedback_candidate",
+            None,
+            None,
+            decode_tool_params::<
+                crate::application::feedback_candidate::ProposeFeedbackCandidateInput,
+            >(raw_params),
+        )
+        .await?;
+        let namespace = Some(params.namespace.as_str().to_string());
+        let result = map_tool_error(
+            &self.runtime,
+            "propose_feedback_candidate",
+            namespace,
+            None,
+            crate::application::feedback_candidate::propose(&self.runtime, params).await,
+        )
+        .await?;
+        structured(result)
+    }
+
+    #[tool(description = "Inspect a scoped feedback candidate, validation reasons, lifecycle state and committed result references.",
+        input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<crate::application::feedback_candidate::GetFeedbackCandidateInput>>()
+    )]
+    async fn get_feedback_candidate(
+        &self,
+        raw_params: JsonObject,
+    ) -> Result<CallToolResult, McpError> {
+        let params = map_tool_error(
+            &self.runtime,
+            "get_feedback_candidate",
+            None,
+            None,
+            decode_tool_params::<crate::application::feedback_candidate::GetFeedbackCandidateInput>(
+                raw_params,
+            ),
+        )
+        .await?;
+        let namespace = Some(params.namespace.as_str().to_string());
+        let result = map_tool_error(
+            &self.runtime,
+            "get_feedback_candidate",
+            namespace,
+            None,
+            crate::application::feedback_candidate::get(&self.runtime, params).await,
+        )
+        .await?;
+        structured(result)
+    }
+
+    #[tool(description = "Deterministically validate feedback source category, exact target version, expected/actual alignment, scope and evidence existence. This does not establish semantic truth.",
+        input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<crate::application::feedback_candidate::FeedbackCandidateActionInput>>()
+    )]
+    async fn validate_feedback_candidate(
+        &self,
+        raw_params: JsonObject,
+    ) -> Result<CallToolResult, McpError> {
+        let params = map_tool_error(
+            &self.runtime,
+            "validate_feedback_candidate",
+            None,
+            None,
+            decode_tool_params::<
+                crate::application::feedback_candidate::FeedbackCandidateActionInput,
+            >(raw_params),
+        )
+        .await?;
+        let namespace = Some(params.namespace.as_str().to_string());
+        let result = map_tool_error(
+            &self.runtime,
+            "validate_feedback_candidate",
+            namespace,
+            None,
+            crate::application::feedback_candidate::validate(&self.runtime, params).await,
+        )
+        .await?;
+        structured(result)
+    }
+
+    #[tool(description = "Reject a pending or blocked feedback candidate with a persisted reason and durable retry receipt.",
+        input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<crate::application::feedback_candidate::RejectFeedbackCandidateInput>>()
+    )]
+    async fn reject_feedback_candidate(
+        &self,
+        raw_params: JsonObject,
+    ) -> Result<CallToolResult, McpError> {
+        let params = map_tool_error(
+            &self.runtime,
+            "reject_feedback_candidate",
+            None,
+            None,
+            decode_tool_params::<
+                crate::application::feedback_candidate::RejectFeedbackCandidateInput,
+            >(raw_params),
+        )
+        .await?;
+        let namespace = Some(params.namespace.as_str().to_string());
+        let result = map_tool_error(
+            &self.runtime,
+            "reject_feedback_candidate",
+            namespace,
+            None,
+            crate::application::feedback_candidate::reject(&self.runtime, params).await,
+        )
+        .await?;
+        structured(result)
+    }
+
+    #[tool(description = "Revalidate an evidence-bound feedback candidate and atomically commit its Claim correction, history, candidate state and receipt. Never alters identity, commitments or permissions.",
+        input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<crate::application::feedback_candidate::FeedbackCandidateActionInput>>()
+    )]
+    async fn commit_feedback_candidate(
+        &self,
+        raw_params: JsonObject,
+    ) -> Result<CallToolResult, McpError> {
+        let params = map_tool_error(
+            &self.runtime,
+            "commit_feedback_candidate",
+            None,
+            None,
+            decode_tool_params::<
+                crate::application::feedback_candidate::FeedbackCandidateActionInput,
+            >(raw_params),
+        )
+        .await?;
+        let namespace = Some(params.namespace.as_str().to_string());
+        let result = map_tool_error(
+            &self.runtime,
+            "commit_feedback_candidate",
+            namespace,
+            None,
+            crate::application::feedback_candidate::commit(&self.runtime, params).await,
+        )
+        .await?;
+        structured(result)
+    }
+
+    #[tool(
+        description = "Inspect the rebuildable local FTS index without writing. Checks source projection, postings, and trigger definitions; ledger facts remain authoritative."
+    )]
+    async fn inspect_retrieval_index(&self) -> Result<CallToolResult, McpError> {
+        let result = map_tool_error(
+            &self.runtime,
+            "inspect_retrieval_index",
+            None,
+            None,
+            self.runtime.store.inspect_retrieval_index().await,
+        )
+        .await?;
+        structured(result)
+    }
+
+    #[tool(
+        description = "Explicitly rebuild only derived local retrieval tables and triggers from durable ledger facts in one transaction. Does not alter events, claims, permissions, identity or commitments."
+    )]
+    async fn rebuild_retrieval_index(&self) -> Result<CallToolResult, McpError> {
+        let result = map_tool_error(
+            &self.runtime,
+            "rebuild_retrieval_index",
+            None,
+            None,
+            self.runtime.store.rebuild_retrieval_index().await,
+        )
+        .await?;
+        structured(result)
+    }
 }
 
 #[tool_handler]
@@ -1739,4 +2209,20 @@ where
     let json = serde_json::to_value(value)
         .map_err(|error| McpError::internal_error(error.to_string(), None))?;
     Ok(CallToolResult::structured(json))
+}
+
+#[async_trait]
+impl crate::ports::feedback_candidate_store::FeedbackCandidateStore for Runtime {
+    async fn get_feedback_candidate(
+        &self,
+        namespace: &crate::domain::types::Namespace,
+        candidate_id: &str,
+    ) -> Result<Option<crate::domain::feedback_candidate::FeedbackCandidate>, AppError> {
+        crate::ports::feedback_candidate_store::FeedbackCandidateStore::get_feedback_candidate(
+            &self.store,
+            namespace,
+            candidate_id,
+        )
+        .await
+    }
 }

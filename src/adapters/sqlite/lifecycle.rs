@@ -10,7 +10,7 @@ use chrono::Utc;
 use serde::Serialize;
 use sqlx::{
     Connection, Row, SqliteConnection,
-    sqlite::{SqliteConnectOptions, SqlitePool},
+    sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions},
 };
 use uuid::Uuid;
 
@@ -26,7 +26,7 @@ use super::{
 
 pub const CURRENT_DATABASE_SCHEMA_VERSION: i64 = CURRENT_SCHEMA_VERSION;
 
-const REQUIRED_TABLES: [&str; 10] = [
+const REQUIRED_TABLES: [&str; 16] = [
     "events",
     "claims",
     "evidence_links",
@@ -36,10 +36,16 @@ const REQUIRED_TABLES: [&str; 10] = [
     "identity_claims",
     "commitments",
     "operation_log",
+    "feedback_candidates",
+    "experience_episodes",
+    "experience_episode_sources",
+    "experience_candidates",
+    "experience_candidate_versions",
+    "experience_candidate_sources",
     "schema_migrations",
 ];
 
-const PRESERVED_DATA_TABLES: [&str; 7] = [
+const PRESERVED_DATA_TABLES: [&str; 13] = [
     "events",
     "claims",
     "evidence_links",
@@ -47,6 +53,12 @@ const PRESERVED_DATA_TABLES: [&str; 7] = [
     "reflections",
     "reflection_trigger_ledger",
     "operation_log",
+    "feedback_candidates",
+    "experience_episodes",
+    "experience_episode_sources",
+    "experience_candidates",
+    "experience_candidate_versions",
+    "experience_candidate_sources",
 ];
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -464,6 +476,7 @@ async fn run_migration_steps(
             }
             3 => ensure_reflection_audit_columns(connection).await?,
             4 => ensure_event_feedback_column(connection).await?,
+            5 => install_v5(connection).await?,
             _ => {
                 return Err(AppError::Message(format!(
                     "missing migration implementation for version {version}"
@@ -499,6 +512,21 @@ async fn execute_init_sql(connection: &mut SqliteConnection) -> Result<(), AppEr
         execute(connection, statement).await?;
     }
     Ok(())
+}
+
+// Additive durable contracts and derived retrieval index share the explicit
+// migration transaction. The index is rebuildable; no read path installs it.
+async fn install_v5(connection: &mut SqliteConnection) -> Result<(), AppError> {
+    for sql in [
+        super::experience::EXPERIENCE_SCHEMA_SQL,
+        super::feedback_candidate::FEEDBACK_CANDIDATE_SCHEMA_SQL,
+    ] {
+        for statement in sql.split(';').filter(|part| !part.trim().is_empty()) {
+            execute(connection, statement).await?;
+        }
+    }
+    execute(connection, "CREATE INDEX IF NOT EXISTS idx_feedback_target_version ON feedback_candidates(namespace, target_claim_id, expected_target_version)").await?;
+    super::retrieval_index::install_retrieval_index(connection).await
 }
 
 async fn record_migration(
@@ -863,14 +891,19 @@ async fn connect_pool(
     create_if_missing: bool,
     read_only: bool,
 ) -> Result<SqlitePool, AppError> {
-    SqlitePool::connect_with(
-        parse_options(database_url)?
-            .create_if_missing(create_if_missing)
-            .read_only(read_only)
-            .foreign_keys(true),
-    )
-    .await
-    .map_err(sqlite_error)
+    // Pin the already-used SQLx defaults rather than tune capacity without evidence.
+    // Journal mode deliberately preserves the existing database setting; no silent WAL switch.
+    SqlitePoolOptions::new()
+        .max_connections(10)
+        .connect_with(
+            parse_options(database_url)?
+                .busy_timeout(Duration::from_secs(5))
+                .create_if_missing(create_if_missing)
+                .read_only(read_only)
+                .foreign_keys(true),
+        )
+        .await
+        .map_err(sqlite_error)
 }
 
 fn parse_options(database_url: &str) -> Result<SqliteConnectOptions, AppError> {
@@ -1025,6 +1058,7 @@ async fn schema_structure_issues(
         .await
         .map_err(sqlite_error)?;
     execute_init_sql(&mut reference).await?;
+    install_v5(&mut reference).await?;
     let mut issues = Vec::new();
     for table in REQUIRED_TABLES {
         let expected = table_structure(&mut reference, table).await?;
@@ -1106,6 +1140,11 @@ async fn table_structure(
         .map_err(sqlite_error)?
     {
         let name = row.get::<String, _>("name");
+        // Retrieval performance objects are checked separately and explicitly
+        // rebuildable; their absence must not make the durable ledger unusable.
+        if name.starts_with("idx_recall_") {
+            continue;
+        }
         let mut index = format!(
             "index:{:?}",
             (

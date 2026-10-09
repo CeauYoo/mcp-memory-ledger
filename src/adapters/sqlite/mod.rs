@@ -10,3 +10,9 @@ pub use lifecycle::{
 pub use store::SqliteStore;
 
 mod text_recall;
+
+mod experience;
+mod feedback_candidate;
+mod retrieval_index;
+
+pub use retrieval_index::RetrievalIndexReport;

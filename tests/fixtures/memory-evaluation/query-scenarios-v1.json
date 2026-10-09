@@ -1,0 +1,356 @@
+{
+  "schema_version": 1,
+  "selection": "Fifty fixed query scenarios across ten existing tasks; not fifty independent tasks. Added after initial ten-task implementation as contract coverage, not held-out quality evidence. Preserve all failures and categories.",
+  "cases": [
+    {
+      "id": "en-city/full_literal",
+      "task_id": "en-city",
+      "category": "full_literal",
+      "query": "deployment_city",
+      "expected_hit": true
+    },
+    {
+      "id": "en-city/partial_literal",
+      "task_id": "en-city",
+      "category": "partial_literal",
+      "query": "deployment",
+      "expected_hit": true
+    },
+    {
+      "id": "en-city/or_missing_term",
+      "task_id": "en-city",
+      "category": "or_missing_term",
+      "query": "deployment_city absent_or_operand_947",
+      "expected_hit": true
+    },
+    {
+      "id": "en-city/quotes_are_literal",
+      "task_id": "en-city",
+      "category": "quotes_are_literal",
+      "query": "\"deployment_city\"",
+      "expected_hit": false
+    },
+    {
+      "id": "en-city/no_literal_match",
+      "task_id": "en-city",
+      "category": "no_literal_match",
+      "query": "unseen_phrase_en-city",
+      "expected_hit": false
+    },
+    {
+      "id": "en-code/full_literal",
+      "task_id": "en-code",
+      "category": "full_literal",
+      "query": "retry_timeout_ms",
+      "expected_hit": true
+    },
+    {
+      "id": "en-code/partial_literal",
+      "task_id": "en-code",
+      "category": "partial_literal",
+      "query": "timeout",
+      "expected_hit": true
+    },
+    {
+      "id": "en-code/or_missing_term",
+      "task_id": "en-code",
+      "category": "or_missing_term",
+      "query": "retry_timeout_ms absent_or_operand_947",
+      "expected_hit": true
+    },
+    {
+      "id": "en-code/quotes_are_literal",
+      "task_id": "en-code",
+      "category": "quotes_are_literal",
+      "query": "\"retry_timeout_ms\"",
+      "expected_hit": false
+    },
+    {
+      "id": "en-code/no_literal_match",
+      "task_id": "en-code",
+      "category": "no_literal_match",
+      "query": "unseen_phrase_en-code",
+      "expected_hit": false
+    },
+    {
+      "id": "en-punctuation/full_literal",
+      "task_id": "en-punctuation",
+      "category": "full_literal",
+      "query": "release%_tag",
+      "expected_hit": true
+    },
+    {
+      "id": "en-punctuation/partial_literal",
+      "task_id": "en-punctuation",
+      "category": "partial_literal",
+      "query": "%_",
+      "expected_hit": true
+    },
+    {
+      "id": "en-punctuation/or_missing_term",
+      "task_id": "en-punctuation",
+      "category": "or_missing_term",
+      "query": "release%_tag absent_or_operand_947",
+      "expected_hit": true
+    },
+    {
+      "id": "en-punctuation/quotes_are_literal",
+      "task_id": "en-punctuation",
+      "category": "quotes_are_literal",
+      "query": "\"release%_tag\"",
+      "expected_hit": false
+    },
+    {
+      "id": "en-punctuation/no_literal_match",
+      "task_id": "en-punctuation",
+      "category": "no_literal_match",
+      "query": "unseen_phrase_en-punctuation",
+      "expected_hit": false
+    },
+    {
+      "id": "en-case/full_literal",
+      "task_id": "en-case",
+      "category": "full_literal",
+      "query": "CachePolicy",
+      "expected_hit": true
+    },
+    {
+      "id": "en-case/partial_literal",
+      "task_id": "en-case",
+      "category": "partial_literal",
+      "query": "Policy",
+      "expected_hit": true
+    },
+    {
+      "id": "en-case/or_missing_term",
+      "task_id": "en-case",
+      "category": "or_missing_term",
+      "query": "CachePolicy absent_or_operand_947",
+      "expected_hit": true
+    },
+    {
+      "id": "en-case/quotes_are_literal",
+      "task_id": "en-case",
+      "category": "quotes_are_literal",
+      "query": "\"CachePolicy\"",
+      "expected_hit": false
+    },
+    {
+      "id": "en-case/no_literal_match",
+      "task_id": "en-case",
+      "category": "no_literal_match",
+      "query": "unseen_phrase_en-case",
+      "expected_hit": false
+    },
+    {
+      "id": "zh-short/full_literal",
+      "task_id": "zh-short",
+      "category": "full_literal",
+      "query": "咖啡",
+      "expected_hit": true
+    },
+    {
+      "id": "zh-short/partial_literal",
+      "task_id": "zh-short",
+      "category": "partial_literal",
+      "query": "咖",
+      "expected_hit": true
+    },
+    {
+      "id": "zh-short/or_missing_term",
+      "task_id": "zh-short",
+      "category": "or_missing_term",
+      "query": "咖啡 absent_or_operand_947",
+      "expected_hit": true
+    },
+    {
+      "id": "zh-short/quotes_are_literal",
+      "task_id": "zh-short",
+      "category": "quotes_are_literal",
+      "query": "\"咖啡\"",
+      "expected_hit": false
+    },
+    {
+      "id": "zh-short/no_literal_match",
+      "task_id": "zh-short",
+      "category": "no_literal_match",
+      "query": "unseen_phrase_zh-short",
+      "expected_hit": false
+    },
+    {
+      "id": "zh-long/full_literal",
+      "task_id": "zh-long",
+      "category": "full_literal",
+      "query": "数据库备份周期",
+      "expected_hit": true
+    },
+    {
+      "id": "zh-long/partial_literal",
+      "task_id": "zh-long",
+      "category": "partial_literal",
+      "query": "备份",
+      "expected_hit": true
+    },
+    {
+      "id": "zh-long/or_missing_term",
+      "task_id": "zh-long",
+      "category": "or_missing_term",
+      "query": "数据库备份周期 absent_or_operand_947",
+      "expected_hit": true
+    },
+    {
+      "id": "zh-long/quotes_are_literal",
+      "task_id": "zh-long",
+      "category": "quotes_are_literal",
+      "query": "\"数据库备份周期\"",
+      "expected_hit": false
+    },
+    {
+      "id": "zh-long/no_literal_match",
+      "task_id": "zh-long",
+      "category": "no_literal_match",
+      "query": "unseen_phrase_zh-long",
+      "expected_hit": false
+    },
+    {
+      "id": "zh-city/full_literal",
+      "task_id": "zh-city",
+      "category": "full_literal",
+      "query": "北京",
+      "expected_hit": true
+    },
+    {
+      "id": "zh-city/partial_literal",
+      "task_id": "zh-city",
+      "category": "partial_literal",
+      "query": "京",
+      "expected_hit": true
+    },
+    {
+      "id": "zh-city/or_missing_term",
+      "task_id": "zh-city",
+      "category": "or_missing_term",
+      "query": "北京 absent_or_operand_947",
+      "expected_hit": true
+    },
+    {
+      "id": "zh-city/quotes_are_literal",
+      "task_id": "zh-city",
+      "category": "quotes_are_literal",
+      "query": "\"北京\"",
+      "expected_hit": false
+    },
+    {
+      "id": "zh-city/no_literal_match",
+      "task_id": "zh-city",
+      "category": "no_literal_match",
+      "query": "unseen_phrase_zh-city",
+      "expected_hit": false
+    },
+    {
+      "id": "zh-mixed/full_literal",
+      "task_id": "zh-mixed",
+      "category": "full_literal",
+      "query": "API重试策略",
+      "expected_hit": true
+    },
+    {
+      "id": "zh-mixed/partial_literal",
+      "task_id": "zh-mixed",
+      "category": "partial_literal",
+      "query": "API",
+      "expected_hit": true
+    },
+    {
+      "id": "zh-mixed/or_missing_term",
+      "task_id": "zh-mixed",
+      "category": "or_missing_term",
+      "query": "API重试策略 absent_or_operand_947",
+      "expected_hit": true
+    },
+    {
+      "id": "zh-mixed/quotes_are_literal",
+      "task_id": "zh-mixed",
+      "category": "quotes_are_literal",
+      "query": "\"API重试策略\"",
+      "expected_hit": false
+    },
+    {
+      "id": "zh-mixed/no_literal_match",
+      "task_id": "zh-mixed",
+      "category": "no_literal_match",
+      "query": "unseen_phrase_zh-mixed",
+      "expected_hit": false
+    },
+    {
+      "id": "en-paraphrase/full_literal",
+      "task_id": "en-paraphrase",
+      "category": "full_literal",
+      "query": "retention_days",
+      "expected_hit": true
+    },
+    {
+      "id": "en-paraphrase/partial_literal",
+      "task_id": "en-paraphrase",
+      "category": "partial_literal",
+      "query": "retention",
+      "expected_hit": true
+    },
+    {
+      "id": "en-paraphrase/or_missing_term",
+      "task_id": "en-paraphrase",
+      "category": "or_missing_term",
+      "query": "retention_days absent_or_operand_947",
+      "expected_hit": true
+    },
+    {
+      "id": "en-paraphrase/quotes_are_literal",
+      "task_id": "en-paraphrase",
+      "category": "quotes_are_literal",
+      "query": "\"retention_days\"",
+      "expected_hit": false
+    },
+    {
+      "id": "en-paraphrase/no_literal_match",
+      "task_id": "en-paraphrase",
+      "category": "no_literal_match",
+      "query": "expiration schedule",
+      "expected_hit": false
+    },
+    {
+      "id": "zh-paraphrase/full_literal",
+      "task_id": "zh-paraphrase",
+      "category": "full_literal",
+      "query": "开会地点",
+      "expected_hit": true
+    },
+    {
+      "id": "zh-paraphrase/partial_literal",
+      "task_id": "zh-paraphrase",
+      "category": "partial_literal",
+      "query": "开会",
+      "expected_hit": true
+    },
+    {
+      "id": "zh-paraphrase/or_missing_term",
+      "task_id": "zh-paraphrase",
+      "category": "or_missing_term",
+      "query": "开会地点 absent_or_operand_947",
+      "expected_hit": true
+    },
+    {
+      "id": "zh-paraphrase/quotes_are_literal",
+      "task_id": "zh-paraphrase",
+      "category": "quotes_are_literal",
+      "query": "\"开会地点\"",
+      "expected_hit": false
+    },
+    {
+      "id": "zh-paraphrase/no_literal_match",
+      "task_id": "zh-paraphrase",
+      "category": "no_literal_match",
+      "query": "讨论场所",
+      "expected_hit": false
+    }
+  ]
+}

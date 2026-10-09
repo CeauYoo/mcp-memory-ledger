@@ -31,16 +31,34 @@ async fn server_exposes_expected_tools_over_stdio() {
         vec![
             "build_self_snapshot".to_string(),
             "build_task_context".to_string(),
+            "commit_feedback_candidate".to_string(),
             "decide_with_snapshot".to_string(),
+            "get_episode_detail".to_string(),
             "get_evidence_relation".to_string(),
+            "get_experience_candidate".to_string(),
+            "get_feedback_candidate".to_string(),
+            "get_feedback_target_version".to_string(),
             "get_memory".to_string(),
             "get_reflection_history".to_string(),
             "get_self_model_history".to_string(),
             "ingest_interaction".to_string(),
+            "inspect_retrieval_index".to_string(),
+            "list_episode_details".to_string(),
+            "list_experience_candidates".to_string(),
+            "propose_experience_candidate".to_string(),
+            "propose_feedback_candidate".to_string(),
+            "rebuild_retrieval_index".to_string(),
+            "recall_experience_candidates".to_string(),
             "recall_memory".to_string(),
+            "record_episode".to_string(),
+            "reject_feedback_candidate".to_string(),
+            "revise_experience_candidate".to_string(),
+            "rollback_experience_candidate".to_string(),
             "run_reflection".to_string(),
             "search_memory".to_string(),
+            "set_experience_candidate_status".to_string(),
             "supersede_memory".to_string(),
+            "validate_feedback_candidate".to_string(),
         ]
     );
 }
@@ -5095,7 +5113,7 @@ required = true
         .expect("client");
 
     let tools = client.list_all_tools().await.expect("list tools");
-    assert_eq!(tools.len(), 12);
+    assert_eq!(tools.len(), 30);
 
     let health: serde_json::Value = reqwest::get(format!("http://127.0.0.1:{port}/api/health"))
         .await
@@ -5174,7 +5192,7 @@ max_concurrent_tasks = 1
             .await
             .unwrap();
     let tools = client.list_all_tools().await.unwrap();
-    assert_eq!(tools.len(), 12);
+    assert_eq!(tools.len(), 30);
 
     client
         .call_tool(
