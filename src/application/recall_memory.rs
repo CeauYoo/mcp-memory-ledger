@@ -64,6 +64,23 @@ pub struct RecallExplanation {
     pub time_basis: &'static str,
 }
 
+impl RecallExplanation {
+    /// Versioned aliases used only by byte-budgeted context; see context-diagnostics.md.
+    pub(super) fn compact_for_context(&mut self) {
+        self.validity = match self.validity {
+            "active_claim_not_independently_verified" => "active_unverified_v1",
+            "historical_event_not_a_current_conclusion" => "historical_event_v1",
+            other => other,
+        };
+        self.time_basis = match self.time_basis {
+            "claim_recorded_at_desc_after_term_count"
+            | "event_recorded_at_desc_after_term_count" => "recorded_desc_v1",
+            "claim_creation_time_unknown_no_recency_assumed" => "recorded_unknown_v1",
+            other => other,
+        };
+    }
+}
+
 pub const RECALL_SELECTION_POLICY: &str =
     "balanced_claim_event_quotas_claim_odd_slot_then_term_count_recency_id_v2";
 

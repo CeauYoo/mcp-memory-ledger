@@ -1577,3 +1577,8 @@ Windows fixture portability: `python -m unittest discover -s tests/fixtures/memo
 - `python3 scripts/temporal-scope-export-smoke.py --binary target/debug/agent_llm_mm --output target/reports/temporal-scope-export`: real provider-free stdio timestamp/replay/history/export journey; use `python` and `.exe` on Windows. No real user database or remote model is used.
 
 Earlier schema-v5 570-test/evaluation artifacts remain historical. New-stage results must carry matching source/binary manifests and exact-head CI; do not transfer old performance numbers to the new schema.
+
+
+### Final original-plan context and caller-budget regression
+
+`cargo test --test context_diagnostics --test caller_operation_budget --test mcp_stdio --test schema6_migration` covers scoped rich Episode context, honest bounded diagnostics, optional caller counts/stops over actual local MCP subprocesses, and historical receipt/fingerprint replay across migration. Run the normal full/fmt/Clippy/status-sync gates afterward. The fixed offline evaluator keeps its original tasks and byte budgets; richer metadata costs must be reported rather than hidden by retuning fixtures. See [context](context-diagnostics.md), [caller budget](caller-operation-budget.md), and [module extraction](implementation-module-boundaries.md) contracts.

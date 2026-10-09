@@ -11,6 +11,7 @@ pub enum DomainError {
     InvalidObservedAt,
 }
 
+pub mod caller_budget;
 pub mod claim;
 pub mod commitment;
 pub mod episode;

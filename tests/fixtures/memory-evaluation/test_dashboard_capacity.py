@@ -63,6 +63,21 @@ class DashboardCapacityTests(unittest.TestCase):
             with self.assertRaises(AssertionError):
                 capacity.dashboard_get(43210, capacity.DASHBOARD_HTTP_PATHS[2])
 
+    def test_reservation_probe_rolls_back_without_changing_source(self):
+        import sqlite3
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            database = Path(directory) / "probe.sqlite"
+            with sqlite3.connect(database) as connection:
+                connection.execute("CREATE TABLE facts(value TEXT)")
+                connection.execute("INSERT INTO facts VALUES ('preserved')")
+            before = database.read_bytes()
+            result = capacity.measure_reservation_acquisition(database, .01)
+            self.assertEqual(result["result"], "acquired_then_rolled_back")
+            self.assertGreaterEqual(result["acquisition_elapsed_ms"], 0)
+            self.assertGreaterEqual(result["held_after_contender_ready_ms"], 0)
+            self.assertEqual(database.read_bytes(), before)
+
 
 if __name__ == "__main__":
     unittest.main()

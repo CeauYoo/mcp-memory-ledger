@@ -16,6 +16,9 @@ use tokio::{
     sync::oneshot,
 };
 
+#[path = "mcp_stdio/caller_budget.rs"]
+mod caller_budget;
+
 #[tokio::test]
 async fn server_exposes_expected_tools_over_stdio() {
     let mut client = test_support::spawn_stdio_client().await.unwrap();

@@ -1,8 +1,10 @@
 ## 2026-10-09 数据模型续建（schema v6）
 
+全部原文 ID 的最新收口状态与停止条件见[最终核对](2026-10-09-original-plan-final-reconciliation.md)。
+
 原文 S01/S02/S06 是可实施要求，不是需要再次授权的研究项。本阶段交付记录时间/观察时间区分、未知历史 nullable、无损纳秒排序键与索引、独立 Reflection origin/affected scope、source-scoped targetless history 及只读有界 structured export。历史混合/未知归属保持隔离，不从 affected scope 推导读取权限。非破坏性 export 是 interchange；数据库备份仍承担恢复，retain-all 不启用自动删除。既有 keyed receipts 与 Claim fingerprintv1 保持兼容。
 
-接着独立执行原文 M01–M03 的 crate 内模块拆分及 D10 的可观察状态诊断；不引入新框架、控制器或全局变更权限。每阶段独立测试、提交和用户更新。v5 的性能/评测文件保持原始来源绑定；v6 与后续 refactor 需要各自新证据，不复用历史“通过”。
+接着独立执行原文 M01–M03 的 crate 内模块拆分、D09 的有界丰富 Episode 证据、D10 的可观察状态诊断及 C09 的 caller-owned 次数/停止合同；不引入新框架、控制器或全局变更权限。每阶段独立测试、提交和用户更新。v5 的性能/评测文件保持原始来源绑定；v6 与后续 refactor 需要各自新证据，不复用历史“通过”。
 
 ---
 

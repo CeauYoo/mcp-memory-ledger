@@ -860,6 +860,8 @@ fn parse_optional_timestamp(
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct RunReflectionParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caller_budget: Option<crate::domain::caller_budget::CallerBudget>,
     pub reflection: ReflectionDto,
     #[serde(default)]
     pub supersede_claim_id: Option<String>,
@@ -938,6 +940,8 @@ impl TryFrom<RunReflectionParams> for ReflectionInput {
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct RecallMemoryParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caller_budget: Option<crate::domain::caller_budget::CallerBudget>,
     pub namespace: String,
     pub query: String,
     #[serde(default)]
@@ -959,6 +963,8 @@ impl TryFrom<RecallMemoryParams> for crate::application::recall_memory::RecallMe
 
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct BuildTaskContextParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caller_budget: Option<crate::domain::caller_budget::CallerBudget>,
     pub namespace: String,
     pub query: String,
     #[serde(default)]

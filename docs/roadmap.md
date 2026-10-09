@@ -29,6 +29,8 @@
 
 ## 2026-10-09 原方案续建
 
+最终有限收口包括 D09 丰富 Episode 证据视图、D10 可观察状态诊断、C09 caller-owned 次数/停止合同与 M01–M03 内部模块拆分；逐项状态与真正外部门见[最终 70 项核对](plans/2026-10-09-original-plan-final-reconciliation.md)。不把真实模型收益、用户机器安装或发布批准自动标为完成。
+
 继续实施原文明确的数据模型要求：schema v6 时间键、独立 Reflection origin/effect 与安全 targetless history、只读 scoped export。未知历史保持未知；不以“迁移复杂”作为权限阻塞。模块拆分在该阶段验证后独立提交，避免与数据语义变化混淆。
 
 本轮按原 A–E 讨论推进反馈候选、确定性支持合同、派生全文索引、离线对照/容量证据和有界经验候选。运行时边界与可复现入口见 [A–E 指南](memory-feedback-experience.md)；全量要求和遗留项见 [原文追踪矩阵](plans/2026-10-09-original-plan-traceability.md)。生命周期基础已通过后前移这组有限切片的理由写入唯一 active plan；不将 M2/M3 真实产品与模型效果门自动标成完成。
@@ -113,7 +115,7 @@ M0 未通过前，不开始新 provider、daemon 写能力、remote/team 或正�
 
 退出门：真实 MCP 客户端完成“写入 → 重连 → 检索 → 查看证据 → supersede → 回看历史”，且两个干扰 namespace 没有任何数据混入。
 
-本次最小召回不等于完整 M3：固定双语fixture覆盖短中文词、字面符号、scope隔离和旧Claim排除；仍无embedding、FTS索引或大库性能承诺。完整context预算覆盖metadata，排除JSON-RPC包装。legacy direct/automatic全局self-model治理仍为experimental，不借namespace声明多用户安全隔离。
+本次最小召回不等于完整 M3：固定双语fixture覆盖短中文词、字面符号、scope隔离和旧Claim排除；这一早期基线没有 embedding/FTS；后续已实现 FTS 与 10k/100k 合成观测，仍无生产性能承诺。完整context预算覆盖metadata，排除JSON-RPC包装。legacy direct/automatic全局self-model治理仍为experimental，不借namespace声明多用户安全隔离。
 
 ## Next — M2 Local Product Alpha
 

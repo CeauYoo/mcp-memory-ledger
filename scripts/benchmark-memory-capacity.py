@@ -23,6 +23,39 @@ evaluation = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(evaluation)
 
 
+def measure_reservation_acquisition(database, hold_seconds=.05):
+    """Measure a direct SQLite lock-acquisition primitive, not Rust request time."""
+    ready = threading.Event()
+    def contender():
+        with sqlite3.connect(database, timeout=5) as connection:
+            started = time.perf_counter()
+            ready.set()
+            connection.execute("BEGIN IMMEDIATE")
+            elapsed = (time.perf_counter() - started) * 1000
+            connection.rollback()
+            return elapsed
+    # Both connections roll back; no source rows or durable logs are written.
+    with sqlite3.connect(database, timeout=5) as holder:
+        holder.execute("BEGIN IMMEDIATE")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(contender)
+            try:
+                if not ready.wait(5):
+                    raise RuntimeError("reservation contender did not start")
+                started = time.perf_counter()
+                time.sleep(hold_seconds)
+            finally:
+                holder.rollback()
+            held_ms = (time.perf_counter() - started) * 1000
+            acquisition_ms = future.result(timeout=6)
+    return {"kind": "direct_sqlite_begin_immediate_acquisition",
+            "sqlite_version": sqlite3.sqlite_version,
+            "held_after_contender_ready_ms": held_ms,
+            "acquisition_elapsed_ms": acquisition_ms,
+            "result": "acquired_then_rolled_back",
+            "limitations": "Python SQLite primitive, not Rust internal telemetry; includes busy-handler scheduling and statement overhead."}
+
+
 def percentile(values, q):
     return sorted(values)[max(0, math.ceil(len(values) * q) - 1)]
 
@@ -228,6 +261,28 @@ def run_size(binary, size, repeats, directory, dashboard_http=False):
             report["queries"][name] = {"query": query, "mcp_latency_ms": describe(times),
                 "response_bytes": describe(sizes), "strategy": result["strategy"], "returned_records": len(result["records"]),
                 "observed_server_rss_bytes": rss(client.proc.pid)}
+        # Separate context timings expose the cost of bounded source/status inspection;
+        # keep raw-recall observations above unchanged for historical comparisons.
+        report["context_queries"] = {}
+        for name in ("selective_ascii", "common_short_cjk", "revision_chain"):
+            arguments = {"namespace": "project/capacity-00", "query": queries[name],
+                         "limit": 20, "max_bytes": 16384}
+            for _ in range(2):
+                client.tool("build_task_context", arguments)
+            times, sizes = [], []
+            for _ in range(repeats):
+                started = time.perf_counter()
+                context = client.tool("build_task_context", arguments)
+                times.append((time.perf_counter() - started) * 1000)
+                measured = len(evaluation.compact(context).encode())
+                assert measured == context["serialized_bytes"] <= arguments["max_bytes"]
+                assert all(r["record"]["namespace"] == arguments["namespace"] for r in context["records"])
+                sizes.append(measured)
+            report["context_queries"][name] = {"query": queries[name], "mcp_latency_ms": describe(times),
+                "response_bytes": describe(sizes), "returned_records": len(context["records"]),
+                "rich_episodes": len(context.get("rich_episodes", [])),
+                "diagnostics_present": context.get("diagnostics") is not None,
+                "omissions": context["omissions"], "max_bytes": arguments["max_bytes"]}
         report["query_plans"] = plans(db, queries["selective_ascii"])
         # Three independent MCP connections to the same temporary DB: read, writer, dashboard-like browse.
         writer = evaluation.smoke.Client(binary, config, [])
@@ -270,6 +325,7 @@ def run_size(binary, size, repeats, directory, dashboard_http=False):
         finally:
             writer.close()
             browse.close()
+        report["reservation_acquisition_probe"] = measure_reservation_acquisition(db)
         if dashboard_http:
             report["dashboard_http"] = run_dashboard_http(binary, db, config, repeats, client)
         report["database_bytes_after_reads_and_writes"] = sum(p.stat().st_size for p in directory.glob("memory.sqlite*"))
@@ -301,7 +357,7 @@ def main():
         "limitations": ["Local MCP timings include transport/serialization/provenance reads; no throughput SLA.",
             "Warm cache, one hardware/runtime session; compare only matching data hashes, build profiles and conditions.",
             "RSS is a Linux process snapshot, not peak memory; null means unavailable.",
-            "Lock probe request delay includes work beyond lock waiting; internal lock wait is not instrumented.",
+            "MCP lock probe is total request delay; separate direct Python SQLite BEGIN acquisition measures wait plus scheduling/statement overhead, not Rust internal telemetry.",
             "Dashboard-like browse means search_memory union; no browser/dashboard rendering measured.",
             "EXPLAIN primitives use Python SQLite, which can differ from the binary bundled SQLite/planner.",
             "Dataset has N/2 events + N/2 claims and 99 reflection rows; extra relation/index rows are not included in N."]}

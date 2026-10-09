@@ -1,5 +1,7 @@
 Schema v6: 記録時刻と観測時刻を区別し、過去の不明な Claim 時刻は null を保持します。独立した Reflection scope、安全な targetless history、読み取り専用の bounded export を追加しました。[時間契約](temporal-metadata.md)、[scope](reflection-scope-history.md)、[export](scoped-export.md)を参照してください。
 
+原案の最後の限定実装では、タスクコンテキストに上限付きの rich Episode 証拠と観測可能な状態診断を追加し、呼び出し側が管理する任意の検索・反省・再試行回数を明示します。成功応答全体の JSON バイト上限を維持し、内部モジュール分割によって権限を拡大しません。検証状況と外部の証拠ゲートは[最終項目別確認](plans/2026-10-09-original-plan-final-reconciliation.md)を参照してください。
+
 # MCP Memory Ledger
 
 SQLite と証拠ベースの自己修正で支える、ローカル AI Agent 向け MCP memory layer。

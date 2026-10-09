@@ -20,17 +20,23 @@ The original offline slice added `recall_memory` and `build_task_context` to the
 
 Compatibility note: direct reflection no longer permits project evidence to revise global self Claims; project-specific facts stay scoped, while the documented legacy global-world observation exception remains.
 
-See the [original workflow and contracts](docs/local-memory-usability.md) for retry rules, the historical schema-v4 slice, feedback trust limits, current-vs-historical retrieval, context byte accounting, and an executable installed-binary restart/backup/restore simulation. Current schema-v5 recall uses the derived index and literal fallbacks described below; embeddings and production capacity guarantees remain absent. Formal Alpha/fresh-machine/release gates remain open.
+See the [original workflow and contracts](docs/local-memory-usability.md) for retry rules, the historical schema-v4 slice, feedback trust limits, current-vs-historical retrieval, context byte accounting, and an executable installed-binary restart/backup/restore simulation. Current recall uses the derived index and literal fallbacks described below; embeddings and production capacity guarantees remain absent. Formal Alpha/fresh-machine/release gates remain open.
 
 ## Temporal scope and readonly export (schema v6)
 
 Recording time now differs explicitly from caller observation time; legacy Claim times remain unknown. Normalized nanosecond keys drive indexed ordering, and mixed-type search orders before per-type truncation. Reflection origin and affected scope are independent durable metadata; explicit targetless history stays source-scoped and cannot introduce global patches. `export_memory` returns bounded, consistent, same-scope interchange without logging or mutating the database. See [temporal contract](docs/temporal-metadata.md), [Reflection scope/history](docs/reflection-scope-history.md), and [readonly export](docs/scoped-export.md). Existing v5 databases require explicit migration with backup/rehearsal. Retain-all remains the policy; no automatic deletion is introduced.
 
+[Run the complete local workflow](docs/runnable-memory-workflow.md): isolated mock examples, MCP feedback/correction/experience flow, context/budgets and safe export/recovery.
+
+## Bounded task context and implementation boundaries
+
+The final original-plan slice integrates scoped source-linked Episode evidence and observable context diagnostics within the same complete-JSON byte cap. Optional caller-owned operation budgets make retrieval/reflection/retry exhaustion explicit without creating server sessions or background loops. SQLite, MCP runtime/logging and automatic-reflection stages are separated into private in-crate modules. See [context diagnostics](docs/context-diagnostics.md), [caller budgets](docs/caller-operation-budget.md), [module boundaries](docs/implementation-module-boundaries.md), and the [final 70-ID reconciliation](docs/plans/2026-10-09-original-plan-final-reconciliation.md) for implementation and verification state; real-model efficacy remains unmeasured.
+
 ## Original A–E plan: local feedback and experience runtime
 
 The original planning discussion now drives a finite continuation: persisted evidence-bound feedback candidates, atomic correction/retry, rebuildable SQLite FTS5 recall with exact short-CJK fallback and bounded explanations, plus richer Episodes and versioned/rejectable semantic/procedural candidates. Explicit activation only changes knowledge recall eligibility; it never grants action authority.
 
-See [workflow and contracts](docs/memory-feedback-experience.md), [evaluation methodology](docs/evaluation-methodology.md), and the [70-item baseline traceability matrix](docs/plans/2026-10-09-original-plan-traceability.md). Schema v5 uses explicit safe migration; provider-free offline checks are separate from real same-model outcome evidence. Formal Alpha/fresh-machine/release gates remain open.
+See [workflow and contracts](docs/memory-feedback-experience.md), [evaluation methodology](docs/evaluation-methodology.md), and the [70-item baseline traceability matrix](docs/plans/2026-10-09-original-plan-traceability.md). The schema5 capabilities and subsequent schema6 additions use explicit safe migration; provider-free offline checks are separate from real same-model outcome evidence. Formal Alpha/fresh-machine/release gates remain open.
 
 ## Features
 

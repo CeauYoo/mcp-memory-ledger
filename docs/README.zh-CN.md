@@ -1,5 +1,7 @@
 # MCP Memory Ledger
 
+原方案最后一组有限实现加入任务上下文中的有界丰富 Episode 证据、可观察状态诊断，以及可选 caller-owned 检索/反思/重试预算；整个成功上下文仍受完整 JSON 字节上限约束。内部模块拆分不扩大权限。当前验证及真正外部门见[最终逐项核对](plans/2026-10-09-original-plan-final-reconciliation.md)。
+
 面向本地 AI Agent 的证据门控记忆与自我修订层。
 
 语言：[English](../README.md) | 简体中文 | [日本語](README.ja.md)

@@ -1,13 +1,22 @@
 use super::{SqliteStore, retrieval_index::retrieval_structure_issues};
 use crate::{
-    domain::types::Owner,
+    domain::{
+        claim::ClaimReference,
+        event::EventReference,
+        experience::{MAX_EXPERIENCE_PAYLOAD_BYTES, MAX_EXPERIENCE_REFERENCES, PersistedEpisode},
+        types::Owner,
+    },
     error::AppError,
     ports::text_memory_store::{
-        TextMemoryHit, TextMemoryPage, TextMemoryQuery, TextMemoryReference, TextMemoryStore,
+        CLAIM_STATUS_REFERENCE_LIMIT, CLAIM_STATUS_SAMPLE_LIMIT, LINKED_EPISODE_LIMIT,
+        LINKED_EPISODE_SOURCE_LIMIT, LinkedEpisodePage, LinkedEpisodeQuery,
+        TextClaimStatusDiagnostics, TextClaimStatusSample, TextMemoryHit, TextMemoryPage,
+        TextMemoryQuery, TextMemoryReference, TextMemoryStore,
     },
 };
 use async_trait::async_trait;
 use sqlx::{QueryBuilder, Row, Sqlite, SqliteConnection};
+use std::collections::BTreeSet;
 
 #[async_trait]
 impl TextMemoryStore for SqliteStore {
@@ -76,6 +85,181 @@ impl TextMemoryStore for SqliteStore {
             index_warning: warning,
         })
     }
+
+    async fn inspect_text_claim_status(
+        &self,
+        query: TextMemoryQuery,
+    ) -> Result<Option<TextClaimStatusDiagnostics>, AppError> {
+        query.validate()?;
+        let mut transaction = self.pool.begin().await.map_err(sqlite_error)?;
+        // The derived index deliberately contains only active Claims. Read bounded
+        // authoritative windows instead; inspection never repairs or changes sources.
+        let disputed = sample_claim_status(&mut transaction, &query, "disputed").await?;
+        let superseded = sample_claim_status(&mut transaction, &query, "superseded").await?;
+        transaction.rollback().await.map_err(sqlite_error)?;
+        Ok(Some(TextClaimStatusDiagnostics {
+            sample_limit_per_status: CLAIM_STATUS_SAMPLE_LIMIT,
+            reference_limit_per_status: CLAIM_STATUS_REFERENCE_LIMIT,
+            disputed,
+            superseded,
+        }))
+    }
+
+    async fn linked_episodes(
+        &self,
+        query: LinkedEpisodeQuery,
+    ) -> Result<Option<LinkedEpisodePage>, AppError> {
+        if !query.scope.is_explicitly_scoped()
+            || query.event_references.len() > LINKED_EPISODE_SOURCE_LIMIT
+        {
+            return Err(AppError::InvalidParams(
+                "invalid scoped linked Episode query".into(),
+            ));
+        }
+        let namespace = query.scope.namespace().expect("validated scope");
+        let owner = owner_name(query.scope.owner().expect("validated scope"));
+        let event_ids = query
+            .event_references
+            .iter()
+            .map(|reference| reference.event_id().to_owned())
+            .collect::<BTreeSet<_>>();
+        let mut result = LinkedEpisodePage {
+            records: Vec::new(),
+            has_more: false,
+            unavailable: 0,
+        };
+        if event_ids.is_empty() {
+            return Ok(Some(result));
+        }
+        let mut tx = self.pool.begin().await.map_err(sqlite_error)?;
+        // Scope before each limit, using one ordered reverse-index window per source.
+        // Never materialize the complete fan-out of a high-degree source Event.
+        let mut candidate_ids = BTreeSet::new();
+        for event_id in &event_ids {
+            let ids: Vec<String> = sqlx::query_scalar("SELECT s.episode_id FROM experience_episode_sources s CROSS JOIN events e ON e.event_id=s.event_id CROSS JOIN experience_episodes p ON p.episode_id=s.episode_id WHERE s.event_id=? AND e.owner=? AND e.namespace=? AND p.namespace=? ORDER BY s.episode_id ASC LIMIT ?")
+                .bind(event_id).bind(owner).bind(namespace.as_str()).bind(namespace.as_str())
+                .bind((LINKED_EPISODE_LIMIT + 1) as i64).fetch_all(&mut *tx).await.map_err(sqlite_error)?;
+            result.has_more |= ids.len() > LINKED_EPISODE_LIMIT;
+            candidate_ids.extend(ids);
+        }
+        result.has_more |= candidate_ids.len() > LINKED_EPISODE_LIMIT;
+        for episode_id in candidate_ids.into_iter().take(LINKED_EPISODE_LIMIT) {
+            let row = sqlx::query("SELECT episode_id, recorded_at, CASE WHEN length(CAST(payload_json AS BLOB)) <= ? THEN payload_json ELSE NULL END AS payload_json FROM experience_episodes WHERE episode_id=? AND namespace=?")
+                .bind((MAX_EXPERIENCE_PAYLOAD_BYTES + 1024) as i64).bind(&episode_id).bind(namespace.as_str())
+                .fetch_one(&mut *tx).await.map_err(sqlite_error)?;
+            let Some(payload) = row.get::<Option<String>, _>("payload_json") else {
+                result.unavailable += 1;
+                continue;
+            };
+            let Ok(episode) = serde_json::from_str::<PersistedEpisode>(&payload) else {
+                result.unavailable += 1;
+                continue;
+            };
+            let timestamp =
+                chrono::DateTime::parse_from_rfc3339(&row.get::<String, _>("recorded_at"));
+            if episode.episode_id != row.get::<String, _>("episode_id")
+                || episode.namespace != *namespace
+                || timestamp.is_err()
+                || timestamp.ok().map(|t| t.with_timezone(&chrono::Utc))
+                    != Some(episode.recorded_at)
+                || episode.content.validate().is_err()
+            {
+                result.unavailable += 1;
+                continue;
+            }
+            let payload_sources = episode
+                .content
+                .source_event_refs
+                .iter()
+                .map(|r| EventReference::parse(r).map(|r| r.event_id().to_owned()))
+                .collect::<Result<BTreeSet<_>, _>>()?;
+            let sources = sqlx::query("SELECT s.event_id, e.owner, e.namespace FROM experience_episode_sources s LEFT JOIN events e ON e.event_id=s.event_id WHERE s.episode_id=? ORDER BY s.event_id LIMIT ?")
+                .bind(&episode.episode_id).bind((MAX_EXPERIENCE_REFERENCES + 1) as i64)
+                .fetch_all(&mut *tx).await.map_err(sqlite_error)?;
+            let safe = sources.len() <= MAX_EXPERIENCE_REFERENCES
+                && sources.iter().all(|source| {
+                    source.get::<Option<String>, _>("owner").as_deref() == Some(owner)
+                        && source.get::<Option<String>, _>("namespace").as_deref()
+                            == Some(namespace.as_str())
+                });
+            let edge_sources: BTreeSet<String> = sources
+                .iter()
+                .map(|source| source.get("event_id"))
+                .collect();
+            if !safe || edge_sources != payload_sources || payload_sources.is_disjoint(&event_ids) {
+                result.unavailable += 1;
+                continue;
+            }
+            result.records.push(episode);
+        }
+        tx.rollback().await.map_err(sqlite_error)?;
+        Ok(Some(result))
+    }
+}
+
+fn owner_name(owner: Owner) -> &'static str {
+    match owner {
+        Owner::Self_ => "self",
+        Owner::User => "user",
+        Owner::World => "world",
+        Owner::Unknown => "unknown",
+    }
+}
+
+async fn sample_claim_status(
+    connection: &mut SqliteConnection,
+    query: &TextMemoryQuery,
+    status: &'static str,
+) -> Result<TextClaimStatusSample, AppError> {
+    let owner = match query.scope.owner().expect("validated scope") {
+        Owner::Self_ => "self",
+        Owner::User => "user",
+        Owner::World => "world",
+        Owner::Unknown => "unknown",
+    };
+    let namespace = query.scope.namespace().expect("validated scope").as_str();
+    // Materialize only scoped IDs before inspecting text. The existing scope/status/ID
+    // index supports this order. One sentinel establishes whether the scan is complete.
+    let mut sql = QueryBuilder::<Sqlite>::new(
+        "WITH status_window AS MATERIALIZED (SELECT claim_id FROM claims WHERE ",
+    );
+    scope(&mut sql, owner, namespace, false);
+    sql.push(" AND status = ")
+        .push_bind(status)
+        .push(" ORDER BY claim_id ASC LIMIT ")
+        .push_bind((CLAIM_STATUS_SAMPLE_LIMIT + 1) as i64)
+        .push(") SELECT c.claim_id AS id, (");
+    for (i, term) in query.terms.iter().enumerate() {
+        if i > 0 {
+            sql.push(" OR ");
+        }
+        literal_match(&mut sql, &["c.subject", "c.predicate", "c.object"], term);
+    }
+    sql.push(") AS matches_query FROM status_window w JOIN claims c ON c.claim_id = w.claim_id ORDER BY c.claim_id ASC");
+    let rows = sql
+        .build()
+        .fetch_all(connection)
+        .await
+        .map_err(sqlite_error)?;
+    let mut sample = TextClaimStatusSample {
+        sampled_claim_count: rows.len().min(CLAIM_STATUS_SAMPLE_LIMIT),
+        sampled_match_count: 0,
+        scope_scan_complete: rows.len() <= CLAIM_STATUS_SAMPLE_LIMIT,
+        claim_references: Vec::new(),
+        references_truncated: false,
+    };
+    for row in rows.into_iter().take(CLAIM_STATUS_SAMPLE_LIMIT) {
+        if row.get::<i64, _>("matches_query") != 0 {
+            sample.sampled_match_count += 1;
+            if sample.claim_references.len() < CLAIM_STATUS_REFERENCE_LIMIT {
+                sample
+                    .claim_references
+                    .push(ClaimReference::from_claim_id(row.get::<String, _>("id")).canonical());
+            }
+        }
+    }
+    sample.references_truncated = sample.sampled_match_count > sample.claim_references.len();
+    Ok(sample)
 }
 
 fn sqlite_error(error: sqlx::Error) -> AppError {
