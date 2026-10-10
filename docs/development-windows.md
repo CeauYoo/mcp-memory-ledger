@@ -193,7 +193,9 @@ Run explicit `migrate` for an existing v5 database; inspect the generated backup
 Wrapper 按原始有序参数解析 `doctor --read-only [config]` 与
 `doctor --allow-bootstrap [config]`，避免 PowerShell 命名参数绑定吞掉 GNU 风格开关。
 测试使用真正的本机子进程检查 Cargo 的 `--` 分隔符、工作目录、环境恢复和退出码；
-PowerShell 函数替身不能准确模拟原生参数透传。
+PowerShell 函数替身不能准确模拟原生参数透传。PATH 恢复检查以 PowerShell 会话
+启动后、调用 wrapper 前的值为基线；PowerShell 自身启动时可能加入其安装目录，
+不能把这项启动行为误判为 wrapper 修改了调用者环境。
 
 Python 的 SQLite 连接上下文只管理事务，不负责关闭连接。包验证、容量探针和离线
 工作流显式关闭连接，包括异常路径，避免 Windows 临时目录删除时出现 WinError 32。

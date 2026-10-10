@@ -313,11 +313,15 @@ class WrapperTests(unittest.TestCase):
                 driver.write_text(
                     "$ErrorActionPreference = 'Stop'\n"
                     "$PSNativeCommandUseErrorActionPreference = $true\n"
+                    # PowerShell startup may extend PATH on Windows. Capture
+                    # the caller session's exact baseline before the wrapper.
+                    "$pathBeforeWrapper = $env:PATH\n"
                     f"& {ps_quote(WRAPPER)} {invocation}\n"
                     "$code = $LASTEXITCODE\n"
                     "[ordered]@{exit_code = $code; cwd = (Get-Location).Path; "
                     "config = $env:AGENT_LLM_MM_CONFIG; "
                     "config_present = (Test-Path Env:AGENT_LLM_MM_CONFIG); path = $env:PATH; "
+                    "path_before = $pathBeforeWrapper; "
                     "native_error_preference = $PSNativeCommandUseErrorActionPreference} | "
                     "ConvertTo-Json -Compress\nexit 0\n", encoding="utf-8")
                 env = dict(ENV, PATH=str(native_bin) + os.pathsep + ENV["PATH"])
@@ -334,8 +338,8 @@ class WrapperTests(unittest.TestCase):
                 self.assertEqual(Path(caller["cwd"]), self.caller)
                 self.assertEqual(caller["config"], inherited)
                 self.assertEqual(caller["config_present"], inherited is not None)
-                self.assertEqual(caller["path"], native["path"])
-                self.assertEqual(caller["path"], env["PATH"])
+                self.assertEqual(native["path"], caller["path_before"])
+                self.assertEqual(caller["path"], caller["path_before"])
                 self.assertTrue(caller["native_error_preference"])
                 self.assertIn("intentional native failure", result.stderr)
 
