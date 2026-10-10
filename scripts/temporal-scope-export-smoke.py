@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Provider-free schema6 temporal/history/export MCP smoke with synthetic data."""
 import argparse
+from contextlib import closing
 from datetime import datetime
 import hashlib
 import importlib.util
@@ -60,7 +61,7 @@ def main():
             else:
                 raise AssertionError("targetless global update must fail")
         def count():
-            with sqlite3.connect(database) as db:
+            with closing(sqlite3.connect(database)) as db, db:
                 return db.execute("SELECT count(*) FROM operation_log").fetchone()[0]
         before = count()
         exported = client.tool("export_memory", {"namespace": "project/a", "max_bytes": 16384})
@@ -79,7 +80,7 @@ def main():
         assert count() == before, "failed export must not append diagnostics"
         # Synthetic import rows make equal-time ties deterministic and verify
         # that the MCP Runtime forwards union-specific ordering before LIMIT.
-        with sqlite3.connect(database) as db:
+        with closing(sqlite3.connect(database)) as db, db:
             for suffix in ("z", "a", "m"):
                 db.execute("INSERT INTO events(event_id,recorded_at,owner,namespace,kind,summary) VALUES (?,?,'world','project/order','observation','tie')", ("order-" + suffix, "2026-01-01T00:00:00Z"))
         browse = client.tool("search_memory", {"namespace": "project/order", "record_type": "Event", "limit": 1})

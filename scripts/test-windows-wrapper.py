@@ -6,6 +6,7 @@ Run on Windows with PowerShell 7 and the repository's pinned Rust toolchain.
 never labels that run as Windows runtime evidence. No provider calls are made.
 """
 import argparse
+from contextlib import closing
 import hashlib
 import json
 import os
@@ -148,7 +149,10 @@ class WrapperTests(unittest.TestCase):
             ("serve", "config", "extra"), ("init", "config", "extra"),
             ("migrate", "config", "extra"), ("bootstrap-local", "config", "extra"),
             ("doctor", "config", "extra"),
+            ("doctor", "config", ""),
             ("doctor", "--read-only", "config", "extra"),
+            ("doctor", "--allow-bootstrap", "config", "extra"),
+            ("serve", "config", ""),
             ("serve", "config", "extra", "one-more"),
         ]
         for args in cases:
@@ -220,7 +224,9 @@ class WrapperTests(unittest.TestCase):
 
     def test_legacy_migration_keeps_backup_and_existing_record(self):
         config, database = self.config("legacy.toml")
-        with sqlite3.connect(database) as connection:
+        # A sqlite3 connection context commits/rolls back but does not close
+        # the handle. Close it explicitly before migration and Windows cleanup.
+        with closing(sqlite3.connect(database)) as connection:
             connection.executescript("""
                 CREATE TABLE events (event_id TEXT PRIMARY KEY, recorded_at TEXT NOT NULL,
                   owner TEXT NOT NULL, namespace TEXT, kind TEXT NOT NULL, summary TEXT NOT NULL);
@@ -238,18 +244,23 @@ class WrapperTests(unittest.TestCase):
         self.assertTrue(backup.is_file())
         # Backup is produced by VACUUM INTO, so validate logical data, not bytes.
         for path in [backup, database]:
-            with sqlite3.connect(path) as connection:
+            with closing(sqlite3.connect(path)) as connection:
                 self.assertEqual(connection.execute(
                     "SELECT summary FROM events WHERE event_id='wrapper-legacy'").fetchone(),
                     ("preserve this legacy record",))
         self.assertEqual(self.report("doctor", config)["status"], "ok")
 
     def test_explicit_doctor_bootstrap(self):
-        config, database = self.config()
-        report = self.report("doctor", "--allow-bootstrap", config)
-        self.assertEqual(report["status"], "ok")
-        self.assertTrue(report["database_lifecycle"]["bootstrap_performed"])
-        self.assertTrue(database.is_file())
+        for explicit_config in [False, True]:
+            with self.subTest(explicit_config=explicit_config):
+                config, database = self.config(f"bootstrap-{explicit_config}.toml")
+                args = ["doctor", "--allow-bootstrap"]
+                if explicit_config:
+                    args.append(config)
+                report = self.report(*args, env=dict(ENV, AGENT_LLM_MM_CONFIG=str(config)))
+                self.assertEqual(report["status"], "ok")
+                self.assertTrue(report["database_lifecycle"]["bootstrap_performed"])
+                self.assertTrue(database.is_file())
 
     def test_caller_state_and_native_exit_code_are_preserved(self):
         config, _ = self.config("config [literal].toml")
@@ -260,30 +271,65 @@ class WrapperTests(unittest.TestCase):
             "'config': os.environ.get('AGENT_LLM_MM_CONFIG'), 'path': os.environ['PATH']}))\n"
             "print('intentional native failure', file=sys.stderr)\n"
             "sys.exit(37)\n", encoding="utf-8")
-        for inherited in [None, "original caller config"]:
-            with self.subTest(inherited=inherited):
+        # A PowerShell function named cargo would consume the bare -- token as
+        # its own end-of-parameters marker. Use a real native executable so this
+        # assertion covers the same argument boundary as the actual Cargo call.
+        native_bin = self.work / "native probe bin"
+        native_bin.mkdir()
+        native_source = native_bin / "cargo.rs"
+        native_source.write_text(
+            "use std::{env, process::{Command, exit}};\n"
+            "fn main() {\n"
+            '    let status = Command::new(env!("WRAPPER_PROBE_PYTHON"))\n'
+            '        .arg(env!("WRAPPER_PROBE_SCRIPT"))\n'
+            "        .args(env::args_os().skip(1))\n"
+            '        .status().expect("launch native argument probe");\n'
+            "    exit(status.code().unwrap_or(1));\n"
+            "}\n", encoding="utf-8")
+        native_cargo = native_bin / ("cargo.exe" if os.name == "nt" else "cargo")
+        build_env = dict(ENV, WRAPPER_PROBE_PYTHON=sys.executable, WRAPPER_PROBE_SCRIPT=str(probe))
+        self.success(run([shutil.which("rustc"), "--edition=2021", str(native_source), "-o",
+                          str(native_cargo)], cwd=self.work, env=build_env))
+        cases = [
+            ([], ["serve"]),
+            (["serve", config], ["serve"]),
+            (["init", config], ["init"]),
+            (["migrate", config], ["migrate"]),
+            (["doctor"], ["doctor", "--read-only"]),
+            (["doctor", config], ["doctor", "--read-only"]),
+            (["doctor", "--read-only"], ["doctor", "--read-only"]),
+            (["doctor", "--read-only", config], ["doctor", "--read-only"]),
+            (["doctor", "--allow-bootstrap"], ["doctor", "--allow-bootstrap"]),
+            (["doctor", "--allow-bootstrap", config], ["doctor", "--allow-bootstrap"]),
+        ]
+        for inherited, (arguments, forwarded) in (
+                (inherited, case) for inherited in [None, "original caller config"] for case in cases):
+            with self.subTest(inherited=inherited, arguments=arguments):
+                # Keep mode/flag tokens unquoted to also exercise ordinary
+                # PowerShell session calls, alongside invoke()'s -File calls.
+                invocation = " ".join(ps_quote(arg) if isinstance(arg, Path) else arg
+                                      for arg in arguments)
                 driver = self.work / "invoke-in-session.ps1"
                 driver.write_text(
                     "$ErrorActionPreference = 'Stop'\n"
                     "$PSNativeCommandUseErrorActionPreference = $true\n"
-                    f"function cargo {{ & {ps_quote(sys.executable)} {ps_quote(probe)} @args }}\n"
-                    f"& {ps_quote(WRAPPER)} doctor --read-only {ps_quote(config)}\n"
+                    f"& {ps_quote(WRAPPER)} {invocation}\n"
                     "$code = $LASTEXITCODE\n"
                     "[ordered]@{exit_code = $code; cwd = (Get-Location).Path; "
                     "config = $env:AGENT_LLM_MM_CONFIG; "
                     "config_present = (Test-Path Env:AGENT_LLM_MM_CONFIG); path = $env:PATH; "
                     "native_error_preference = $PSNativeCommandUseErrorActionPreference} | "
                     "ConvertTo-Json -Compress\nexit 0\n", encoding="utf-8")
-                env = dict(ENV)
+                env = dict(ENV, PATH=str(native_bin) + os.pathsep + ENV["PATH"])
                 if inherited is not None:
                     env["AGENT_LLM_MM_CONFIG"] = inherited
                 result = self.success(run([PWSH, "-NoProfile", "-NonInteractive", "-File", str(driver)],
                                           cwd=self.caller, env=env))
                 native, caller = map(json.loads, result.stdout.splitlines())
                 self.assertEqual(native["args"], ["run", "--quiet", "--bin", "agent_llm_mm",
-                                                  "--", "doctor", "--read-only"])
+                                                  "--", *forwarded])
                 self.assertEqual(Path(native["cwd"]), ROOT)
-                self.assertEqual(Path(native["config"]), config)
+                self.assertEqual(native["config"], str(config) if config in arguments else inherited)
                 self.assertEqual(caller["exit_code"], 37)
                 self.assertEqual(Path(caller["cwd"]), self.caller)
                 self.assertEqual(caller["config"], inherited)
@@ -359,8 +405,8 @@ def main():
     args = parser.parse_args()
     if os.name != "nt" and not args.allow_non_windows:
         parser.error("Windows is required; use --allow-non-windows only for supplemental checks")
-    if not PWSH or not shutil.which("cargo"):
-        parser.error("PowerShell 7 (pwsh) and cargo are required; tests are never silently skipped")
+    if not PWSH or not shutil.which("cargo") or not shutil.which("rustc"):
+        parser.error("PowerShell 7 (pwsh), cargo, and rustc are required; tests are never silently skipped")
     version = run([PWSH, "-NoProfile", "-NonInteractive", "-Command", "$PSVersionTable.PSVersion.ToString()"],
                   cwd=ROOT)
     if version.returncode or int(version.stdout.strip().split(".")[0]) < 7:

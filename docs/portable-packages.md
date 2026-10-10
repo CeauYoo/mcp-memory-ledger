@@ -164,10 +164,16 @@ an existing database or assume unpacking a newer executable migrates it.
 python3 -m unittest discover -s tests -p 'test_portable_package.py' -v
 ```
 
-The regression fixtures are explicitly synthetic, never executed, and never
-release evidence. They exercise archive integrity, source mismatch, native
+Archive regression payloads are explicitly synthetic, never executed, and never
+release evidence. Separate SQLite tests execute real local synthetic backup and
+restore operations and check connection closure on success and errors. They exercise archive integrity, source mismatch, native
 headers, deterministic archive output, unsafe extraction, environment isolation,
 existing-output protection, and fail-closed evidence generation.
+
+The verifier explicitly closes every SQLite source/destination connection before
+restored process checks and temporary-directory cleanup, including on failure.
+Transaction context exit alone does not close Python SQLite connections, which
+can keep files locked on Windows.
 
 The older `packaging-archive-evidence.sh` checks a fixed four-archive inventory;
 it does not build or certify the payloads. Its broad `packaging-preflight-check`

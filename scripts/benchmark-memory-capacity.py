@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Safe temporary-database MCP capacity observations; no performance pass threshold."""
 import argparse
+from contextlib import closing
 from datetime import datetime, timezone
 import concurrent.futures
 import hashlib
@@ -27,15 +28,16 @@ def measure_reservation_acquisition(database, hold_seconds=.05):
     """Measure a direct SQLite lock-acquisition primitive, not Rust request time."""
     ready = threading.Event()
     def contender():
-        with sqlite3.connect(database, timeout=5) as connection:
+        with closing(sqlite3.connect(database, timeout=5)) as connection, connection:
             started = time.perf_counter()
             ready.set()
             connection.execute("BEGIN IMMEDIATE")
             elapsed = (time.perf_counter() - started) * 1000
             connection.rollback()
             return elapsed
+    # SQLite's context manager handles transactions but does not close handles.
     # Both connections roll back; no source rows or durable logs are written.
-    with sqlite3.connect(database, timeout=5) as holder:
+    with closing(sqlite3.connect(database, timeout=5)) as holder, holder:
         holder.execute("BEGIN IMMEDIATE")
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
             future = pool.submit(contender)
@@ -78,7 +80,7 @@ def seed(db, size):
     pairs = size // 2
     started = time.perf_counter()
     digest = hashlib.sha256()
-    with sqlite3.connect(db) as connection:
+    with closing(sqlite3.connect(db)) as connection, connection:
         connection.execute("PRAGMA foreign_keys=ON")
         for i in range(pairs):
             ns = "project/capacity-00" if i < 100 else f"project/capacity-{i % 20:02d}"
@@ -104,7 +106,7 @@ def seed(db, size):
 def plans(db, term):
     """Diagnostic primitive plans; not claimed to be the complete application SQL."""
     queries = [("literal_claim_primitive", "SELECT claim_id FROM claims WHERE owner='world' AND namespace=? AND status='active' AND instr(lower(subject),?)>0", ("project/capacity-00", term))]
-    with sqlite3.connect(db) as connection:
+    with closing(sqlite3.connect(db)) as connection, connection:
         if connection.execute("SELECT 1 FROM sqlite_master WHERE name='text_recall_fts'").fetchone():
             queries.append(("fts_candidate_primitive", "SELECT d.record_id FROM text_recall_fts JOIN text_recall_documents d ON d.doc_id=text_recall_fts.rowid WHERE text_recall_fts MATCH ? AND d.owner='world' AND d.namespace=?", ('"' + term + '"', "project/capacity-00")))
         return [{"name": name, "sql": sql, "parameters": args,
@@ -207,7 +209,7 @@ def run_dashboard_http(binary, db, config, repeats, reader_client):
                     write_times.append(write_ms)
                     recall_times.append(recall_ms)
         # All writes/recalls have finished. Isolate GETs to verify read-only behavior.
-        with sqlite3.connect(db) as connection:
+        with closing(sqlite3.connect(db)) as connection, connection:
             before = connection.execute("SELECT count(*) FROM operation_log").fetchone()[0]
             for path in DASHBOARD_HTTP_PATHS:
                 _, value = dashboard_get(port, path)
@@ -310,13 +312,15 @@ def run_size(binary, size, repeats, directory, dashboard_http=False):
                         concurrent_samples[label].append(future.result())
             report["concurrent_mcp_latency_ms"] = {k: describe(v) for k, v in concurrent_samples.items()}
             # Intentional bounded external writer reservation. This is observed request delay, not internal lock telemetry.
-            with sqlite3.connect(db) as lock:
+            with closing(sqlite3.connect(db)) as lock, lock:
                 lock.execute("BEGIN IMMEDIATE")
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                     future = pool.submit(ingest, 999)
                     started = time.perf_counter()
-                    time.sleep(.05)
-                    lock.rollback()
+                    try:
+                        time.sleep(.05)
+                    finally:
+                        lock.rollback()
                     held_ms = (time.perf_counter() - started) * 1000
                     try:
                         report["lock_probe"] = {"held_reservation_ms": held_ms, "write_request_ms": future.result(), "result": "committed"}

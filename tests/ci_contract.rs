@@ -74,6 +74,28 @@ fn ci_executes_source_bound_packages_and_real_windows_wrapper() {
             .count(),
         2
     );
+    // Each Windows Python command is its own step: PowerShell otherwise lets a
+    // later successful native command mask an earlier nonzero exit status.
+    let windows = workflow
+        .split("  windows-runtime:")
+        .nth(1)
+        .expect("Windows job");
+    for (step, command) in [
+        (
+            "Verify feedback and experience proxy workflow",
+            "python scripts/evaluate-memory-loop.py",
+        ),
+        (
+            "Test offline evaluation fixtures",
+            "python -m unittest discover",
+        ),
+        (
+            "Verify temporal scope and export workflow",
+            "python scripts/temporal-scope-export-smoke.py",
+        ),
+    ] {
+        assert!(windows.contains(&format!("- name: {step}\n        run: {command}")));
+    }
     assert!(
         !workflow.contains("upload-artifact"),
         "local candidate checks must not publish artifacts"

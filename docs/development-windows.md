@@ -187,3 +187,15 @@ Run explicit `migrate` for an existing v5 database; inspect the generated backup
 ### Final original-plan context and caller-budget regression
 
 `cargo test --test context_diagnostics --test caller_operation_budget --test mcp_stdio --test schema6_migration` covers scoped rich Episode context, honest bounded diagnostics, optional caller counts/stops over actual local MCP subprocesses, and historical receipt/fingerprint replay across migration. Run the normal full/fmt/Clippy/status-sync gates afterward. The fixed offline evaluator keeps its original tasks and byte budgets; richer metadata costs must be reported rather than hidden by retuning fixtures. See [context](context-diagnostics.md), [caller budget](caller-operation-budget.md), and [module extraction](implementation-module-boundaries.md) contracts.
+
+## Wrapper 与离线验证的 Windows 细节
+
+Wrapper 按原始有序参数解析 `doctor --read-only [config]` 与
+`doctor --allow-bootstrap [config]`，避免 PowerShell 命名参数绑定吞掉 GNU 风格开关。
+测试使用真正的本机子进程检查 Cargo 的 `--` 分隔符、工作目录、环境恢复和退出码；
+PowerShell 函数替身不能准确模拟原生参数透传。
+
+Python 的 SQLite 连接上下文只管理事务，不负责关闭连接。包验证、容量探针和离线
+工作流显式关闭连接，包括异常路径，避免 Windows 临时目录删除时出现 WinError 32。
+CI 将各项 Python 验证拆成独立步骤；任何失败都会使该 job 失败，不会被后续成功命令掩盖。
+是否已通过仍须查看当前精确提交的 Windows CI，不以脚本存在或其他平台通过代替。

@@ -3,6 +3,7 @@
 This is a local installation simulation, not fresh-machine or release approval.
 """
 import argparse
+from contextlib import closing
 import hashlib
 import json
 import os
@@ -158,15 +159,19 @@ def main():
         client.close()
     backup = output / "backup.sqlite"
     restored = output / "restored.sqlite"
-    with sqlite3.connect(database) as src, sqlite3.connect(backup) as dst:
-        src.backup(dst)
+    # Connection contexts handle transactions; closing also releases file handles.
+    with closing(sqlite3.connect(database)) as src, closing(sqlite3.connect(backup)) as dst:
+        with src, dst:
+            src.backup(dst)
     # Separate, never-existing restore target; no live path switching or overwriting.
-    with sqlite3.connect(backup) as src, sqlite3.connect(restored) as dst:
-        src.backup(dst)
-    with sqlite3.connect(database) as src, sqlite3.connect(restored) as dst:
-        assert list(src.iterdump()) == list(dst.iterdump())
-        assert dst.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
-        assert dst.execute("PRAGMA foreign_key_check").fetchall() == []
+    with closing(sqlite3.connect(backup)) as src, closing(sqlite3.connect(restored)) as dst:
+        with src, dst:
+            src.backup(dst)
+    with closing(sqlite3.connect(database)) as src, closing(sqlite3.connect(restored)) as dst:
+        with src, dst:
+            assert list(src.iterdump()) == list(dst.iterdump())
+            assert dst.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+            assert dst.execute("PRAGMA foreign_key_check").fetchall() == []
     write_config(restored)
     doctor = subprocess.run([str(installed), "doctor", "--read-only"], env=env,
                             capture_output=True, text=True, encoding="utf-8", check=True)

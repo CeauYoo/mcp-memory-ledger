@@ -5,6 +5,7 @@ Local artifacts and local simulation only. No upload, tag, signing, release
 approval, real fresh-user evidence, or cross-platform support inference.
 """
 import argparse
+from contextlib import closing
 import gzip
 import hashlib
 import io
@@ -496,6 +497,27 @@ class McpClient:
         return result["structuredContent"]
 
 
+def backup_restore(database, backup, restored):
+    # Reserve brand-new paths, then use SQLite's online backup API. No live-file
+    # copy, existing-database overwrite, or automatic production-path switch.
+    with backup.open("xb"), restored.open("xb"):
+        pass
+    # SQLite connection contexts manage transactions but do not close handles.
+    # Close each handle before later checks, process starts, and Windows cleanup,
+    # including when connecting the next handle or performing a check fails.
+    with closing(sqlite3.connect(f"file:{database.as_posix()}?mode=ro", uri=True)) as db, \
+            closing(sqlite3.connect(backup)) as dst:
+        db.backup(dst)
+    with closing(sqlite3.connect(f"file:{backup.as_posix()}?mode=ro", uri=True)) as db, \
+            closing(sqlite3.connect(restored)) as dst:
+        db.backup(dst)
+    with closing(sqlite3.connect(f"file:{database.as_posix()}?mode=ro", uri=True)) as db, \
+            closing(sqlite3.connect(f"file:{restored.as_posix()}?mode=ro", uri=True)) as restored_db:
+        require(list(db.iterdump()) == list(restored_db.iterdump()), "backup/restore content mismatch")
+        require(restored_db.execute("PRAGMA integrity_check").fetchone()[0] == "ok", "SQLite integrity check failed")
+        require(not restored_db.execute("PRAGMA foreign_key_check").fetchall(), "SQLite foreign key check failed")
+
+
 def smoke(binary, root, output):
     state = root / "state"
     state.mkdir()
@@ -551,19 +573,7 @@ def smoke(binary, root, output):
         history = client.tool("get_reflection_history", {"namespace": "project/package/a", "claim_reference": old})
         require(bool(history["reflections"]), "correction audit history missing")
     backup, restored = state / "backup.sqlite", state / "restored.sqlite"
-    # Reserve brand-new paths, then use SQLite's online backup API. No live-file
-    # copy, existing-database overwrite, or automatic production-path switch.
-    with backup.open("xb"), restored.open("xb"):
-        pass
-    with sqlite3.connect(f"file:{database.as_posix()}?mode=ro", uri=True) as db, sqlite3.connect(backup) as dst:
-        db.backup(dst)
-    with sqlite3.connect(f"file:{backup.as_posix()}?mode=ro", uri=True) as db, sqlite3.connect(restored) as dst:
-        db.backup(dst)
-    with sqlite3.connect(f"file:{database.as_posix()}?mode=ro", uri=True) as db, \
-            sqlite3.connect(f"file:{restored.as_posix()}?mode=ro", uri=True) as restored_db:
-        require(list(db.iterdump()) == list(restored_db.iterdump()), "backup/restore content mismatch")
-        require(restored_db.execute("PRAGMA integrity_check").fetchone()[0] == "ok", "SQLite integrity check failed")
-        require(not restored_db.execute("PRAGMA foreign_key_check").fetchall(), "SQLite foreign key check failed")
+    backup_restore(database, backup, restored)
     # Explicitly switch only this synthetic smoke configuration to the new path.
     config.write_text(config.read_text(encoding="utf-8").replace(database.as_posix(), restored.as_posix()),
                       encoding="utf-8")

@@ -1,15 +1,16 @@
-param(
-    [string]$Mode = "serve",
-    [string]$SecondArg,
-    [string]$ThirdArg
-)
+# Read positional arguments directly: PowerShell's parameter binder treats
+# GNU-style doctor flags as unbound named parameters instead of positional
+# values, which would separate them from the config path and reorder input.
+$Mode = if ($args.Count -gt 0) { [string]$args[0] } else { "serve" }
+$SecondArg = if ($args.Count -gt 1) { [string]$args[1] } else { $null }
+$ThirdArg = if ($args.Count -gt 2) { [string]$args[2] } else { $null }
 
 $ErrorActionPreference = "Stop"
 # Preserve native command exit codes even when the caller enabled PowerShell's
 # opt-in conversion of nonzero native exits into terminating errors.
 $PSNativeCommandUseErrorActionPreference = $false
 
-if ($args.Count -gt 0) {
+if ($args.Count -gt 3) {
     [Console]::Error.WriteLine("too many arguments for mode: $Mode")
     exit 2
 }
@@ -40,7 +41,7 @@ if ($Mode -eq "doctor") {
     else {
         $doctorMode = "--read-only"
         $configPath = $SecondArg
-        if ($ThirdArg) {
+        if ($args.Count -gt 2) {
             [Console]::Error.WriteLine("too many arguments for mode: doctor")
             exit 2
         }
@@ -53,7 +54,7 @@ if ($Mode -eq "doctor") {
 }
 else {
     $configPath = $SecondArg
-    if ($ThirdArg) {
+    if ($args.Count -gt 2) {
         [Console]::Error.WriteLine("too many arguments for mode: $Mode")
         exit 2
     }

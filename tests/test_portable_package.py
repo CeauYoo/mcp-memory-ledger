@@ -1,9 +1,11 @@
 """Offline packaging regression tests; synthetic fixtures are never release evidence."""
 import importlib.util
+from contextlib import closing
 import json
 import os
 from pathlib import Path
 import stat
+import sqlite3
 import struct
 import tarfile
 import tempfile
@@ -397,6 +399,134 @@ class PackageTests(unittest.TestCase):
             with self.subTest(candidate=candidate), self.assertRaises(package.PackageError):
                 package.candidate_name(candidate)
         self.assertEqual(package.candidate_name("local-mvp-ci-rc.1"), "local-mvp-ci-rc.1")
+
+
+class DatabaseBackupTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.database = self.root / "memory.sqlite"
+        self.backup = self.root / "backup.sqlite"
+        self.restored = self.root / "restored.sqlite"
+        with closing(sqlite3.connect(self.database)) as db:
+            db.executescript("CREATE TABLE memories (id INTEGER PRIMARY KEY, content TEXT);"
+                             "CREATE TABLE links (memory_id INTEGER REFERENCES memories(id));"
+                             "INSERT INTO memories VALUES (1, 'amber');"
+                             "INSERT INTO links VALUES (1);")
+
+    def track_connections(self, fail_connect_at=None, fail_backup_at=None, fail_query=None):
+        connect = sqlite3.connect
+        connections = []
+
+        class TrackedConnection(sqlite3.Connection):
+            def backup(self, target, *args, **kwargs):
+                if self.number == fail_backup_at:
+                    raise sqlite3.OperationalError("injected backup failure")
+                return super().backup(target, *args, **kwargs)
+
+            def execute(self, sql, *args, **kwargs):
+                if sql == fail_query:
+                    raise sqlite3.OperationalError("injected query failure")
+                return super().execute(sql, *args, **kwargs)
+
+        def tracked_connect(*args, **kwargs):
+            number = len(connections) + 1
+            if number == fail_connect_at:
+                raise sqlite3.OperationalError("injected connect failure")
+            db = connect(*args, factory=TrackedConnection, **kwargs)
+            db.number = number
+            connections.append(db)
+            # Keep failing regressions from leaking their fixtures, too.
+            self.addCleanup(db.close)
+            return db
+
+        return patch.object(package.sqlite3, "connect", side_effect=tracked_connect), connections
+
+    def assert_closed(self, connections, count):
+        self.assertEqual(len(connections), count)
+        for db in connections:
+            with self.assertRaisesRegex(sqlite3.ProgrammingError, "closed database"):
+                db.execute("SELECT 1")
+
+    def test_backup_restore_closes_all_handles_and_preserves_source_bytes(self):
+        before = self.database.read_bytes()
+        tracker, connections = self.track_connections()
+        with tracker:
+            package.backup_restore(self.database, self.backup, self.restored)
+        self.assert_closed(connections, 6)
+        self.assertEqual(self.database.read_bytes(), before)
+        for path in (self.backup, self.restored):
+            with closing(sqlite3.connect(path)) as db:
+                self.assertEqual(db.execute("SELECT * FROM memories").fetchall(), [(1, "amber")])
+                self.assertEqual(db.execute("SELECT * FROM links").fetchall(), [(1,)])
+
+    def test_online_backup_includes_committed_wal_rows_without_changing_source(self):
+        with closing(sqlite3.connect(self.database)) as writer:
+            self.assertEqual(writer.execute("PRAGMA journal_mode=WAL").fetchone()[0], "wal")
+            writer.execute("INSERT INTO memories VALUES (2, 'violet')")
+            writer.commit()
+            wal = Path(str(self.database) + "-wal")
+            self.assertGreater(wal.stat().st_size, 0)
+            before = {path: path.read_bytes() for path in (self.database, wal)}
+            tracker, connections = self.track_connections()
+            with tracker:
+                package.backup_restore(self.database, self.backup, self.restored)
+            self.assert_closed(connections, 6)
+            for path, content in before.items():
+                self.assertEqual(path.read_bytes(), content)
+            for path in (self.backup, self.restored):
+                with closing(sqlite3.connect(path)) as db:
+                    self.assertEqual(db.execute("SELECT * FROM memories ORDER BY id").fetchall(),
+                                     [(1, "amber"), (2, "violet")])
+
+    def test_existing_backup_or_restore_path_is_never_overwritten(self):
+        for name in ("backup", "restored"):
+            with self.subTest(existing=name):
+                backup = self.root / (name + "-backup.sqlite")
+                restored = self.root / (name + "-restored.sqlite")
+                existing = backup if name == "backup" else restored
+                existing.write_bytes(b"keep existing database")
+                with patch.object(package.sqlite3, "connect") as connect, self.assertRaises(FileExistsError):
+                    package.backup_restore(self.database, backup, restored)
+                connect.assert_not_called()
+                self.assertEqual(existing.read_bytes(), b"keep existing database")
+
+    def test_connection_failure_closes_every_previously_opened_handle(self):
+        for fail_at in range(1, 7):
+            with self.subTest(connection=fail_at):
+                tracker, connections = self.track_connections(fail_connect_at=fail_at)
+                with tracker, self.assertRaisesRegex(sqlite3.OperationalError, "connect failure"):
+                    package.backup_restore(self.database, self.root / f"backup-{fail_at}.sqlite",
+                                           self.root / f"restored-{fail_at}.sqlite")
+                self.assert_closed(connections, fail_at - 1)
+
+    def test_backup_or_restore_exception_closes_both_handles(self):
+        for fail_at in (1, 3):
+            with self.subTest(source_connection=fail_at):
+                tracker, connections = self.track_connections(fail_backup_at=fail_at)
+                with tracker, self.assertRaisesRegex(sqlite3.OperationalError, "backup failure"):
+                    package.backup_restore(self.database, self.root / f"backup-{fail_at}.sqlite",
+                                           self.root / f"restored-{fail_at}.sqlite")
+                self.assert_closed(connections, fail_at + 1)
+
+    def test_check_exception_closes_comparison_handles(self):
+        for index, query in enumerate(("PRAGMA integrity_check", "PRAGMA foreign_key_check")):
+            with self.subTest(query=query):
+                tracker, connections = self.track_connections(fail_query=query)
+                with tracker, self.assertRaisesRegex(sqlite3.OperationalError, "query failure"):
+                    package.backup_restore(self.database, self.root / f"backup-{index}.sqlite",
+                                           self.root / f"restored-{index}.sqlite")
+                self.assert_closed(connections, 6)
+
+    def test_foreign_key_check_failure_closes_all_handles(self):
+        with closing(sqlite3.connect(self.database)) as db:
+            db.execute("INSERT INTO links VALUES (999)")
+            db.commit()
+        tracker, connections = self.track_connections()
+        with tracker, self.assertRaisesRegex(package.PackageError, "foreign key check failed"):
+            package.backup_restore(self.database, self.backup, self.restored)
+        self.assert_closed(connections, 6)
 
 
 if __name__ == "__main__":

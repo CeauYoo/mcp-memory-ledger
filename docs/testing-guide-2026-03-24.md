@@ -1590,3 +1590,14 @@ Earlier schema-v5 570-test/evaluation artifacts remain historical. New-stage res
 ### Final original-plan context and caller-budget regression
 
 `cargo test --test context_diagnostics --test caller_operation_budget --test mcp_stdio --test schema6_migration` covers scoped rich Episode context, honest bounded diagnostics, optional caller counts/stops over actual local MCP subprocesses, and historical receipt/fingerprint replay across migration. Run the normal full/fmt/Clippy/status-sync gates afterward. The fixed offline evaluator keeps its original tasks and byte budgets; richer metadata costs must be reported rather than hidden by retuning fixtures. See [context](context-diagnostics.md), [caller budget](caller-operation-budget.md), and [module extraction](implementation-module-boundaries.md) contracts.
+
+
+### Windows CI 的失败传播与资源清理
+
+离线 evaluator、Python fixture 和 temporal/export smoke 各占独立 Windows 步骤，
+保证任一原生命令非零退出都使 job 失败。Wrapper 参数检查使用本机探针，不使用会吞掉
+`--` 的 PowerShell 函数替身。SQLite 验证覆盖真实备份内容和成功/异常后的连接关闭；
+不得通过忽略临时目录删除错误让 Windows 检查“通过”。
+
+本轮修复后的 Python 基线为 13 项 evaluation fixture 和 40 项 portable-package 回归；
+历史提交的 9/33 项结果保留为历史证据，不用于替代当前 head 的 CI。

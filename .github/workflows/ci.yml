@@ -86,10 +86,11 @@ jobs:
       - name: Verify installed-binary offline memory workflow
         run: python scripts/local-memory-smoke.py --binary target/debug/agent_llm_mm.exe --output target/reports/local-memory-smoke
       - name: Verify feedback and experience proxy workflow
-        run: |
-          python scripts/evaluate-memory-loop.py --binary target/debug/agent_llm_mm.exe --output target/reports/memory-evaluation
-          python -m unittest discover -s tests/fixtures/memory-evaluation -p "test_*.py"
-          python scripts/temporal-scope-export-smoke.py --binary target/debug/agent_llm_mm.exe --output target/reports/temporal-scope-export
+        run: python scripts/evaluate-memory-loop.py --binary target/debug/agent_llm_mm.exe --output target/reports/memory-evaluation
+      - name: Test offline evaluation fixtures
+        run: python -m unittest discover -s tests/fixtures/memory-evaluation -p "test_*.py"
+      - name: Verify temporal scope and export workflow
+        run: python scripts/temporal-scope-export-smoke.py --binary target/debug/agent_llm_mm.exe --output target/reports/temporal-scope-export
 
       - name: Verify actual PowerShell wrapper behavior
         run: python scripts/test-windows-wrapper.py

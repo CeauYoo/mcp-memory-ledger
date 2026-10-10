@@ -26,6 +26,7 @@
 - [Portable package](portable-packages.md)：从精确 Git commit/tree 构建本机原生二进制，包含校验信息、许可、隔离 mock 配置与使用说明；验证先检查归档和来源，再在无 Rust 的子进程环境完成真实二进制闭环。
 - PowerShell wrapper：补齐 literal 路径、仓库根目录相对路径、调用者配置环境恢复及多余参数拒绝；真实平台行为由 `scripts/test-windows-wrapper.py` 在 Windows CI 执行。
 - 这些检查是受控本地/CI 安装模拟；M1 真实用户客户端、真实 fresh-machine 十分钟验收、live provider 和人工 release decision 未因此完成。
+- Windows 回归按真实原生进程检查参数透传；Python 数据库验证显式关闭连接，避免临时目录清理持有文件锁。Windows 的各 Python 检查分成独立 CI 步骤，后续成功命令不能掩盖前一项失败。
 - 任何精确提交是否通过，以该提交 PR checks 为准；下方保留原实现基线，不将旧绿灯作为本轮结果。
 
 ## 验证证据（明确绑定提交）
