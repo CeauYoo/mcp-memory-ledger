@@ -299,7 +299,7 @@ fn wrapper_scripts_reject_unsupported_modes_with_exit_code_two() {
     );
     assert!(
         script.contains("cd \"$project_root\"")
-            && powershell.contains("Push-Location $projectRoot"),
+            && powershell.contains("Push-Location -LiteralPath $projectRoot"),
         "wrapper scripts should resolve relative bootstrap-local targets from the repository root"
     );
 }

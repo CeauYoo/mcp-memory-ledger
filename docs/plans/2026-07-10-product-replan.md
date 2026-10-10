@@ -1,3 +1,16 @@
+## 2026-10-10 文档缺口续建：本地包与 Windows wrapper
+
+重新核对上游 `dev-work@c318caf`、独立分支 `dev_work_dots@73fb00a` 和实际实现后，本轮先补 M2 两项可实施缺口：
+
+1. 从确定 Git commit/tree 构建原生 portable archive，携带来源、工具链和文件校验信息；解包后用隔离 mock 库验证无 Rust 的核心闭环。
+2. 实际执行 PowerShell wrapper 的 bootstrap、路径、环境恢复、错误码和 stdio 合同，并由 Windows CI 提供该平台证据。
+
+已有 archive inspector 仅检查预先存在的文件，不能代替源代码构建；已有 Windows native 测试不能代替 wrapper 行为。本地/CI 解包验证仍是受控安装模拟，M1 真实用户客户端、M2 fresh-machine 十分钟验收、真实 provider 与人工发布决定继续开放。正式 tag、release、部署和付费模型实验不在本次实现权限内。
+
+这组代码通过独立审查、同源测试和精确提交 CI 后，再实施 append-only global identity/commitment version ledger 的独立切片。版本、diff、有效时间与显式补偿回滚须保持现有 `run_reflection` 写边界、expected-version 冲突检测、证据审计和 schema 迁移恢复合同；不新增自动回滚、全局权限或数据删除政策。
+
+---
+
 ## 2026-10-09 当前执行状态（文档整理后）
 
 本文件仍是唯一 active plan。下方同日“续建”段落保留任务展开时的历史语境：schema6、M01–M03 模块拆分、D09–D10 上下文/诊断与 C09 caller budget 均已实现；不要再次领取已完成代码任务。实现基线 `9ba0050` 的三平台精确 CI 已通过，见[最终核对](2026-10-09-original-plan-final-reconciliation.md)与[当前状态](../project-status.md)。当前剩余是 M1 真实用户客户端、M2 fresh-machine/打包/发布与真实模型效果等明确外部门；本次文档整理不将其标为完成。原有 checkbox/reality-gate 配对继续保留。

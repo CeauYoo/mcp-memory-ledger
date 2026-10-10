@@ -2,6 +2,12 @@
 
 2026-10-09 文档导航：首次使用见[快速开始](quickstart.md)，当前操作见[数据库手册](database-operations.md)，可执行协议示例见[完整工作流](runnable-memory-workflow.md)。实现基线三平台验证与 Windows native / wrapper 区别见[当前状态](project-status.md)；下方分阶段追加记录不代表新的发布批准。
 
+## 2026-10-10 portable package 与 wrapper 验证
+
+- `python scripts/test-windows-wrapper.py`：必须找到真实 PowerShell 与 Cargo，不允许缺失工具时跳过成功。CI 在 Windows runner 上执行；其他平台运行不代替 Windows 证据。
+- portable build 与无 Rust 解包测试、负向 fixture 命令见[本地包合同](portable-packages.md)。构建身份绑定精确 Git commit/tree，测试修改后的工作区须先形成可核对的提交快照。
+- CI 产物保留在 runner 本地；本阶段不上传包、不创建 release/tag、不替用户执行客户端验收。
+
 ## 1. 目标
 
 这份文档说明当前仓库应如何测试，覆盖：

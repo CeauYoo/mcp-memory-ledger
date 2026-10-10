@@ -16,13 +16,17 @@ shape that is already maintainable:
 - a signed or clearly named source-only Git tag, plus repository source at that
   tag
 - release notes that point to the exact evidence directory for that candidate
-- no binary packaging, installer, service manager, auto-updater, remote
-  bootstrapper, or packaging automation claim unless a later workstream adds and
-  gates that capability
+- native portable binary archives may be built locally from an exact committed
+  source tree with the bounded workflow below; each supported-platform claim
+  needs its own runtime evidence
+- no installer, service manager, auto-updater, remote bootstrapper, signing, or
+  published binary distribution claim without a separate authorized gate
 
-The source-only artifact is intentional. It keeps the first release auditable
-from source and avoids implying a packaged product surface before install,
-upgrade, rollback, and platform support are implemented and verified.
+Source-only publication remains the conservative baseline. Local archive build
+and unpack simulation are now implemented, but do not themselves authorize
+publication or establish fresh-machine install, upgrade, rollback, or platform
+support. Local Alpha does not require an installer, service manager, or
+auto-updater; those broader packaging surfaces remain separate.
 
 ## Version Naming
 
@@ -153,6 +157,29 @@ This runner creates local soak evidence only. It does not create a source tag,
 binary package, installer, service manager, auto-updater, Windows runner
 evidence, real fresh-machine evidence, remote/team evidence, upload, release
 decision, or Local Alpha certification.
+
+## Source-Built Portable Archive Simulation
+
+Use the source-specific native builder and standalone no-Rust-on-PATH verifier
+in [`../portable-packages.md`](../portable-packages.md). The builder compiles
+an isolated exact Git commit/tree with locked dependencies and creates a real
+executable archive, LICENSE/NOTICE, configuration/docs, deterministic payload
+manifest, archive checksum, and build receipt. It does not accept an arbitrary
+prebuilt executable. The packager must match the selected source commit.
+
+The verifier checks expected commit/tree, archive and payload hashes, safe
+archive structure and executable architecture, then performs init, read-only
+doctor, scoped MCP ingest/restart/recall/inspect/correct/history, and backup /
+restore-to-new-path / restored readback in a fresh temporary directory. Its child PATH contains no cargo or rustc. The output is
+explicitly local unpack simulation, never real fresh-machine or real-user
+client evidence. Native Linux/macOS/Windows code paths are not platform support
+evidence until actually run on each corresponding host.
+
+The versioned per-platform archives from this workflow are distinct from the
+legacy fixed-name, four-archive checksum inventory below. The legacy broad
+preflight is not the Local Alpha portable-artifact gate and remains blocked on
+installer/service/auto-updater work. Do not relabel its parseable arbitrary
+archives as source-built executable evidence.
 
 ## Packaging Archive Evidence
 

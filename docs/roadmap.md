@@ -1,6 +1,6 @@
 # MCP Memory Ledger 路线图
 
-状态：`active summary` · 更新：2026-10-09
+状态：`active summary` · 更新：2026-10-10
 
 目标是可信、可检索、可审计、可恢复的本地记忆。当前仍为 technical MVP；[状态页](project-status.md)列实际能力，[唯一 active plan](plans/2026-07-10-product-replan.md)列任务、依赖、证据门与停止条件。本页不是第二份任务队列。
 
@@ -19,6 +19,8 @@ M0 的 scoped snapshot、治理原子性、显式数据库生命周期、loopbac
 - 客户端、OS 和数据库路径须明确记录；mock 协议 smoke 不代替真实用户客户端验收。
 
 ## Next：M2 Local Product Alpha
+
+本轮先实现不依赖外部账号的源代码绑定 portable build/解包验证和 Windows wrapper 行为测试；它们提供 M2 的实现基础，不能自动关闭 M1 真实客户端门。当前进度以[状态页](project-status.md)和[本地包合同](portable-packages.md)为准。
 
 在 M1 退出门基础上补齐：
 

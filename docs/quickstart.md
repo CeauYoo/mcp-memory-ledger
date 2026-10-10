@@ -2,6 +2,8 @@
 
 目标：从源码构建，用一个隔离数据库完成 MCP 记忆闭环。当前没有经过正式发布验收的安装包；源码构建不是 fresh-machine 产品验收。
 
+如果维护者已用[portable package 流程](portable-packages.md)构建与你平台匹配的候选包，可按包内说明直接运行二进制，最终用户无需 Rust。包必须有可核对的来源与校验值；当前仓库尚未发布经过人工批准的发行包。下面保留源码开发路径。
+
 ## 1. 环境与构建
 
 - 安装 Rust/rustup，仓库 `rust-toolchain.toml` 固定 **1.95.0**；详见[工具链政策](toolchain-policy.md)。

@@ -31,6 +31,7 @@
 
 - [当前实现状态](project-status.md)：已实现 / 部分 / 未实现及精确提交证据。
 - [评估方法](evaluation-methodology.md)：固定 fixture、A/B/C/消融、容量观测和不能推出的结论。
+- [本地 portable 包](portable-packages.md)：来源绑定的原生构建、校验和隔离无 Rust 验证；不等于正式发布。
 - [测试指南](testing-guide-2026-03-24.md)：fast/core/full、离线工作流、CI/平台范围。
 - [最终 70 项核对](plans/2026-10-09-original-plan-final-reconciliation.md)：原方案有限实现收口与外部证据门。
 - [Reality gates](product/follow-up-reality-gates.md)、[Local Alpha gate](product/release-gate-local-alpha.md)、[Release readiness](release-readiness.md)、[release engineering](product/release-engineering.md)。

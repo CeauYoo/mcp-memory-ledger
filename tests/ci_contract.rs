@@ -44,3 +44,38 @@ fn cargo_and_rustup_share_the_verified_toolchain_floor() {
     assert!(toolchain.contains("channel = \"1.95.0\""));
     assert!(toolchain.contains("components = [\"clippy\", \"rustfmt\"]"));
 }
+
+#[test]
+fn ci_executes_source_bound_packages_and_real_windows_wrapper() {
+    let workflow = fs::read_to_string(".github/workflows/ci.yml").expect("CI workflow");
+    assert!(workflow.contains("github.event.pull_request.head.sha || github.sha"));
+    for contract in [
+        "scripts/test-windows-wrapper.py",
+        "test_portable_package.py",
+        "scripts/portable-package.py build",
+        "scripts/portable-package.py verify",
+        "--expected-commit",
+        "--expected-tree",
+    ] {
+        assert!(
+            workflow.contains(contract),
+            "missing executable CI contract: {contract}"
+        );
+    }
+    assert_eq!(
+        workflow
+            .matches("scripts/portable-package.py build")
+            .count(),
+        2
+    );
+    assert_eq!(
+        workflow
+            .matches("scripts/portable-package.py verify")
+            .count(),
+        2
+    );
+    assert!(
+        !workflow.contains("upload-artifact"),
+        "local candidate checks must not publish artifacts"
+    );
+}

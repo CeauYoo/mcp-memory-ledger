@@ -19,6 +19,23 @@ Historical consolidation baseline (current runtime additions follow below):
 - Local Product Alpha is still in progress until every release gate has fresh,
   reviewable evidence and a human release decision
 
+## 2026-10-10 packaging and wrapper continuation
+
+A source-bound native portable archive builder and strict unpack verifier now
+provide an executable per-platform build path, rather than inspecting only
+pre-existing archives. PowerShell wrapper behavior has a fail-closed executable
+harness in Windows CI. See [portable packages](../portable-packages.md) and the
+[current status](../project-status.md). Each new commit still needs its own green
+checks. Older missing-builder / unexecuted-wrapper descriptions below record the
+historical baseline; they do not override these new implementation contracts.
+
+Local and CI unpack tests remain controlled installation simulations. Real user
+client acceptance, fresh-machine timing, live provider authorization/evidence,
+and human release approval remain open. No artifact upload, release, tag,
+installer, service-manager or auto-updater is introduced by this slice. The old
+broad packaging-preflight remains separate and cannot certify this per-platform
+builder as a complete production release.
+
 ## 2026-10-09 current runtime additions
 
 The current draft branch has implemented scoped corrections/retry receipts, schema-v5 feedback candidates, FTS5 retrieval and inert versioned experience candidates. Exact head9a9d3be passed all three platform jobs; the source-specific logs/manifests are linked from the draft PR and evaluation evidence. This is not Alpha approval.

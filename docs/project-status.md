@@ -1,6 +1,6 @@
 # 当前实现状态
 
-更新：2026-10-09。当前定位：**source-only、local-first technical MVP**。实现基线为 `9ba0050d3ffb9228b02e2d0895b4e76d11ead989`；本次整理只更新文档，不修改生产逻辑。
+更新：2026-10-10。当前定位：**local-first technical MVP，尚未正式发布 binary package**。历史运行时实现基线为 `9ba0050d3ffb9228b02e2d0895b4e76d11ead989`；本轮新增源代码绑定的本地 portable package 构建/解包验证，以及 Windows wrapper 行为测试和修复。包可在本地生成，不代表人工发布批准。
 
 ## 已实现
 
@@ -20,6 +20,13 @@
 | 内部模块整理 | [SQLite、MCP、自动反思私有模块边界](implementation-module-boundaries.md)，未新增框架或权限 |
 
 新 Claim 有记录时间；历史未知时间保持 null。Reflection 的 origin 与 affected scope 各有职责，后者不是另一项可见性授权。旧 receipt/fingerprint 字节兼容性有迁移回归，不能通过迁移伪造历史或改变已成功请求的含义。
+
+## 本轮交付：可追溯包与 Windows wrapper
+
+- [Portable package](portable-packages.md)：从精确 Git commit/tree 构建本机原生二进制，包含校验信息、许可、隔离 mock 配置与使用说明；验证先检查归档和来源，再在无 Rust 的子进程环境完成真实二进制闭环。
+- PowerShell wrapper：补齐 literal 路径、仓库根目录相对路径、调用者配置环境恢复及多余参数拒绝；真实平台行为由 `scripts/test-windows-wrapper.py` 在 Windows CI 执行。
+- 这些检查是受控本地/CI 安装模拟；M1 真实用户客户端、真实 fresh-machine 十分钟验收、live provider 和人工 release decision 未因此完成。
+- 任何精确提交是否通过，以该提交 PR checks 为准；下方保留原实现基线，不将旧绿灯作为本轮结果。
 
 ## 验证证据（明确绑定提交）
 
@@ -46,7 +53,7 @@
 ## 尚未关闭的产品与研究门
 
 1. 用户真实 MCP 客户端闭环及 fresh-machine 安装证据。
-2. 正式 binary packaging、Windows wrapper parity、人工 release approval 与 rollback note。
+2. 正式发行包与人工 release approval、实际用户机器支持范围及 rollback note；本地构建器和 CI wrapper 验证属于实现基础。
 3. 经单独授权和预算约束的真实同模型效果 / token / 成本实验。
 4. 完整 self-model 版本策略、语义检索，以及需独立需求和权限的 remote/team/autonomy。
 
