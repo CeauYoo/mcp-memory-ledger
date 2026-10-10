@@ -39,3 +39,5 @@ pub mod temporal;
 pub mod reflection_scope;
 
 pub mod ledger_export;
+
+pub mod self_model_version;

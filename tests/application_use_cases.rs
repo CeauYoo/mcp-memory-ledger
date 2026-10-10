@@ -15,6 +15,7 @@ use agent_llm_mm::{
         event::{Event, EventReference, MAX_EVIDENCE_MANIFEST_ITEMS},
         identity_core::IdentityCore,
         reflection::Reflection,
+        self_model_version::{SelfModelVersion, SelfModelVersionKind},
         self_revision::{SelfRevisionProposal, SelfRevisionRequest, TriggerType},
         snapshot::{SelfSnapshot, SnapshotBudget, SnapshotTimeWindow},
         types::{EventKind, MemoryScope, Mode, Namespace, Owner},
@@ -138,6 +139,18 @@ async fn reflection_can_update_identity_and_commitments_with_audited_supporting_
     .unwrap();
 
     assert_eq!(result.reflection_id, "id-1");
+    assert_eq!(result.self_model_version, Some(1));
+    let versions = deps
+        .state
+        .lock()
+        .unwrap()
+        .committed
+        .self_model_versions
+        .clone();
+    assert_eq!(versions.len(), 2);
+    assert_eq!(versions[1].identity, deps.identity());
+    assert_eq!(versions[1].commitments, deps.commitments());
+    assert!(versions[1].identity_written && versions[1].commitments_written);
     assert_eq!(
         result.replacement_claim_id.as_deref(),
         Some("id-1:replacement")
@@ -1486,6 +1499,7 @@ struct State {
 
 #[derive(Debug, Clone, Default)]
 struct CommittedState {
+    self_model_versions: Vec<SelfModelVersion>,
     receipts: Vec<(String, agent_llm_mm::ports::StoredWriteReceipt)>,
     log: Vec<String>,
     events: Vec<StoredEvent>,
@@ -1510,6 +1524,8 @@ struct PendingIngest {
 
 #[derive(Debug, Default)]
 struct PendingReflection {
+    self_model_versions: Vec<SelfModelVersion>,
+    expected_self_model_version: Option<u64>,
     receipts: Vec<(String, agent_llm_mm::ports::StoredWriteReceipt)>,
     claims: Vec<StoredClaim>,
     evidence_links: Vec<(String, String)>,
@@ -1553,7 +1569,25 @@ impl Default for State {
 }
 
 impl InMemoryDeps {
-    fn new(state: State) -> Self {
+    fn new(mut state: State) -> Self {
+        // Seed the fixture baseline exactly once, after all intentional fixture setup.
+        // Subsequent direct projection changes must be detected as drift.
+        assert!(state.committed.self_model_versions.is_empty());
+        state.committed.self_model_versions.push(SelfModelVersion {
+            version: 0,
+            previous_version: None,
+            kind: SelfModelVersionKind::InitializationBaseline,
+            reflection_id: None,
+            recorded_at: state.now,
+            effective_at: Some(state.now),
+            identity: state.committed.identity.clone().expect("fixture identity"),
+            commitments: state.committed.commitments.clone(),
+            identity_written: false,
+            commitments_written: false,
+            identity_source_version: 0,
+            commitment_source_version: 0,
+            rollback_target_version: None,
+        });
         Self {
             state: Arc::new(Mutex::new(state)),
         }
@@ -2261,6 +2295,108 @@ struct InMemoryReflectionTransaction {
 
 #[async_trait]
 impl ReflectionTransaction for InMemoryReflectionTransaction {
+    async fn load_current_self_model_version(&mut self) -> Result<SelfModelVersion, AppError> {
+        let head = self
+            .pending
+            .self_model_versions
+            .last()
+            .cloned()
+            .or_else(|| {
+                self.deps
+                    .state
+                    .lock()
+                    .unwrap()
+                    .committed
+                    .self_model_versions
+                    .last()
+                    .cloned()
+            })
+            .ok_or_else(|| AppError::Message("missing fixture self-model baseline".into()))?;
+        if self.load_identity().await? != head.identity
+            || self.load_commitments().await? != head.commitments
+        {
+            return Err(AppError::Message("self-model projection drift".into()));
+        }
+        Ok(head)
+    }
+    async fn load_self_model_version(
+        &mut self,
+        version: u64,
+    ) -> Result<Option<SelfModelVersion>, AppError> {
+        Ok(self
+            .pending
+            .self_model_versions
+            .iter()
+            .find(|entry| entry.version == version)
+            .cloned()
+            .or_else(|| {
+                self.deps
+                    .state
+                    .lock()
+                    .unwrap()
+                    .committed
+                    .self_model_versions
+                    .iter()
+                    .find(|entry| entry.version == version)
+                    .cloned()
+            }))
+    }
+    async fn load_self_model_reflection(
+        &mut self,
+        reflection_id: &str,
+    ) -> Result<Option<StoredReflection>, AppError> {
+        Ok(self
+            .pending
+            .reflections
+            .iter()
+            .find(|entry| entry.reflection_id == reflection_id)
+            .cloned()
+            .or_else(|| {
+                self.deps
+                    .state
+                    .lock()
+                    .unwrap()
+                    .committed
+                    .reflections
+                    .iter()
+                    .find(|entry| entry.reflection_id == reflection_id)
+                    .cloned()
+            }))
+    }
+    async fn append_self_model_version(
+        &mut self,
+        expected_version: u64,
+        version: SelfModelVersion,
+    ) -> Result<(), AppError> {
+        let head = self
+            .pending
+            .self_model_versions
+            .last()
+            .cloned()
+            .or_else(|| {
+                self.deps
+                    .state
+                    .lock()
+                    .unwrap()
+                    .committed
+                    .self_model_versions
+                    .last()
+                    .cloned()
+            })
+            .ok_or_else(|| AppError::Message("missing fixture self-model baseline".into()))?;
+        if head.version != expected_version
+            || version.version != expected_version + 1
+            || version.previous_version != Some(expected_version)
+        {
+            return Err(AppError::InvalidParams("stale self-model version".into()));
+        }
+        self.pending
+            .expected_self_model_version
+            .get_or_insert(expected_version);
+        self.pending.self_model_versions.push(version);
+        Ok(())
+    }
+
     async fn load_write_receipt(
         &mut self,
         operation_id: &str,
@@ -2409,6 +2545,22 @@ impl ReflectionTransaction for InMemoryReflectionTransaction {
 
     async fn commit(self: Box<Self>) -> Result<(), AppError> {
         let mut state = self.deps.state.lock().unwrap();
+        if let Some(expected) = self.pending.expected_self_model_version
+            && state
+                .committed
+                .self_model_versions
+                .last()
+                .map(|head| head.version)
+                != Some(expected)
+        {
+            return Err(AppError::InvalidParams(
+                "stale self-model version at commit".into(),
+            ));
+        }
+        state
+            .committed
+            .self_model_versions
+            .extend(self.pending.self_model_versions);
         state.committed.receipts.extend(self.pending.receipts);
         for claim in self.pending.claims {
             upsert_claim(&mut state.committed.claims, claim);

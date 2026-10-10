@@ -8,7 +8,7 @@ Compatibility note: the current Rust crate, binary, scripts, configuration examp
 
 ## Current Scope
 
-Current capabilities and all 31 tools are maintained in [current status](project-status.md) and the [tool index](tool-reference.md). Schema6, feedback correction, literal recall/context and versioned experience candidates are implemented. Actual user-client/fresh-machine evidence, real-model efficacy and human release approval remain open.
+Current capabilities and all 32 tools are maintained in [current status](project-status.md) and the [tool index](tool-reference.md). Schema7, feedback correction, literal recall/context and versioned experience candidates are implemented. Actual user-client/fresh-machine evidence, real-model efficacy and human release approval remain open.
 
 ## Best Fit
 
@@ -29,3 +29,5 @@ Current capabilities and all 31 tools are maintained in [current status](project
 ## Acknowledgement
 
 This repository was developed, discussed, and documented with active support from OpenAI Codex as a collaborative development tool. Thanks to OpenAI for the tooling and research ecosystem that made this workflow possible.
+
+Schema7 global self-model version/diff and explicit compensation contract: [details](self-model-versions.md). Existing scoped read/export boundaries and experimental single-user limits remain.

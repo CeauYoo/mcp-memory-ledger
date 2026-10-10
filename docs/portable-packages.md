@@ -181,3 +181,14 @@ also tracks installer/service-manager/auto-updater blockers. These are separate
 from this per-platform portable archive path. Local Alpha does not require
 installers, services or auto-updaters, but still requires its own fresh-machine,
 platform, user-client, provider and human-decision gates.
+
+## Observed native CI coverage (2026-10-10)
+
+[Run 38035347484](https://github.com/yooyui/mcp-memory-ledger/actions/runs/38035347484) passed for exact source
+`0ca8bccc64cadb3f1eae9d1a74bad602a1c60bc9`: Linux x86_64, macOS ARM64 and
+Windows x86_64 each built and verified their native archive and completed the
+no-Rust unpacked-binary workflow. Windows PowerShell 7.6.6 also passed the actual
+12-test wrapper harness, including 20 native argument/environment combinations.
+All three ran 40 package tests and 13 evaluation fixtures. Other architectures,
+OS versions and real-user machines are not certified by that configured-host run;
+every later source head requires new checks. No package was published as a release.

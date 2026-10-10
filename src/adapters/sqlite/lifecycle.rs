@@ -26,7 +26,7 @@ use super::{
 
 pub const CURRENT_DATABASE_SCHEMA_VERSION: i64 = CURRENT_SCHEMA_VERSION;
 
-const REQUIRED_TABLES: [&str; 18] = [
+const REQUIRED_TABLES: [&str; 19] = [
     "events",
     "claims",
     "evidence_links",
@@ -35,6 +35,7 @@ const REQUIRED_TABLES: [&str; 18] = [
     "reflection_trigger_ledger",
     "reflection_scopes",
     "reflection_evidence",
+    "self_model_versions",
     "identity_claims",
     "commitments",
     "operation_log",
@@ -47,7 +48,7 @@ const REQUIRED_TABLES: [&str; 18] = [
     "schema_migrations",
 ];
 
-const PRESERVED_DATA_TABLES: [&str; 15] = [
+const PRESERVED_DATA_TABLES: [&str; 16] = [
     "events",
     "claims",
     "evidence_links",
@@ -56,6 +57,7 @@ const PRESERVED_DATA_TABLES: [&str; 15] = [
     "reflection_trigger_ledger",
     "reflection_scopes",
     "reflection_evidence",
+    "self_model_versions",
     "operation_log",
     "feedback_candidates",
     "experience_episodes",
@@ -231,7 +233,7 @@ pub async fn initialize_database(database_url: &str) -> Result<DatabaseLifecycle
                 "init could not exclusively create database: {error}"
             ))
         })?;
-    migrate_in_place(database_url, false).await?;
+    migrate_in_place(database_url, false, true).await?;
 
     let mut report = inspect_database(database_url).await?;
     if !report.is_current() {
@@ -265,7 +267,9 @@ pub async fn migrate_database(database_url: &str) -> Result<DatabaseLifecycleRep
             "migrate requires an existing database; run init first".to_string(),
         ));
     }
-    if initial.status == "unsupported_newer_schema" || initial.status == "schema_structure_invalid"
+    if initial.status == "unsupported_newer_schema"
+        || initial.status == "schema_structure_invalid"
+        || initial.status == "self_model_ledger_invalid"
     {
         return Err(AppError::Message(initial.message));
     }
@@ -293,7 +297,7 @@ pub async fn migrate_database(database_url: &str) -> Result<DatabaseLifecycleRep
     let rehearsal_url = sqlite_url(&rehearsal_path);
 
     let rehearsal_result = async {
-        migrate_in_place(&rehearsal_url, false).await?;
+        migrate_in_place(&rehearsal_url, false, false).await?;
         let report = inspect_database(&rehearsal_url).await?;
         if !report.is_current() {
             return Err(AppError::Message(format!(
@@ -313,6 +317,7 @@ pub async fn migrate_database(database_url: &str) -> Result<DatabaseLifecycleRep
         &mut locked,
         Some(&rehearsal.table_counts),
         path_writable_hint(&path),
+        false,
     )
     .await?;
     locked.close().await.map_err(sqlite_error)?;
@@ -389,9 +394,13 @@ async fn begin_migration(
     Ok(connection)
 }
 
-async fn migrate_in_place(database_url: &str, create_if_missing: bool) -> Result<(), AppError> {
+async fn migrate_in_place(
+    database_url: &str,
+    create_if_missing: bool,
+    initialization: bool,
+) -> Result<(), AppError> {
     let mut connection = begin_migration(database_url, create_if_missing).await?;
-    migrate_locked(&mut connection, None, None).await?;
+    migrate_locked(&mut connection, None, None, initialization).await?;
     connection.close().await.map_err(sqlite_error)
 }
 
@@ -399,6 +408,7 @@ async fn migrate_locked(
     connection: &mut SqliteConnection,
     rehearsal_counts: Option<&[DatabaseTableCount]>,
     path_writable_hint: Option<bool>,
+    initialization: bool,
 ) -> Result<DatabaseLifecycleReport, AppError> {
     let version = schema_version(connection).await?;
     if version > CURRENT_SCHEMA_VERSION {
@@ -409,7 +419,7 @@ async fn migrate_locked(
     validate_existing_ledger(connection, version).await?;
     let before_counts = existing_preserved_counts(connection).await?;
     let migration_result = async {
-        run_migration_steps(connection, version, &before_counts).await?;
+        run_migration_steps(connection, version, &before_counts, initialization).await?;
         let report = inspect_connection(connection, "migrate", true, path_writable_hint).await?;
         if !report.is_current() {
             return Err(AppError::Message(format!(
@@ -467,6 +477,7 @@ async fn run_migration_steps(
     connection: &mut SqliteConnection,
     from_version: i64,
     before_counts: &[DatabaseTableCount],
+    initialization: bool,
 ) -> Result<(), AppError> {
     for (version, name) in SCHEMA_MIGRATIONS {
         if version <= from_version {
@@ -482,6 +493,7 @@ async fn run_migration_steps(
             4 => ensure_event_feedback_column(connection).await?,
             5 => install_v5(connection).await?,
             6 => install_v6(connection).await?,
+            7 => super::self_model_versions::install(connection).await?,
             _ => {
                 return Err(AppError::Message(format!(
                     "missing migration implementation for version {version}"
@@ -492,8 +504,14 @@ async fn run_migration_steps(
         execute(connection, &format!("PRAGMA user_version = {version}")).await?;
     }
 
-    seed_baseline_commitments(&mut *connection).await?;
-    seed_default_identity(connection).await?;
+    if from_version < 7 {
+        seed_baseline_commitments(&mut *connection).await?;
+        seed_default_identity(connection).await?;
+        super::self_model_versions::seed_baseline(connection, initialization).await?;
+    }
+    // A current ledger must never be reseeded or silently repaired, even during
+    // an explicit lifecycle operation. Projection drift requires investigation.
+    super::self_model_versions::load_current(connection).await?;
     validate_preserved_counts(connection, before_counts).await?;
     let foreign_key_violations = foreign_key_violation_count(connection).await?;
     if foreign_key_violations != 0 {
@@ -785,7 +803,16 @@ async fn inspect_connection(
     let runtime_defaults_present = identity_present && baseline_commitment_present;
     let unknown_owner_inventory = unknown_owner_inventory(connection, &table_names).await?;
 
-    let (status, migration_required, message) = if version > CURRENT_SCHEMA_VERSION {
+    let self_model_error = if version == CURRENT_SCHEMA_VERSION && schema_structure_valid {
+        super::self_model_versions::load_current(connection)
+            .await
+            .err()
+    } else {
+        None
+    };
+    let (status, migration_required, message) = if let Some(error) = self_model_error {
+        ("self_model_ledger_invalid", false, error.to_string())
+    } else if version > CURRENT_SCHEMA_VERSION {
         (
             "unsupported_newer_schema",
             false,
@@ -1134,6 +1161,7 @@ async fn schema_structure_issues(
     execute_init_sql(&mut reference).await?;
     install_v5(&mut reference).await?;
     install_v6_extensions(&mut reference).await?;
+    super::self_model_versions::install(&mut reference).await?;
     let mut issues = Vec::new();
     for table in REQUIRED_TABLES {
         let expected = table_structure(&mut reference, table).await?;
@@ -1157,6 +1185,18 @@ async fn schema_structure_issues(
         .map_err(sqlite_error)?;
         if actual.as_deref().map(normalize_schema_ddl) != Some(normalize_schema_ddl(&ddl)) {
             issues.push(format!("{name}: recording-time trigger differs"));
+        }
+    }
+    for (name, ddl) in super::self_model_versions::trigger_ddl() {
+        let actual = sqlx::query_scalar::<_, String>(
+            "SELECT sql FROM sqlite_master WHERE type='trigger' AND name=?",
+        )
+        .bind(name)
+        .fetch_optional(&mut *connection)
+        .await
+        .map_err(sqlite_error)?;
+        if actual.as_deref().map(normalize_schema_ddl) != Some(normalize_schema_ddl(ddl)) {
+            issues.push(format!("{name}: self-model append-only trigger differs"));
         }
     }
     reference.close().await.map_err(sqlite_error)?;

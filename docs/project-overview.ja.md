@@ -8,7 +8,7 @@ MCP Memory Ledger は、長期記憶・自己スナップショット・反省�
 
 ## 現在のスコープ
 
-現在の 31 ツールと能力は[実装状態](project-status.md)と[ツール索引](tool-reference.md)に集約しています。schema6、フィードバック訂正、字面検索・context、経験候補の版管理は実装済みです。実ユーザークライアント、fresh-machine、実モデル効果、公開承認の gate は未完了です。
+現在の 32 ツールと能力は[実装状態](project-status.md)と[ツール索引](tool-reference.md)に集約しています。schema7、フィードバック訂正、字面検索・context、経験候補の版管理は実装済みです。実ユーザークライアント、fresh-machine、実モデル効果、公開承認の gate は未完了です。
 
 ## 適した用途
 
@@ -29,3 +29,5 @@ MCP Memory Ledger は、長期記憶・自己スナップショット・反省�
 ## 謝辞
 
 このリポジトリは、OpenAI Codex を協調的な開発ツールとして活用しながら、実装・議論・文書整理を進めてきました。このようなワークフローを可能にするツール群と研究エコシステムを提供している OpenAI に感謝します。
+
+Schema7 global self-model version/diff and explicit compensation contract: [details](self-model-versions.md). Existing scoped read/export boundaries and experimental single-user limits remain.

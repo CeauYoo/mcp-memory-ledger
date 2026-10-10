@@ -19,6 +19,9 @@ use tokio::{
 #[path = "mcp_stdio/caller_budget.rs"]
 mod caller_budget;
 
+#[path = "mcp_stdio/self_model_versions.rs"]
+mod self_model_versions;
+
 #[tokio::test]
 async fn server_exposes_expected_tools_over_stdio() {
     let mut client = test_support::spawn_stdio_client().await.unwrap();
@@ -45,6 +48,7 @@ async fn server_exposes_expected_tools_over_stdio() {
             "get_memory".to_string(),
             "get_reflection_history".to_string(),
             "get_self_model_history".to_string(),
+            "get_self_model_versions".to_string(),
             "ingest_interaction".to_string(),
             "inspect_retrieval_index".to_string(),
             "list_episode_details".to_string(),
@@ -5134,7 +5138,7 @@ required = true
         .expect("client");
 
     let tools = client.list_all_tools().await.expect("list tools");
-    assert_eq!(tools.len(), 31);
+    assert_eq!(tools.len(), 32);
 
     let health: serde_json::Value = reqwest::get(format!("http://127.0.0.1:{port}/api/health"))
         .await
@@ -5213,7 +5217,7 @@ max_concurrent_tasks = 1
             .await
             .unwrap();
     let tools = client.list_all_tools().await.unwrap();
-    assert_eq!(tools.len(), 31);
+    assert_eq!(tools.len(), 32);
 
     client
         .call_tool(

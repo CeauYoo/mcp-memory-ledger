@@ -24,8 +24,8 @@ M0 的 scoped snapshot、治理原子性、显式数据库生命周期、loopbac
 
 在 M1 退出门基础上补齐：
 
-- 可追溯 binary archive/checksum、无需 Rust 的首次运行、fresh-machine 10 分钟内核心闭环；
-- Windows 完整 runtime/wrapper parity 的真实证据或明确支持范围；
+- 已具备可追溯 binary archive/checksum 与 configured-host CI 的无 Rust 解包闭环；仍须真实 fresh-machine 10 分钟内验收；
+- Windows x86_64 / PowerShell 7.6.6 已有实际 wrapper 与包验证证据；持续验证新 head，并明确其他 OS/架构与用户客户端支持范围；
 - backup → restore-to-new-path → read-only verify → manual switch；
 - 一个真实 provider 的连通/解析证据（需明确数据与费用授权）；
 - 人工 release decision、rollback note 和公开文档审阅。
@@ -38,7 +38,7 @@ M0 的 scoped snapshot、治理原子性、显式数据库生命周期、loopbac
 
 - 扩充独立任务集，并做真实同模型对照、token/成本与因果效果实验；
 - 根据证据评估 relation ranking、semantic retrieval 和查询策略；
-- 制定 identity/commitment 版本、effective time、rollback 合同；
+- 有界 identity/commitment 追加版本、来源安全 diff、记录边界 effective time 与显式补偿 rollback 已实现，见[合同](self-model-versions.md)；更广泛生命周期政策另行决定；
 - 只有先确定数据政策和授权，才研究 retention、tombstone、compaction；目前 retain-all。
 
 计划质量门仍为 recall@5 ≥ 0.80、provenance coverage = 100%、namespace leakage = 0；固定 10 项离线 proxy 达到部分数字不代表完整 M3 通过。

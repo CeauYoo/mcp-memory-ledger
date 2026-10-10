@@ -22,3 +22,6 @@ mod reflection_scope;
 mod temporal_schema;
 
 mod ledger_export;
+
+mod self_model_version_reads;
+mod self_model_versions;

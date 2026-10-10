@@ -188,6 +188,12 @@ Run explicit `migrate` for an existing v5 database; inspect the generated backup
 
 `cargo test --test context_diagnostics --test caller_operation_budget --test mcp_stdio --test schema6_migration` covers scoped rich Episode context, honest bounded diagnostics, optional caller counts/stops over actual local MCP subprocesses, and historical receipt/fingerprint replay across migration. Run the normal full/fmt/Clippy/status-sync gates afterward. The fixed offline evaluator keeps its original tasks and byte budgets; richer metadata costs must be reported rather than hidden by retuning fixtures. See [context](context-diagnostics.md), [caller budget](caller-operation-budget.md), and [module extraction](implementation-module-boundaries.md) contracts.
 
+## Schema v7 global self-model versions
+
+Use explicit `migrate` for older databases, including v6; retain its backup anchor and restore only to a new path. Migration captures current projections as baseline0 with unknown historical effective time. `serve` and index repair never seed or repair the version ledger. See [version contract](self-model-versions.md) and [database operations](database-operations.md). Run `cargo test --test schema7_migration --test self_model_versions --test version_api` and the full/fmt/Clippy/status-sync gates against this source; prior schema6 counts remain historical. Versioned writes and reads reject projection drift. Local deterministic tests are not actual user-client or fresh-machine evidence.
+
+Windows native CI explicitly includes `schema7_migration`, `self_model_versions`, `version_api` and the MCP subprocess version workflow. Their presence is a verification route, not a claim of a completed Windows run for an unpublished working tree. Existing exact-source portable build and PowerShell wrapper checks remain separate.
+
 ## Wrapper 与离线验证的 Windows 细节
 
 Wrapper 按原始有序参数解析 `doctor --read-only [config]` 与

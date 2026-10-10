@@ -26,6 +26,9 @@ fn ci_covers_linux_and_macos_quality_gates() {
         "experience_workflow",
         "indexed_text_recall",
         "mcp_stdio",
+        "schema7_migration",
+        "self_model_versions",
+        "version_api",
     ] {
         assert!(
             workflow.contains(&format!("--test {suite}")),

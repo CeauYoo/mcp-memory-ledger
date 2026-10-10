@@ -14,9 +14,10 @@
 - **反馈与纠错**：保存反馈候选，验证明确的结构化证据合同，原子提交更正；保留旧 Claim、来源和可重试回执。
 - **积累可审核经验**：语义/流程候选支持查看、拒绝、版本修订、回滚和显式激活。激活只改变可召回状态，不执行流程或授予权限。
 - **可追溯本地打包**：从指定 Git 版本构建原生 portable archive，校验后隔离解包运行；这不是已批准的正式发行包。详见[本地包合同](docs/portable-packages.md)；平台脚本与实际验证范围见对应开发指南。
+- **版本化全局 self-model**：identity/commitment 追加版本、同范围可见 diff、expected-version 冲突检测和显式组件补偿回滚；仍受既有 Claim、证据与全局写边界约束。详见[合同](docs/self-model-versions.md)。
 - **本地数据运维**：显式初始化/迁移、默认只读诊断、索引检查/重建、备份恢复，以及有界只读 scoped export。
 
-当前注册 **31 个 MCP 工具**，按用途见[工具与合同索引](docs/tool-reference.md)。二进制/crate 兼容名称仍是 `agent_llm_mm`，脚本和配置前缀仍是 `agent-llm-mm`。
+当前注册 **32 个 MCP 工具**，按用途见[工具与合同索引](docs/tool-reference.md)。二进制/crate 兼容名称仍是 `agent_llm_mm`，脚本和配置前缀仍是 `agent-llm-mm`。
 
 ## 从这里开始
 

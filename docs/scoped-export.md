@@ -103,3 +103,9 @@ The suite exercises scope/mixed-relation privacy, reflection provenance, exact
 full-response budgets, stable repeated exports, oversized source-row failure,
 complete experience history and source closure, structural validation, concurrent
 WAL snapshot consistency, and absence of database mutation on read-only export.
+
+Schema7 `self_model_versions` internal aggregate snapshots and component-source
+history are not part of this scoped export. Use the separately opted-in
+[get_self_model_versions contract](self-model-versions.md) for permitted written
+components and source-safe diffs, and a full database backup for recoverable ledger
+history. A new global version does not broaden export visibility.

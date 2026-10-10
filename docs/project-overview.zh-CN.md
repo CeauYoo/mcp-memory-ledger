@@ -8,7 +8,7 @@ MCP Memory Ledger 是一个 Rust 编写的本机 MCP `stdio` memory demo，用�
 
 ## 当前范围
 
-当前能力与 31 工具合同统一见[当前状态](project-status.md)和[工具索引](tool-reference.md)。已包含 schema6、反馈纠错、字面召回/上下文与版本化经验候选；仍是 technical MVP，真实客户端/fresh-machine、真实模型收益与人工发布门未关闭。
+当前能力与 32 工具合同统一见[当前状态](project-status.md)和[工具索引](tool-reference.md)。已包含 schema7、反馈纠错、字面召回/上下文与版本化经验候选；仍是 technical MVP，真实客户端/fresh-machine、真实模型收益与人工发布门未关闭。
 
 ## 适合的使用方式
 
@@ -29,3 +29,5 @@ MCP Memory Ledger 是一个 Rust 编写的本机 MCP `stdio` memory demo，用�
 ## 致谢
 
 本仓库在开发、讨论和文档整理过程中明确使用了 OpenAI Codex 作为协作式开发工具。感谢 OpenAI 提供相关工具与研究生态，使这种以讨论驱动、迭代收口的开发方式成为可能。
+
+Schema7 global self-model version/diff and explicit compensation contract: [details](self-model-versions.md). Existing scoped read/export boundaries and experimental single-user limits remain.

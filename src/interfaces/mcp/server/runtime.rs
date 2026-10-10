@@ -405,3 +405,13 @@ impl crate::ports::feedback_candidate_store::FeedbackCandidateStore for Runtime 
         .await
     }
 }
+
+#[async_trait]
+impl crate::ports::self_model_version_store::SelfModelVersionStore for Runtime {
+    async fn query_self_model_versions(
+        &self,
+        query: crate::ports::self_model_version_store::SelfModelVersionQuery,
+    ) -> Result<crate::ports::self_model_version_store::SelfModelVersionPage, AppError> {
+        self.store.query_self_model_versions(query).await
+    }
+}

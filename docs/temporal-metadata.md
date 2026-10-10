@@ -112,3 +112,5 @@ ordering, including equal timestamps and unknown Claims. Migration, backfill,
 backup/restore, and Reflection replacement paths also need their lifecycle and
 Reflection suites; these focused tests alone are not release or deployment
 qualification.
+
+Schema7 introduces a distinct [self-model version effective_at boundary](self-model-versions.md): current server recording time for newly committed global versions, unknown historical time for a migration baseline. It is not caller observed_at, inferred past validity, scheduling or a wall-clock ordering guarantee.

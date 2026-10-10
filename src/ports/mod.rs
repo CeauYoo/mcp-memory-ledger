@@ -91,6 +91,39 @@ pub trait IngestTransactionRunner {
 
 #[async_trait]
 pub trait ReflectionTransaction {
+    /// Returns the current head only after verifying both current projections.
+    async fn load_current_self_model_version(
+        &mut self,
+    ) -> Result<crate::domain::self_model_version::SelfModelVersion, AppError> {
+        Err(AppError::Message(
+            "transaction does not support self-model versions".into(),
+        ))
+    }
+    async fn load_self_model_version(
+        &mut self,
+        _version: u64,
+    ) -> Result<Option<crate::domain::self_model_version::SelfModelVersion>, AppError> {
+        Err(AppError::Message(
+            "transaction does not support self-model versions".into(),
+        ))
+    }
+    async fn load_self_model_reflection(
+        &mut self,
+        _reflection_id: &str,
+    ) -> Result<Option<StoredReflection>, AppError> {
+        Err(AppError::Message(
+            "transaction does not support self-model provenance".into(),
+        ))
+    }
+    async fn append_self_model_version(
+        &mut self,
+        _expected_version: u64,
+        _version: crate::domain::self_model_version::SelfModelVersion,
+    ) -> Result<(), AppError> {
+        Err(AppError::Message(
+            "transaction does not support self-model versions".into(),
+        ))
+    }
     async fn load_feedback_candidate(
         &mut self,
         _namespace: &crate::domain::types::Namespace,
@@ -212,3 +245,5 @@ pub mod experience_store;
 pub mod feedback_candidate_store;
 
 pub mod ledger_export_store;
+
+pub mod self_model_version_store;

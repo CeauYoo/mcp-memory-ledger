@@ -1,5 +1,9 @@
+#[path = "legacy_schema7.rs"]
+mod legacy_schema7;
+
 // Test-only removal of schema-v6 additions when constructing v5 fixtures.
 pub async fn remove_v6_objects(connection: &mut sqlx::SqliteConnection) {
+    legacy_schema7::remove_v7_objects(connection).await;
     for table in ["events", "claims", "reflections"] {
         for suffix in ["ai", "au"] {
             sqlx::query(&format!(

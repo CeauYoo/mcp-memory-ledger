@@ -1,6 +1,6 @@
 # 数据库初始化、升级与恢复
 
-当前 schema **6**。所有操作先确认 `AGENT_LLM_MM_CONFIG` 指向的配置，以及实际 `database_url`；使用绝对路径，并将开发/测试库与正式库分开。配置方式见[快速开始](quickstart.md)。
+当前 schema **7**。所有操作先确认 `AGENT_LLM_MM_CONFIG` 指向的配置，以及实际 `database_url`；使用绝对路径，并将开发/测试库与正式库分开。配置方式见[快速开始](quickstart.md)。
 
 ## 二进制只有四类命令
 
@@ -33,6 +33,8 @@ agent_llm_mm serve
 
 Schema5 引入 feedback/experience/derived FTS；schema6 引入时间键、独立 Reflection 范围与证据关系。新字段是 additive，旧 Claim 时间保持 unknown/null。兼容回归保留旧成功回执、候选、反馈和 fingerprint 字节，不凭空增加观察时间或重复旧写入。详见[时间兼容合同](temporal-metadata.md)和[阶段迁移结果](plans/2026-10-09-schema6-results.md)。
 
+Schema7 增加 append-only 全局 self-model 版本。旧库迁移只捕获当时 identity/commitment 投影为 migration baseline0，effective_at 保持 unknown；旧 audit/receipt 字节不重写。初始化 baseline 时间已知。serve、index repair 和普通读取不自动补版本或修复漂移；全局写/版本读发现 head 与投影不一致即 fail closed。详见[版本、回滚和结构合同](self-model-versions.md)。
+
 ## 备份与恢复到新路径
 
 在支持这些 shell 脚本的 Unix 环境：
@@ -56,3 +58,5 @@ Windows 的当前 native CI 用 Python `sqlite3.Connection.backup` 验证恢复�
 - `export_memory` 是同 scope、有界、一致的只读交换文档，不写日志；不是完整可恢复数据库备份，也不自动脱敏。完整合同见[scoped export](scoped-export.md)。
 
 默认保留全部历史、来源与成功 request_id 回执。删除回执可能破坏重试正确性；本轮没有自动 retention、compaction 或 destructive repair。
+
+Schema7 的 self-model 补偿回滚不是 schema downgrade。schema6 binary 不能打开 schema7 库；若需回退旧 binary，恢复迁移前 backup 到新路径，用匹配旧 binary 只读核验后手动切换。旧 backup 不包含迁移后的新写入，不承诺无损逆转或原地降级。

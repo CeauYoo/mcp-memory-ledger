@@ -28,4 +28,4 @@ Explicit migration backfills historical scope only when existing source endpoint
 
 `reflection_evidence` is an authoritative FK-backed ledger relation with preserved evidence order and a reverse Event lookup index. It is not disposable or rebuilt as part of text-index recovery. Once `evidence_normalized` is true, reads use the relation even if legacy JSON differs or the relation is empty. Unnormalizable historical JSON is retained for compatibility rather than inventing links.
 
-The previous internal global-governance behavior is unchanged. These metadata additions introduce no global rollback operation and no new global mutation permission.
+The previous internal global-governance behavior is unchanged. Schema6 metadata itself introduced no global rollback or mutation permission. Schema7 adds a separate bounded [version/compensation contract](self-model-versions.md), preserving these existing scoped history boundaries. Its read tool exposes permitted written components only, never inherited aggregate snapshots.

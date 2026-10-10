@@ -18,3 +18,5 @@ pub mod experience;
 pub mod feedback_candidate;
 
 pub mod export_memory;
+
+pub mod get_self_model_versions;

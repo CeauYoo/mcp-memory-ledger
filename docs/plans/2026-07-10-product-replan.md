@@ -1,3 +1,11 @@
+## 2026-10-10 schema7 独立实现切片
+
+有界 global identity/commitment append-only ledger 已在本轮本地代码中实现：真实初始化/迁移 baseline0、单调版本、来源安全 ordered diff、记录边界 effective time、expected-version guard 和显式同范围组件补偿回滚。生产写路径仍仅 `run_reflection`；新 rollback 继续要求 Claim anchor、显式同范围来源、新提供的有效证据、confirm 和 durable request_id。迁移/恢复、旧回执字节、漂移 fail-closed、原子失败、范围防泄漏和结构门须随源代码测试。见[合同](../self-model-versions.md)。
+
+- [x] **M3.1.1 Bounded Global Self-Model Versions** — schema7 版本、来源安全 diff 和显式补偿已实现；673 项 all-feature Rust 测试与本地 MCP/恢复闭环通过，见[阶段结果](2026-10-10-schema7-results.md)。这不关闭真实平台、用户客户端、模型效果或发布门。
+
+这项依赖调整允许在已隔离本地工作区继续实现，按阶段提交远程分支并独立验证精确提交 CI，不继承旧 head 的结果。M1 真实客户端、M2 fresh-machine、真实模型效果、人工发布与 remote/autonomy 门不关闭。以下原先“稍后实施 version ledger”的叙述保留当时顺序，不覆盖本段当前状态。
+
 ## 2026-10-10 文档缺口续建：本地包与 Windows wrapper
 
 重新核对上游 `dev-work@c318caf`、独立分支 `dev_work_dots@73fb00a` 和实际实现后，本轮先补 M2 两项可实施缺口：
@@ -5,9 +13,11 @@
 1. 从确定 Git commit/tree 构建原生 portable archive，携带来源、工具链和文件校验信息；解包后用隔离 mock 库验证无 Rust 的核心闭环。
 2. 实际执行 PowerShell wrapper 的 bootstrap、路径、环境恢复、错误码和 stdio 合同，并由 Windows CI 提供该平台证据。
 
+包/wrapper 阶段 `0ca8bccc64cadb3f1eae9d1a74bad602a1c60bc9` 已通过 [三平台精确提交 CI](https://github.com/yooyui/mcp-memory-ledger/actions/runs/38035347484)，包括 Windows PowerShell 7.6.6 的实际 wrapper 与三平台原生包解包闭环；具体测试数与支持边界见[当前状态](../project-status.md)。
+
 已有 archive inspector 仅检查预先存在的文件，不能代替源代码构建；已有 Windows native 测试不能代替 wrapper 行为。本地/CI 解包验证仍是受控安装模拟，M1 真实用户客户端、M2 fresh-machine 十分钟验收、真实 provider 与人工发布决定继续开放。正式 tag、release、部署和付费模型实验不在本次实现权限内。
 
-这组代码通过独立审查、同源测试和精确提交 CI 后，再实施 append-only global identity/commitment version ledger 的独立切片。版本、diff、有效时间与显式补偿回滚须保持现有 `run_reflection` 写边界、expected-version 冲突检测、证据审计和 schema 迁移恢复合同；不新增自动回滚、全局权限或数据删除政策。
+这组代码已通过独立审查、同源测试和精确提交 CI；append-only global identity/commitment version ledger 作为独立切片提交并重新验证。版本、diff、有效时间与显式补偿回滚须保持现有 `run_reflection` 写边界、expected-version 冲突检测、证据审计和 schema 迁移恢复合同；不新增自动回滚、全局权限或数据删除政策。
 
 ---
 
@@ -480,7 +490,7 @@ M2 退出指标：
 - 冻结至少 50 个 scoped recall 场景，再比较 structured query、FTS5、recency、relation weight 等方案。
 - 初始质量目标为 recall@5 ≥ 0.80、provenance coverage = 100%、namespace leakage = 0；若基线差异较大，先记录基线再批准目标调整。
 - 增加 tombstone、retention、compaction、export 和恢复验证，不直接 hard delete 审计历史。
-- identity / commitment 引入版本、diff、effective time 和 rollback target。
+- identity / commitment 有界版本、来源安全 diff、记录边界 effective time 和显式补偿 rollback target 已由 schema7 独立切片实现；更广泛生命周期与权限策略另行决定。
 - evidence relation、episode summary 和 memory layer projection 要么接入正式 read path，要么删除或明确留在 labs。
 - automatic self-revision 只在可靠 trigger、scope、idempotency、rollback 和人工可解释性通过后扩张。
 

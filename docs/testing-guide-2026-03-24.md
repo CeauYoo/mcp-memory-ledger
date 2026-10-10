@@ -1591,6 +1591,14 @@ Earlier schema-v5 570-test/evaluation artifacts remain historical. New-stage res
 
 `cargo test --test context_diagnostics --test caller_operation_budget --test mcp_stdio --test schema6_migration` covers scoped rich Episode context, honest bounded diagnostics, optional caller counts/stops over actual local MCP subprocesses, and historical receipt/fingerprint replay across migration. Run the normal full/fmt/Clippy/status-sync gates afterward. The fixed offline evaluator keeps its original tasks and byte budgets; richer metadata costs must be reported rather than hidden by retuning fixtures. See [context](context-diagnostics.md), [caller budget](caller-operation-budget.md), and [module extraction](implementation-module-boundaries.md) contracts.
 
+## 2026-10-10 schema7 self-model version contract
+
+Run `cargo test --test schema7_migration --test self_model_versions --test version_api`, then `cargo fmt --all -- --check`, `cargo clippy --all-targets --all-features -- -D warnings`, `cargo test --all-features`, `scripts/status-sync-check.sh`, and `git diff --check`. These tests target truthful init/migration baselines, immutable contiguous versions, no-op/global-only version writes, stale/CAS conflicts, source-safe selective rollback, unchanged legacy serialization, keyed replay/conflicts, transaction failure atomicity, drift rejection, one-snapshot scoped reads/diffs, structure weakening and backup/restore. Test fixture setup must establish its intended baseline deliberately; production never silently rebaselines unversioned low-level identity changes.
+
+Use a fresh isolated mock database for live MCP smoke: init, ingest two same-scope evidence/Claim anchors, write identity twice, read opted-in versions, compensate the selected component with a new durable request key and explicit evidence, replay, reject a stale version, and verify backup/restore readback. No model or remote account is necessary. Do not reuse historical schema6 metrics as evidence for new source. See [complete contract](self-model-versions.md).
+
+Schema7 的完整本地结果与最终 source/binary digest 见[阶段报告](plans/2026-10-10-schema7-results.md)。Doctor 的 memory-layer blocked 诊断仅阻止自动派生层写入，不否认现有 run_reflection 全局版本路径；发布诊断区分本地 portable build/CI configured hosts 与仍未完成的真实用户兼容和发布批准门。
+
 
 ### Windows CI 的失败传播与资源清理
 

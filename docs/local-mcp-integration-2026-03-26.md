@@ -1,6 +1,6 @@
 # 本机 MCP 接入
 
-更新：2026-10-09。文件名保留历史链接兼容性；本页描述当前 schema6 / 31 工具版本。
+更新：2026-10-10。文件名保留历史链接兼容性；本页描述当前 schema7 / 32 工具版本。
 
 先完成[快速开始](quickstart.md)的 build、明确配置、`init` 和 `doctor --read-only`。客户端负责启动服务进程；不要把自己的 shell 环境、工作目录或相对 SQLite 路径当作客户端必然继承的状态。
 
@@ -43,7 +43,7 @@ env = { AGENT_LLM_MM_CONFIG = "/absolute/path/ledger-demo.toml" }
 
 ## 3. 连接后验证
 
-1. 重新加载/连接 server，检查 `tools/list` 当前返回 31 个工具。
+1. 重新加载/连接 server，检查 `tools/list` 当前返回 32 个工具。
 2. 用 `ingest_interaction` 向 `project/demo` 写入一条合成 Event/Claim，保存结果 ID。
 3. 断开再连接；用 `recall_memory` 查原文，再 `get_memory` 查看 evidence/provenance。
 4. 按[完整工作流](runnable-memory-workflow.md)更正并查看历史；确认其他 namespace 不混入。
@@ -63,3 +63,5 @@ env = { AGENT_LLM_MM_CONFIG = "/absolute/path/ledger-demo.toml" }
 核对实际 binary → 实际配置环境 → 绝对数据库路径 → 单独运行 `doctor --read-only` → 客户端 stderr → 重连。不要用 init/自动迁移掩盖路径错误，不要把 provider 密钥或整库贴入日志/issue。
 
 升级与恢复见[数据库操作](database-operations.md)，诊断产物与测试门见[测试指南](testing-guide-2026-03-24.md)。
+
+Schema7 global self-model version/diff and explicit compensation contract: [details](self-model-versions.md). Existing scoped read/export boundaries and experimental single-user limits remain.

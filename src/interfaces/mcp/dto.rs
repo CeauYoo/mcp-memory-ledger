@@ -10,6 +10,7 @@ use crate::{
         get_memory::{GetMemoryInput, MemoryRecordReference},
         get_reflection_history::{DEFAULT_REFLECTION_HISTORY_LIMIT, GetReflectionHistoryInput},
         get_self_model_history::{DEFAULT_SELF_MODEL_HISTORY_LIMIT, GetSelfModelHistoryInput},
+        get_self_model_versions::{DEFAULT_SELF_MODEL_VERSION_LIMIT, GetSelfModelVersionsInput},
         ingest_interaction::IngestInput,
         run_reflection::ReflectionInput,
         search_memory::{DEFAULT_SEARCH_MEMORY_LIMIT, MemoryRecordType, SearchMemoryInput},
@@ -657,6 +658,36 @@ impl TryFrom<GetSelfModelHistoryParams> for GetSelfModelHistoryInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct GetSelfModelVersionsParams {
+    pub namespace: String,
+    /// Explicit opt-in to global counters, which reveal cross-namespace activity.
+    #[serde(default)]
+    pub allow_global_version_metadata: bool,
+    #[serde(default)]
+    #[schemars(range(min = 1, max = 100))]
+    pub limit: Option<usize>,
+    /// Exclusive cursor; records are returned newest first.
+    #[serde(default)]
+    pub before_version: Option<u64>,
+}
+
+impl TryFrom<GetSelfModelVersionsParams> for GetSelfModelVersionsInput {
+    type Error = AppError;
+
+    fn try_from(value: GetSelfModelVersionsParams) -> Result<Self, Self::Error> {
+        let input = Self {
+            namespace: Namespace::parse(value.namespace).map_err(AppError::from)?,
+            allow_global_version_metadata: value.allow_global_version_metadata,
+            limit: value.limit.unwrap_or(DEFAULT_SELF_MODEL_VERSION_LIMIT),
+            before_version: value.before_version,
+        };
+        input.validate()?;
+        Ok(input)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct SupersedeMemoryParams {
     #[serde(default)]
     pub request_id: Option<String>,
@@ -861,6 +892,12 @@ fn parse_optional_timestamp(
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct RunReflectionParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expected_self_model_version: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub self_model_rollback: Option<crate::domain::self_model_version::SelfModelRollbackRequest>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub caller_budget: Option<crate::domain::caller_budget::CallerBudget>,
     pub reflection: ReflectionDto,
     #[serde(default)]
@@ -883,6 +920,20 @@ impl TryFrom<RunReflectionParams> for ReflectionInput {
     type Error = AppError;
 
     fn try_from(value: RunReflectionParams) -> Result<Self, Self::Error> {
+        // Hash the complete typed request before moving fields. New absent fields are
+        // omitted so legacy typed payloads preserve their previous serialized bytes.
+        let write_receipt = value
+            .request_id
+            .as_ref()
+            .map(|key| {
+                crate::ports::WriteReceiptRequest::new(
+                    "run_reflection",
+                    value.origin_namespace.as_deref().unwrap_or("self"),
+                    key,
+                    &value,
+                )
+            })
+            .transpose()?;
         let origin = value
             .origin_namespace
             .map(Namespace::parse)
@@ -905,8 +956,9 @@ impl TryFrom<RunReflectionParams> for ReflectionInput {
                 || value.replacement_claim.is_some()
                 || value.identity_update.is_some()
                 || value.commitment_updates.is_some()
+                || value.self_model_rollback.is_some()
             {
-                return Err(AppError::InvalidParams("targetless reflections require origin_namespace and may only record an evidence-backed reflection; replacement, identity and commitment updates are not allowed".into()));
+                return Err(AppError::InvalidParams("targetless reflections require origin_namespace and may only record an evidence-backed reflection; replacement, identity, commitment updates and rollback are not allowed".into()));
             }
             ReflectionInput::record_only(
                 value.reflection.into(),
@@ -915,6 +967,15 @@ impl TryFrom<RunReflectionParams> for ReflectionInput {
         };
         if let Some(scope) = origin {
             input = input.with_origin_scope(scope);
+        }
+        if let Some(expected_version) = value.expected_self_model_version {
+            input = input.with_expected_self_model_version(expected_version);
+        }
+        if let Some(rollback) = value.self_model_rollback {
+            input = input.with_self_model_rollback(rollback);
+        }
+        if let Some(receipt) = write_receipt {
+            input = input.with_write_receipt(receipt);
         }
 
         if let Some(replacement_evidence_query) = value.replacement_evidence_query {

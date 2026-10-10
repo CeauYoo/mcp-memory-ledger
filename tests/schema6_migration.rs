@@ -44,7 +44,10 @@ async fn v5_migration_preserves_raw_unknown_and_quarantines_ambiguous_history() 
     assert_eq!(old.schema_version, Some(5));
     assert_eq!(fs::read(&path).unwrap(), old_bytes);
     let migrated = migrate_database(&db).await.unwrap();
-    assert_eq!(migrated.schema_version, Some(6));
+    assert_eq!(
+        migrated.schema_version,
+        Some(agent_llm_mm::adapters::sqlite::CURRENT_DATABASE_SCHEMA_VERSION)
+    );
     assert!(migrated.preserved_row_counts);
     assert_eq!(migrated.foreign_key_violations, 0);
     let mut c = SqliteConnection::connect(&db).await.unwrap();
@@ -383,7 +386,7 @@ mod v5_retry_compatibility {
         // Remove actual v6 columns/relations/triggers; merely changing user_version
         // would not exercise the real v5 table rebuild and compatibility boundary.
         legacy_schema::remove_v6_objects(&mut connection).await;
-        sqlx::raw_sql("DELETE FROM schema_migrations WHERE version=6; PRAGMA user_version=5;")
+        sqlx::raw_sql("DELETE FROM schema_migrations WHERE version>=6; PRAGMA user_version=5;")
             .execute(&mut connection)
             .await
             .unwrap();

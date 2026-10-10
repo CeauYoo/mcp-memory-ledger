@@ -471,7 +471,7 @@ async fn doctor_memory_layer_exposes_read_only_classification_diagnostics() {
         .find(|layer| layer.name == "memory")
         .expect("memory layer should be present");
 
-    // memory 层保持只读且 partial，不得开放任何写入。
+    // This read-only memory-layer report grants no automatic write authority.
     assert!(!memory_layer.writes_allowed);
     assert_eq!(memory_layer.status, "partial");
 
@@ -500,7 +500,16 @@ async fn doctor_memory_layer_exposes_read_only_classification_diagnostics() {
         .find(|diagnostic| diagnostic.key == "self_model_durable_writes")
         .expect("self_model durable write diagnostic should be present");
     assert_eq!(self_model_diagnostic.status, "blocked");
-    assert!(self_model_diagnostic.detail.contains("run_reflection"));
+    for expected_scope in [
+        "automatic memory-layer self-model writes remain blocked",
+        "schema-v7 governed global append-only versions and explicit compensation are implemented",
+        "run_reflection as the only durable identity / commitment write path",
+    ] {
+        assert!(
+            self_model_diagnostic.detail.contains(expected_scope),
+            "missing self-model write diagnostic scope: {expected_scope}"
+        );
+    }
 }
 
 #[tokio::test]
@@ -769,6 +778,82 @@ async fn doctor_exposes_read_only_system_layer_report_with_architecture_blockers
         .map(|phase| phase.phase)
         .collect();
     assert_eq!(phase_numbers, [0, 1, 2, 3, 4, 5, 6, 7, 8]);
+    let memory_phase = system_layer_report
+        .phase_coverage
+        .iter()
+        .find(|phase| phase.phase == 4)
+        .expect("memory layering phase");
+    assert_eq!(memory_phase.status, "partial");
+    assert!(memory_phase.implementation_mode.contains(
+        "schema-v7 governed global append-only versions and explicit compensation through run_reflection only"
+    ));
+    for expected_anchor in [
+        "self_model_versions",
+        "get_self_model_versions",
+        "run_reflection",
+    ] {
+        assert!(
+            memory_phase
+                .current_anchor
+                .iter()
+                .any(|anchor| anchor == expected_anchor),
+            "missing implemented self-model anchor: {expected_anchor}"
+        );
+    }
+    let memory_blockers = memory_phase.blocked_items.join("\n");
+    for expected_boundary in [
+        "procedural execution is not implemented",
+        "automatic memory-layer writes and autonomous self-revision remain blocked",
+        "broader durable memory layers still require separate",
+    ] {
+        assert!(
+            memory_blockers.contains(expected_boundary),
+            "missing memory-layer boundary: {expected_boundary}"
+        );
+    }
+    assert!(!memory_blockers.contains("durable self-model writes require"));
+
+    let release_phase = system_layer_report
+        .phase_coverage
+        .iter()
+        .find(|phase| phase.phase == 8)
+        .expect("release engineering phase");
+    assert_eq!(release_phase.status, "partial");
+    assert!(
+        release_phase.implementation_mode.contains(
+            "local exact-source portable archive build and unpack verification simulation"
+        )
+    );
+    for expected_anchor in [
+        "scripts/portable-package.py build",
+        "scripts/portable-package.py verify",
+        "product_readiness_check",
+    ] {
+        assert!(
+            release_phase
+                .current_anchor
+                .iter()
+                .any(|anchor| anchor == expected_anchor),
+            "missing local packaging anchor: {expected_anchor}"
+        );
+    }
+    let release_blockers = release_phase.blocked_items.join("\n");
+    for expected_boundary in [
+        "installer is not implemented",
+        "service manager and auto-updater are not implemented",
+        "production package readiness is not established",
+        "real fresh-machine and real-user client evidence remain external gates",
+        "human release decision and Local Alpha approval remain external gates",
+        "full user-client compatibility matrix evidence is incomplete; native CI covers only configured hosts",
+        "Beta/GA claims are blocked",
+    ] {
+        assert!(
+            release_blockers.contains(expected_boundary),
+            "missing release phase boundary: {expected_boundary}"
+        );
+    }
+    assert!(!release_blockers.contains("binary package and service manager are not implemented"));
+
     let phase_coverage =
         serde_json::to_string(&system_layer_report.phase_coverage).expect("phase coverage json");
     for expected_boundary in [
@@ -831,7 +916,7 @@ async fn doctor_exposes_read_only_system_layer_report_with_architecture_blockers
 }
 
 #[test]
-fn memory_layer_projection_is_read_only_and_keeps_self_model_durable_writes_blocked() {
+fn memory_layer_projection_is_read_only_and_keeps_automatic_self_model_writes_blocked() {
     let projection = build_memory_layer_projection(MemoryLayerProjectionInput {
         snapshot: SelfSnapshot {
             identity: vec!["identity:self=technical-demo".to_string()],
@@ -850,6 +935,7 @@ fn memory_layer_projection_is_read_only_and_keeps_self_model_durable_writes_bloc
     assert!(projection.read_only);
     assert!(!projection.writes_performed);
     assert_eq!(projection.durable_self_model_write_path, "run_reflection");
+    assert!(projection.layers.iter().all(|layer| !layer.writes_allowed));
     assert_eq!(
         projection.layer_status("working").as_deref(),
         Some("partial")

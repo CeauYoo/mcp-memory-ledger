@@ -207,6 +207,79 @@ struct SqliteReflectionTransaction<'a> {
 
 #[async_trait]
 impl ReflectionTransaction for SqliteReflectionTransaction<'_> {
+    async fn load_current_self_model_version(
+        &mut self,
+    ) -> Result<crate::domain::self_model_version::SelfModelVersion, AppError> {
+        self.ensure_writable()?;
+        let result = async {
+            let transaction = self
+                .transaction
+                .as_mut()
+                .ok_or_else(|| AppError::Message("transaction already closed".into()))?;
+            crate::adapters::sqlite::self_model_versions::load_current(transaction.as_mut()).await
+        }
+        .await;
+        self.note_result(result)
+    }
+    async fn load_self_model_version(
+        &mut self,
+        version: u64,
+    ) -> Result<Option<crate::domain::self_model_version::SelfModelVersion>, AppError> {
+        self.ensure_writable()?;
+        let result = async {
+            let transaction = self
+                .transaction
+                .as_mut()
+                .ok_or_else(|| AppError::Message("transaction already closed".into()))?;
+            crate::adapters::sqlite::self_model_versions::load_version(
+                transaction.as_mut(),
+                version,
+            )
+            .await
+        }
+        .await;
+        self.note_result(result)
+    }
+    async fn load_self_model_reflection(
+        &mut self,
+        reflection_id: &str,
+    ) -> Result<Option<StoredReflection>, AppError> {
+        self.ensure_writable()?;
+        let result = async {
+            let transaction = self
+                .transaction
+                .as_mut()
+                .ok_or_else(|| AppError::Message("transaction already closed".into()))?;
+            crate::adapters::sqlite::self_model_versions::load_reflection(
+                transaction.as_mut(),
+                reflection_id,
+            )
+            .await
+        }
+        .await;
+        self.note_result(result)
+    }
+    async fn append_self_model_version(
+        &mut self,
+        expected_version: u64,
+        version: crate::domain::self_model_version::SelfModelVersion,
+    ) -> Result<(), AppError> {
+        self.ensure_writable()?;
+        let result = async {
+            let transaction = self
+                .transaction
+                .as_mut()
+                .ok_or_else(|| AppError::Message("transaction already closed".into()))?;
+            crate::adapters::sqlite::self_model_versions::append(
+                transaction.as_mut(),
+                expected_version,
+                &version,
+            )
+            .await
+        }
+        .await;
+        self.note_result(result)
+    }
     async fn load_feedback_candidate(
         &mut self,
         namespace: &Namespace,

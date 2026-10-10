@@ -19,6 +19,23 @@ Historical consolidation baseline (current runtime additions follow below):
 - Local Product Alpha is still in progress until every release gate has fresh,
   reviewable evidence and a human release decision
 
+## 2026-10-10 bounded schema7 self-model continuation
+
+The current local code adds append-only global identity/commitment versions,
+truthful initialization/migration baselines, verified source-scoped ordered diffs,
+expected-version guards and explicit component-selective compensating rollback.
+See [contract](../self-model-versions.md). Existing scoped history/export never gain
+aggregate snapshots. Rollback still requires an existing Claim anchor, explicit
+matching origin, supplied durable evidence, confirmation and request key. Global
+writes/reads fail closed on projection drift; this is neither tenant auth nor
+broader autonomy. Migration, atomicity and privacy tests apply to this source;
+independent review and exact-commit CI remain separately verified gates. Older
+missing-version descriptions below are historical, not a current absence claim.
+
+| Stage | Workstream | Status | Current evidence and boundary |
+| --- | --- | --- | --- |
+| `M3` | M3.1.1 Bounded Global Self-Model Versions | `implemented` | Local 673 all-feature Rust tests, source-safe reads/rollback, migration and nonbaseline backup/restore; [stage report](../plans/2026-10-10-schema7-results.md). This bounded code completion does not approve a release, tenant auth or autonomy. |
+
 ## 2026-10-10 packaging and wrapper continuation
 
 A source-bound native portable archive builder and strict unpack verifier now
@@ -28,6 +45,12 @@ harness in Windows CI. See [portable packages](../portable-packages.md) and the
 [current status](../project-status.md). Each new commit still needs its own green
 checks. Older missing-builder / unexecuted-wrapper descriptions below record the
 historical baseline; they do not override these new implementation contracts.
+
+Exact head `0ca8bccc64cadb3f1eae9d1a74bad602a1c60bc9` passed
+[three-platform CI](https://github.com/yooyui/mcp-memory-ledger/actions/runs/38035347484),
+including native archive build/unpack checks and the Windows PowerShell 7.6.6
+wrapper harness. This supersedes the historical unexecuted-wrapper gap for those
+configured hosts only; later heads still need their own exact CI.
 
 Local and CI unpack tests remain controlled installation simulations. Real user
 client acceptance, fresh-machine timing, live provider authorization/evidence,

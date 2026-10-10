@@ -8,7 +8,7 @@
   - 状态：`active / M0 complete / M1 active / M1.0.1, M1.0.2, M1.0.3, M1.1.1, M1.1.2, M1.1.3, M1.1.4, M1.1.5, M1.1.6, M1.2.1, M1.2.2, M1.2.3, M1.2.4, M1.2.5, M1.2.6 and M1.2.7 complete`
   - 目标：把现有 technical MVP 收束为可信、可检索、可审计、可恢复的本地 MCP Memory Ledger
   - 当前里程碑：`M1 Trustworthy Recall`
-  - 当前执行状态：schema6、in-crate 模块拆分、上下文/诊断与 caller budget 的有限实现已完成；M1.3.0 与 M2.0.1 已完成。剩余真实用户客户端/fresh-machine/正式发布与真实模型效果门见[最终核对](2026-10-09-original-plan-final-reconciliation.md)，不是重复实现队列
+  - 当前执行状态：schema7 有界全局 self-model 版本/diff/显式补偿已完成本地验证，见[阶段结果](2026-10-10-schema7-results.md)；schema6、in-crate 模块拆分、上下文/诊断与 caller budget 的有限实现已完成；M1.3.0 与 M2.0.1 已完成。剩余真实用户客户端/fresh-machine/正式发布与真实模型效果门见[最终核对](2026-10-09-original-plan-final-reconciliation.md)，不是重复实现队列
 
 ## 权威层级
 

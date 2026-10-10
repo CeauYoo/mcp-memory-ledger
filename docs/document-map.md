@@ -13,13 +13,14 @@
 
 ## 我想知道每个工具的合同
 
-从[31 工具索引](tool-reference.md)开始，再按需读专页：
+从[32 工具索引](tool-reference.md)开始，再按需读专页：
 
 | 主题 | 权威合同 |
 | --- | --- |
 | 反馈纠错、FTS/短中文、丰富 Episode/经验版本 | [Feedback & experience](memory-feedback-experience.md) |
 | 完整 JSON byte cap、来源 Episode、诊断的缺失/省略 | [Task context](context-diagnostics.md) |
 | caller-owned 检索/反思/重试预算 | [Operation budget](caller-operation-budget.md) |
+| schema7 全局 self-model 版本、diff、显式补偿 | [版本合同](self-model-versions.md) |
 | schema6 时间、未知历史、旧 receipt/fingerprint | [Temporal metadata](temporal-metadata.md) |
 | Reflection 来源与影响范围、安全 targetless history | [Scope/history](reflection-scope-history.md) |
 | 只读有界交换与依赖完整性 | [Scoped export](scoped-export.md) |
@@ -54,3 +55,5 @@
 - [计划索引](plans/README.md)与[历史归档](archive.md)保存出处；历史 checkbox 没有当前执行权。
 
 冲突时以实际代码、测试和数据库 readback 为准，并修正文档。README 是入口，状态页是当前事实，路线图是顺序，active plan 是执行队列，reality gates 是完成约束。
+
+当前 schema7 有界版本交付与源代码绑定验证：[阶段结果](plans/2026-10-10-schema7-results.md)。历史 schema6 数值保持原样，不能自动认证当前源码。

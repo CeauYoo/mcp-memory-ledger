@@ -15,7 +15,7 @@ use crate::{
         build_self_snapshot,
         daemon::DaemonHandle,
         decide_with_snapshot, get_evidence_relation, get_memory, get_reflection_history,
-        get_self_model_history, ingest_interaction,
+        get_self_model_history, get_self_model_versions, ingest_interaction,
         ingest_interaction::IngestInput,
         run_reflection,
         run_reflection::ReflectionInput,
@@ -32,8 +32,8 @@ use crate::{
 
 use super::dto::{
     BuildSelfSnapshotParams, DecideWithSnapshotParams, GetEvidenceRelationParams, GetMemoryParams,
-    GetReflectionHistoryParams, GetSelfModelHistoryParams, IngestInteractionParams,
-    RunReflectionParams, SearchMemoryParams, SupersedeMemoryParams,
+    GetReflectionHistoryParams, GetSelfModelHistoryParams, GetSelfModelVersionsParams,
+    IngestInteractionParams, RunReflectionParams, SearchMemoryParams, SupersedeMemoryParams,
 };
 
 pub const AUTO_REFLECTION_RUNTIME_HOOKS: [&str; 4] = [
@@ -539,7 +539,7 @@ impl Server {
     }
 
     #[tool(
-        description = "Read scoped identity or commitment revision audits persisted on reflections inside one explicit local memory namespace. Claim-attributed and safely source/effect-attributed targetless audits are visible; unknown or incompatible record-only scope stays hidden. This first slice does not version identity_claims or commitments tables and does not provide rollback.",
+        description = "Read scoped identity or commitment revision audits persisted on reflections inside one explicit local memory namespace. Claim-attributed and safely source/effect-attributed targetless audits are visible; unknown or incompatible record-only scope stays hidden. This compatibility history does not expose aggregate snapshots; get_self_model_versions is the separate opt-in version reader.",
         input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<GetSelfModelHistoryParams>>()
     )]
     async fn get_self_model_history(
@@ -596,6 +596,63 @@ impl Server {
                     Some(correlation_id),
                 )
                 .with_response_summary(response_summary),
+            )
+            .await;
+        structured(result)
+    }
+
+    #[tool(
+        description = "Read bounded experimental self-model versions, newest first, within one explicit namespace. Requires allow_global_version_metadata:true because global counters reveal cross-namespace activity and do not provide authorization. Returns only written patches whose source reflection has verified single-scope durable evidence. Inherited aggregate state is omitted; previous values are redacted unless their own source has the same verified scope. Baselines and unknown/mixed provenance are hidden. Uses one consistent read transaction and fails closed on projection drift.",
+        input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<GetSelfModelVersionsParams>>()
+    )]
+    async fn get_self_model_versions(
+        &self,
+        raw_params: JsonObject,
+    ) -> Result<CallToolResult, McpError> {
+        let correlation_id = generated_mcp_correlation_id();
+        let params = map_tool_error(
+            &self.runtime,
+            "get_self_model_versions",
+            None,
+            Some(correlation_id.clone()),
+            decode_tool_params::<GetSelfModelVersionsParams>(raw_params),
+        )
+        .await?;
+        let namespace = Some(params.namespace.clone());
+        let input = map_tool_error(
+            &self.runtime,
+            "get_self_model_versions",
+            namespace.clone(),
+            Some(correlation_id.clone()),
+            get_self_model_versions::GetSelfModelVersionsInput::try_from(params),
+        )
+        .await?;
+        let result = map_tool_error(
+            &self.runtime,
+            "get_self_model_versions",
+            namespace.clone(),
+            Some(correlation_id.clone()),
+            get_self_model_versions::execute(&self.runtime, input).await,
+        )
+        .await?;
+        let summary = serde_json::json!({
+            "result_count": result.records.len(),
+            "has_more": result.has_more,
+        });
+        self.runtime.dashboard.record_tool_ok(
+            "get_self_model_versions",
+            namespace.clone(),
+            Some(correlation_id.clone()),
+            format!(
+                "self-model versions returned {} record(s)",
+                result.records.len()
+            ),
+            &summary,
+        );
+        self.runtime
+            .record_tool_operation(
+                ToolOperationRecord::ok("get_self_model_versions", namespace, Some(correlation_id))
+                    .with_response_summary(summary),
             )
             .await;
         structured(result)
@@ -952,7 +1009,7 @@ impl Server {
     }
 
     #[tool(
-        description = "Record a governed Claim correction, or evidence-backed targetless record-only history with explicit origin_namespace. Targetless MCP calls cannot change identity or commitments; scope metadata grants no authority. Scoped Claim correction also uses supersede_memory. Optional caller_budget limits caller-reported attempts and can explicitly stop unchanged or insufficient evidence before writes; it grants no authority.",
+        description = "Record a governed Claim correction, or evidence-backed targetless record-only history with explicit origin_namespace. Targetless MCP calls cannot change identity or commitments; scope metadata grants no authority. Scoped Claim correction also uses supersede_memory. Optional global patches append self-model versions; expected_self_model_version guards the global head. Explicit component rollback additionally requires confirm:true, origin_namespace, an existing Claim target, evidence, and request_id, and appends a compensating version. Optional caller_budget limits caller-reported attempts and can explicitly stop unchanged or insufficient evidence before writes; it grants no authority.",
         input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<RunReflectionParams>>()
     )]
     async fn run_reflection(&self, raw_params: JsonObject) -> Result<CallToolResult, McpError> {
