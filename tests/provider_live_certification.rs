@@ -494,7 +494,7 @@ fn live_evidence_serialization_redacts_provider_secrets_and_payloads() {
         }),
     ]);
     let secret_base_url = format!(
-        "http://url-user:url-password@{}:{}/api/sk-path-secret/v1?token=query-secret",
+        "http://{}:{}/api/sk-path-secret/v1",
         server.host(),
         server.port()
     );
@@ -944,4 +944,64 @@ fn read_request_path(stream: &mut TcpStream) -> String {
         .and_then(|line| line.split_whitespace().nth(1))
         .unwrap_or("<missing-path>")
         .to_string()
+}
+
+#[test]
+fn native_providers_support_redacted_stub_evidence_but_reject_live_certification() {
+    use agent_llm_mm::support::config::NativeModelConfig;
+    for kind in [
+        ModelProviderKind::OpenAiResponses,
+        ModelProviderKind::Anthropic,
+    ] {
+        let directory = tempdir().expect("temp dir");
+        let native = NativeModelConfig {
+            base_url: "https://native.example.test/v1?token=secret-query".into(),
+            api_key: "native-private-key".into(),
+            model: "native-private-model".into(),
+            timeout_ms: 1000,
+            max_tokens: 2048,
+            temperature: None,
+        };
+        let config = AppConfig {
+            model_provider: kind,
+            model_config: match kind {
+                ModelProviderKind::OpenAiResponses => ModelConfig::OpenAiResponses(native),
+                ModelProviderKind::Anthropic => ModelConfig::Anthropic(native),
+                _ => unreachable!(),
+            },
+            ..AppConfig::default()
+        };
+        let report = run_provider_live_certification(ProviderLiveCertificationOptions {
+            config: config.clone(),
+            evidence_root: directory.path().into(),
+            mode: ProviderLiveCertificationMode::StubEvidence,
+        })
+        .expect("native stub evidence");
+        for evidence in report.generated_evidence {
+            let text = fs::read_to_string(evidence.path).expect("read evidence");
+            for secret in ["native-private-key", "native-private-model", "secret-query"] {
+                assert!(!text.contains(secret));
+            }
+        }
+        let summary = summarize_provider_certification(ProviderCertificationOptions {
+            config: config.clone(),
+            evidence_root: directory.path().into(),
+            output_json_path: None,
+            output_markdown_path: None,
+        })
+        .expect("native summary");
+        assert!(!summary.live_certified);
+        assert_eq!(summary.live_certification_status, "blocked");
+        let error = run_provider_live_certification(ProviderLiveCertificationOptions {
+            config,
+            evidence_root: directory.path().into(),
+            mode: ProviderLiveCertificationMode::Live,
+        })
+        .expect_err("native live runner must not silently route to chat completions");
+        assert!(
+            error
+                .to_string()
+                .contains("native provider live certification is not implemented")
+        );
+    }
 }

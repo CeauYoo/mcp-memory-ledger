@@ -46,3 +46,30 @@ required = false
 enabled = false
 poll_interval_ms = 60000
 max_concurrent_tasks = 1
+
+# Native protocol alternatives. Replace [model] above and select ONE section.
+# Both adapters are offline-tested MVP support, not live-certified providers.
+# provider-live-certification-run currently supports chat-completions only.
+# base_url is an API root; /responses or /messages is appended by the adapter.
+# max_tokens defaults to 2048 and must be positive. timeout_ms defaults to 30000
+# and must be positive. Omit temperature for provider/model defaults.
+#
+# [model]
+# provider = "openai-responses"
+# [model.openai_responses]
+# base_url = "https://api.openai.com/v1"
+# api_key_env = "OPENAI_API_KEY"
+# model = "replace-with-supported-model"
+# max_tokens = 2048
+# timeout_ms = 30000
+# temperature = 0.5 # optional, 0..=2; omit for models that do not support it
+#
+# [model]
+# provider = "anthropic"
+# [model.anthropic]
+# base_url = "https://api.anthropic.com/v1"
+# api_key_env = "ANTHROPIC_API_KEY"
+# model = "replace-with-supported-model"
+# max_tokens = 2048
+# timeout_ms = 30000
+# temperature = 0.5 # optional, 0..=1

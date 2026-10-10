@@ -3,8 +3,8 @@
 ## 0. Scope
 
 - This repository remains a local Rust MCP `stdio` technical demo / MVP, not a production provider gateway.
-- This checklist defines the readiness boundary before adding a new provider. It does not add a provider implementation by itself.
-- A new provider should match the minimum observable behavior already expected from `mock`, `openai-compatible`, and `openrouter`: deterministic config loading, bounded network behavior, explicit parse errors, redacted diagnostics, and preserved MCP `stdio` behavior.
+- This checklist records the implemented protocol boundary and readiness requirements for future providers; documentation alone does not establish live readiness.
+- A new provider should match the minimum observable behavior already expected from `mock`, `openai-compatible`, `openrouter`, `openai-responses`, and `anthropic`: deterministic config loading, bounded network behavior, explicit parse errors, redacted diagnostics, and preserved MCP `stdio` behavior.
 - Items are marked `existing`, `partial`, or `gap` against the current test suite. For a new provider, every applicable item must either be `existing` or gain a provider-specific regression in the same change. `partial` and `gap` items are blockers for broadening provider support until the missing regressions are added or an explicit documented exception is accepted for that provider.
 
 ## 1. Provider Checklist
@@ -19,6 +19,8 @@ It is not a provider router and does not make future providers usable.
 | `mock` | supported | yes | built-in deterministic mock | none |
 | `openai-compatible` | supported | yes | OpenAI-compatible chat completions | none |
 | `openrouter` | supported | yes | OpenRouter chat completions via OpenAI-compatible transport | none |
+| `openai-responses` | supported | yes | native OpenAI Responses, text/non-streaming | live evidence remains separate |
+| `anthropic` | supported | yes | native Anthropic Messages, text/non-streaming | live evidence remains separate |
 | `azure-openai` | planned-only | no | not implemented | config parser, doctor diagnostics, model adapter, error handling, redaction, MCP stdio tests |
 | `local` | planned-only | no | not implemented | config parser, doctor diagnostics, model adapter, error handling, redaction, MCP stdio tests |
 
@@ -36,10 +38,68 @@ provider-specific MCP `stdio` regressions are added in the same change.
 | Timeout handling | Provider network calls must use bounded timeout configuration and surface timeout failures as provider errors, not hangs or silent fallback. | existing | `tests/openai_compatible_model.rs::openai_compatible_model_surfaces_timeout_as_error` confirms that a 200ms timeout against a non-responding server surfaces as a provider error. |
 | Non-success HTTP status behavior | Non-2xx provider responses must return observable provider errors. | existing | `tests/openai_compatible_model.rs::openai_compatible_model_surfaces_non_success_status`. |
 | Malformed JSON behavior | Malformed or schema-incompatible model responses must fail without panic and without fabricating a valid decision or self-revision proposal. | existing | `tests/openai_compatible_model.rs::openai_compatible_model_fails_gracefully_on_malformed_json_response` confirms that completely invalid JSON is surfaced as a provider error without panic. |
-| Decision action parsing | The first assistant message content is the action; blank content is rejected. | existing | `openai_compatible_model_parses_first_assistant_message_into_action` and `openai_compatible_model_rejects_empty_action`. |
+| Decision action parsing | Chat Completions uses the first assistant message; native protocols extract completed text before the shared action parser. Blank text is rejected. | existing | `openai_compatible_model_parses_first_assistant_message_into_action` and `openai_compatible_model_rejects_empty_action`. |
 | Self-revision proposal parsing | `should_reflect`, `rationale`, `machine_patch`, and defaulted patch fields must parse consistently, including fenced JSON. | existing | `openai_compatible_model_parses_self_revision_proposal_from_assistant_message`, `openai_compatible_model_defaults_missing_machine_patch_in_self_revision_proposal`, and `openai_compatible_model_accepts_fenced_json_self_revision_proposal`. |
 | Evidence policy parsing | `proposed_evidence_event_ids`, `proposed_evidence_query`, and `confidence` must parse into the structured self-revision proposal contract. | existing | `openai_compatible_model_parses_self_revision_evidence_policy`. |
 | MCP `stdio` provider path | Config-selected provider behavior must flow through the real MCP `stdio` path without corrupting protocol output. | existing | `tests/mcp_stdio.rs::decide_with_snapshot_over_stdio_uses_openai_compatible_provider_from_config_file`, `tests/mcp_stdio.rs::decide_with_snapshot_over_stdio_uses_openrouter_provider_from_config_file`, and `tests/mcp_stdio.rs::ingest_interaction_auto_reflection_uses_openrouter_provider_from_config_file`. |
+
+## Native protocol contract
+
+Provider selection is explicit; a model name does not select or switch the wire
+protocol. Existing Chat Completions/OpenRouter configuration remains compatible.
+OpenAI recommends Responses for new projects and continues to support Chat
+Completions; this change does not deprecate the latter. See the official
+[OpenAI migration guide](https://developers.openai.com/api/docs/guides/migrate-to-responses)
+and [Anthropic Messages reference](https://platform.claude.com/docs/en/api/messages/create).
+
+| Provider | TOML section | Configured base URL + appended endpoint | Authentication | Request shape |
+| --- | --- | --- | --- | --- |
+| `openai-compatible` | `[model.openai_compatible]` | configured base + `/chat/completions` | Bearer | existing chat messages |
+| `openrouter` | `[model.openrouter]` | configured base + `/chat/completions` | Bearer | existing chat messages |
+| `openai-responses` | `[model.openai_responses]` | `https://api.openai.com/v1` + `/responses` | Bearer | `instructions`, `input`, `store: false`, `max_output_tokens` |
+| `anthropic` | `[model.anthropic]` | `https://api.anthropic.com/v1` + `/messages` | `x-api-key`, `anthropic-version: 2023-06-01` | `system`, `messages`, `max_tokens` |
+
+Set `base_url` explicitly (the official roots above are examples, not implicit defaults).
+Native sections accept `base_url`, `api_key` or `api_key_env`, `model`,
+`timeout_ms`, `max_tokens` (default `2048`), and optional `temperature`.
+Temperature is omitted by default rather than forcing a value unsupported by
+some models. Explicit values must be finite, 0–2 for Responses and 0–1 for Anthropic,
+and still need to be supported by your selected model. `max_tokens` maps to Responses `max_output_tokens` and Anthropic
+`max_tokens`; it bounds model output, not the ledger's context-byte budget.
+Choose a model available to your own account that supports the selected text
+protocol. Base URLs are API roots, not full endpoint URLs. All HTTP adapters now reject
+URL userinfo, query strings and fragments; supply credentials through the API-key
+field/environment variable. Redirecting gateways must be configured at their final API root. Configure secrets in
+local environment variables or an ignored private TOML; never commit a key.
+
+Shared pure prompt construction and decision/self-revision parsing are separate
+from each protocol's request/response mapping. A shared HTTP side-effect layer
+owns authenticated POST, one configured request timeout, disabled redirects,
+status checks, and safe error classification. There are no automatic retries,
+provider failover, or silent mock fallback. API keys are redacted in Debug; malformed TOML diagnostics report location without source excerpts;
+errors must not include raw response bodies, credentials, or secret-bearing URLs.
+
+Native extraction accepts completed assistant text, including multiple text
+blocks in order, and then applies the same domain parser. Provider reasoning /
+thinking blocks are not included in action or proposal text. Refusals, incomplete
+or truncated generations, unexpected native statuses, tool output, empty text,
+and malformed envelopes fail closed rather than being committed as decisions or
+self-revisions. Reflection still goes through the existing evidence/governance
+checks and `run_reflection`; an adapter cannot create a second write path.
+
+Scope is non-streaming text only: no tools/tool execution, vision, hosted
+conversation state, provider-side memory, or native structured-output guarantee.
+Responses explicitly sends `store: false`; that request flag is not a general
+promise about the provider's data-retention policy. Local HTTP fixtures verify
+wire contracts and both decision/reflection paths without paid API calls. They
+do not establish endpoint reachability, model quality, live certification, or a
+release gate. The existing live certification runner rejects native providers;
+preflight keeps `live_certified = false` for both, including when evidence files
+are supplied. Extending that runner requires separate work and authorization.
+
+The detailed legacy test-name lists below remain a Chat Completions compatibility
+baseline. Native protocol and integration tests supplement them, rather than
+replacing them; see the [testing guide](testing-guide-2026-03-24.md).
 
 ## 2. Structured Decision Protocol
 
@@ -130,6 +190,8 @@ Run these before treating a new provider as ready for the MVP track:
 ```zsh
 cargo test --test provider_config -v
 cargo test --test openai_compatible_model -v
+cargo test --test native_model_protocols -v
+cargo test --test mcp_stdio -v
 cargo test --test mcp_stdio decide_with_snapshot_over_stdio_uses_openai_compatible_provider_from_config_file -v
 cargo test --test mcp_stdio decide_with_snapshot_over_stdio_uses_openrouter_provider_from_config_file -v
 cargo test --test mcp_stdio ingest_interaction_auto_reflection_uses_openrouter_provider_from_config_file -v

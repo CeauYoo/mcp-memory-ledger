@@ -148,6 +148,8 @@ fn provider_label(provider: ModelProviderKind) -> &'static str {
         ModelProviderKind::Mock => "mock",
         ModelProviderKind::OpenAiCompatible => "openai-compatible",
         ModelProviderKind::OpenRouter => "openrouter",
+        ModelProviderKind::OpenAiResponses => "openai-responses",
+        ModelProviderKind::Anthropic => "anthropic",
     }
 }
 

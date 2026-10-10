@@ -2,11 +2,30 @@
 
 2026-10-09 文档导航：首次使用见[快速开始](quickstart.md)，当前操作见[数据库手册](database-operations.md)，可执行协议示例见[完整工作流](runnable-memory-workflow.md)。实现基线三平台验证与 Windows native / wrapper 区别见[当前状态](project-status.md)；下方分阶段追加记录不代表新的发布批准。
 
+## 2026-10-10 原生 Responses / Messages 验证
+
+原生 `openai-responses` 和 `anthropic` 使用本地 HTTP fixture 验证，不要求真实账号，不访问付费 API。应同时保留原有 Chat Completions / OpenRouter 回归。
+
+```sh
+cargo test --test provider_config --test openai_compatible_model --test native_model_protocols --test mcp_stdio
+cargo test --all-features
+cargo clippy --all-targets --all-features -- -D warnings
+cargo fmt --all -- --check
+./scripts/status-sync-check.sh
+git diff --check
+```
+
+全套测试包含原生适配器 request/response 单元与集成覆盖；检查原生 endpoint、headers、`store: false`、token budget、默认省略 temperature，以及 decision/self-revision 共享解析。错误覆盖应包含 timeout、非成功 status、畸形 JSON、空文本、拒绝、截断、不支持的工具响应、重定向及不泄漏 key/URL/body。实际 MCP stdio 测试验证 config-selected provider 及自动反思路径，不只测试独立 JSON helper。
+
+本节给出验证入口，不预先声明新总数或精确提交 CI 已通过。离线 fixture 与 doctor 通过都不是新增原生协议的 live 认证；现有 live runner 拒绝 native provider，preflight 对两者保持 `live_certified = false`；真实 endpoint、输出质量、同模型收益和费用实验仍需单独授权及证据。
+
 ## 2026-10-10 portable package 与 wrapper 验证
 
 - `python scripts/test-windows-wrapper.py`：必须找到真实 PowerShell 与 Cargo，不允许缺失工具时跳过成功。CI 在 Windows runner 上执行；其他平台运行不代替 Windows 证据。
 - portable build 与无 Rust 解包测试、负向 fixture 命令见[本地包合同](portable-packages.md)。构建身份绑定精确 Git commit/tree，测试修改后的工作区须先形成可核对的提交快照。
 - CI 产物保留在 runner 本地；本阶段不上传包、不创建 release/tag、不替用户执行客户端验收。
+
+新增协议也通过 `cargo test --test mcp_stdio native_providers` 检查真实子进程配置选择与自动反思门。Windows CI 显式执行 native_model_protocols、openai_compatible_model 与 provider_config；Linux/macOS full gate 包含全部。
 
 ## 1. 目标
 

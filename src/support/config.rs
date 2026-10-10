@@ -28,6 +28,9 @@ pub enum ModelProviderKind {
     OpenAiCompatible,
     #[serde(rename = "openrouter")]
     OpenRouter,
+    #[serde(rename = "openai-responses")]
+    OpenAiResponses,
+    Anthropic,
 }
 
 impl ModelProviderKind {
@@ -36,6 +39,8 @@ impl ModelProviderKind {
             ModelProviderKind::Mock => "mock",
             ModelProviderKind::OpenAiCompatible => "openai-compatible",
             ModelProviderKind::OpenRouter => "openrouter",
+            ModelProviderKind::OpenAiResponses => "openai-responses",
+            ModelProviderKind::Anthropic => "anthropic",
         }
     }
 }
@@ -49,7 +54,7 @@ pub struct ProviderMatrixEntry {
     pub missing_implementation: &'static str,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct OpenAiCompatibleConfig {
     pub base_url: String,
     pub api_key: String,
@@ -57,11 +62,55 @@ pub struct OpenAiCompatibleConfig {
     pub timeout_ms: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq)]
+pub struct NativeModelConfig {
+    pub base_url: String,
+    pub api_key: String,
+    pub model: String,
+    pub timeout_ms: u64,
+    pub max_tokens: u32,
+    pub temperature: Option<f32>,
+}
+
+impl std::fmt::Debug for OpenAiCompatibleConfig {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("OpenAiCompatibleConfig")
+            .field("base_url", &"<redacted>")
+            .field("api_key", &"<redacted>")
+            .field("model", &self.model)
+            .field("timeout_ms", &self.timeout_ms)
+            .finish()
+    }
+}
+
+impl std::fmt::Debug for NativeModelConfig {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("NativeModelConfig")
+            .field("base_url", &"<redacted>")
+            .field("api_key", &"<redacted>")
+            .field("model", &self.model)
+            .field("timeout_ms", &self.timeout_ms)
+            .field("max_tokens", &self.max_tokens)
+            .field("temperature", &self.temperature)
+            .finish()
+    }
+}
+
+impl NativeModelConfig {
+    pub fn validate(&self, provider: &str) -> Result<(), String> {
+        validate_native_config(provider, self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum ModelConfig {
     Mock,
     OpenAiCompatible(OpenAiCompatibleConfig),
     OpenRouter(OpenAiCompatibleConfig),
+    OpenAiResponses(NativeModelConfig),
+    Anthropic(NativeModelConfig),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -140,7 +189,7 @@ impl DaemonConfig {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AppConfig {
     pub transport: TransportKind,
     pub database_url: String,
@@ -188,6 +237,20 @@ impl AppConfig {
                 missing_implementation: "",
             },
             ProviderMatrixEntry {
+                provider: "openai-responses",
+                state: "supported",
+                configurable: true,
+                adapter: "native OpenAI Responses; offline-tested, not live-certified",
+                missing_implementation: "live provider certification runner",
+            },
+            ProviderMatrixEntry {
+                provider: "anthropic",
+                state: "supported",
+                configurable: true,
+                adapter: "native Anthropic Messages; offline-tested, not live-certified",
+                missing_implementation: "live provider certification runner",
+            },
+            ProviderMatrixEntry {
                 provider: "azure-openai",
                 state: "planned-only",
                 configurable: false,
@@ -228,8 +291,17 @@ impl AppConfig {
         let path = path.as_ref();
         let content = fs::read_to_string(path)
             .map_err(|error| format!("failed to read config file {}: {error}", path.display()))?;
-        let file_config: FileConfig = toml::from_str(&content)
-            .map_err(|error| format!("failed to parse config file {}: {error}", path.display()))?;
+        let file_config: FileConfig = toml::from_str(&content).map_err(|error: toml::de::Error| {
+            // TOML diagnostics include source snippets, which may contain inline credentials.
+            // Retain a useful location but never propagate the parser's raw display/message.
+            let location = error.span().map(|span| {
+                let before = &content.as_bytes()[..span.start.min(content.len())];
+                let line = before.iter().filter(|byte| **byte == b'\n').count() + 1;
+                let column = before.iter().rev().take_while(|byte| **byte != b'\n').count() + 1;
+                format!(" at line {line}, column {column}")
+            }).unwrap_or_default();
+            format!("failed to parse config file {}{location}: invalid TOML or unsupported configuration value", path.display())
+        })?;
 
         let mut config = Self::default();
 
@@ -274,6 +346,12 @@ impl AppConfig {
                     let openai = model.openai_compatible.unwrap_or_default();
                     ModelConfig::OpenAiCompatible(provider_config(openai))
                 }
+                ModelProviderKind::OpenAiResponses => ModelConfig::OpenAiResponses(
+                    native_provider_config(model.openai_responses.unwrap_or_default()),
+                ),
+                ModelProviderKind::Anthropic => ModelConfig::Anthropic(native_provider_config(
+                    model.anthropic.unwrap_or_default(),
+                )),
                 ModelProviderKind::OpenRouter => {
                     let openrouter = model.openrouter.unwrap_or_default();
                     ModelConfig::OpenRouter(provider_config(openrouter))
@@ -304,6 +382,15 @@ impl AppConfig {
 
     pub fn validate_model_config(&self) -> Result<(), String> {
         match (&self.model_provider, &self.model_config) {
+            (ModelProviderKind::OpenAiResponses, ModelConfig::OpenAiResponses(config)) => {
+                validate_native_config("openai-responses", config)
+            }
+            (ModelProviderKind::Anthropic, ModelConfig::Anthropic(config)) => {
+                validate_native_config("anthropic", config)
+            }
+            (ModelProviderKind::OpenAiResponses | ModelProviderKind::Anthropic, _) => {
+                Err("native model provider and model config do not match".to_string())
+            }
             (ModelProviderKind::Mock, ModelConfig::Mock) => Ok(()),
             (ModelProviderKind::Mock, _) => {
                 Err("model provider is mock but model config is not mock".to_string())
@@ -330,6 +417,9 @@ impl AppConfig {
             ModelConfig::OpenAiCompatible(config) | ModelConfig::OpenRouter(config) => {
                 Some(config.model.clone())
             }
+            ModelConfig::OpenAiResponses(config) | ModelConfig::Anthropic(config) => {
+                Some(config.model.clone())
+            }
         }
     }
 
@@ -337,6 +427,9 @@ impl AppConfig {
         match &self.model_config {
             ModelConfig::Mock => None,
             ModelConfig::OpenAiCompatible(config) | ModelConfig::OpenRouter(config) => {
+                Some(config.base_url.clone())
+            }
+            ModelConfig::OpenAiResponses(config) | ModelConfig::Anthropic(config) => {
                 Some(config.base_url.clone())
             }
         }
@@ -350,6 +443,45 @@ fn provider_config(config: FileOpenAiCompatibleConfig) -> OpenAiCompatibleConfig
         model: config.model.unwrap_or_default(),
         timeout_ms: config.timeout_ms.unwrap_or(DEFAULT_OPENAI_TIMEOUT_MS),
     }
+}
+
+fn native_provider_config(config: FileNativeModelConfig) -> NativeModelConfig {
+    NativeModelConfig {
+        base_url: config.base_url.unwrap_or_default(),
+        api_key: provider_api_key(config.api_key, config.api_key_env),
+        model: config.model.unwrap_or_default(),
+        timeout_ms: config.timeout_ms.unwrap_or(DEFAULT_OPENAI_TIMEOUT_MS),
+        max_tokens: config.max_tokens.unwrap_or(2048),
+        temperature: config.temperature,
+    }
+}
+
+fn validate_native_config(provider: &str, config: &NativeModelConfig) -> Result<(), String> {
+    for (name, value) in [
+        ("base_url", &config.base_url),
+        ("api_key", &config.api_key),
+        ("model", &config.model),
+    ] {
+        if value.trim().is_empty() {
+            return Err(format!("missing required {provider} field: {name}"));
+        }
+    }
+    if config.timeout_ms == 0 {
+        return Err(format!("{provider} timeout_ms must be greater than 0"));
+    }
+    if config.max_tokens == 0 {
+        return Err(format!("{provider} max_tokens must be greater than 0"));
+    }
+    let upper = if provider == "anthropic" { 1.0 } else { 2.0 };
+    if config
+        .temperature
+        .is_some_and(|value| !value.is_finite() || !(0.0..=upper).contains(&value))
+    {
+        return Err(format!(
+            "{provider} temperature must be finite and between 0 and {upper}"
+        ));
+    }
+    Ok(())
 }
 
 fn provider_api_key(api_key: Option<String>, api_key_env: Option<String>) -> String {
@@ -448,6 +580,10 @@ struct FileModelConfig {
     openai_compatible: Option<FileOpenAiCompatibleConfig>,
     #[serde(default)]
     openrouter: Option<FileOpenAiCompatibleConfig>,
+    #[serde(default, alias = "openai-responses")]
+    openai_responses: Option<FileNativeModelConfig>,
+    #[serde(default)]
+    anthropic: Option<FileNativeModelConfig>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -457,6 +593,17 @@ struct FileOpenAiCompatibleConfig {
     api_key_env: Option<String>,
     model: Option<String>,
     timeout_ms: Option<u64>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct FileNativeModelConfig {
+    base_url: Option<String>,
+    api_key: Option<String>,
+    api_key_env: Option<String>,
+    model: Option<String>,
+    timeout_ms: Option<u64>,
+    max_tokens: Option<u32>,
+    temperature: Option<f32>,
 }
 
 #[derive(Debug, Deserialize, Default)]

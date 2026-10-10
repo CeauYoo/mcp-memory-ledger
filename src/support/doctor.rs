@@ -864,7 +864,7 @@ fn system_phase_coverage() -> Vec<SystemPhaseCoverage> {
             6,
             "Provider Expansion",
             "partial",
-            "mock, openai-compatible, and openrouter are locally supported; future provider rows remain rejected",
+            "mock, openai-compatible, openrouter, native OpenAI Responses, and native Anthropic Messages are locally supported; native adapters have offline coverage only; future provider rows remain rejected",
             ["provider_matrix"],
             [
                 "Azure OpenAI and local providers remain planned-only",

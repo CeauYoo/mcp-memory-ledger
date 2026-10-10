@@ -6969,3 +6969,107 @@ mod test_support {
         format!("sqlite://{}", path.to_string_lossy().replace('\\', "/"))
     }
 }
+
+fn native_stdio_response(provider: &str, text: &str) -> Value {
+    if provider == "openai-responses" {
+        json!({"status":"completed", "output":[{"type":"message", "role":"assistant", "status":"completed", "content":[{"type":"output_text", "text":text}]}]})
+    } else {
+        json!({"type":"message", "role":"assistant", "stop_reason":"end_turn", "content":[{"type":"text", "text":text}]})
+    }
+}
+
+fn native_stdio_config(provider: &str, base_url: &str) -> String {
+    let section = provider.replace('-', "_");
+    format!(
+        r#"
+transport = "stdio"
+database_url = "__DATABASE_URL__"
+[model]
+provider = "{provider}"
+[model.{section}]
+base_url = "{base_url}"
+api_key = "native-test-key"
+model = "native-test-model"
+max_tokens = 2048
+timeout_ms = 30000
+"#
+    )
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn native_providers_decide_with_snapshot_over_stdio_from_config() {
+    for (provider, endpoint) in [
+        ("openai-responses", "/responses"),
+        ("anthropic", "/messages"),
+    ] {
+        let stub = test_support::StubServer::spawn(
+            200,
+            native_stdio_response(provider, "native_selected_action"),
+        )
+        .await;
+        let mut client = test_support::spawn_stdio_client_with_config(native_stdio_config(
+            provider,
+            &stub.base_url(),
+        ))
+        .await
+        .unwrap();
+        let _ = client.list_all_tools().await.unwrap();
+        let response = client.call_tool("decide_with_snapshot", json!({
+            "task":"summarize current memory", "action":"read_identity_core",
+            "snapshot":{"identity":["identity:self=architect"], "commitments":[], "claims":["self.role is architect"], "evidence":["event:evt-1"], "episodes":["episode:task-6"]}
+        })).await.unwrap();
+        assert_eq!(
+            response["result"]["structuredContent"]["decision"]["action"], "native_selected_action",
+            "{provider}: {response:?}"
+        );
+        assert_eq!(stub.last_request_path().await.as_deref(), Some(endpoint));
+        assert_eq!(stub.request_count().await, 1);
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn native_providers_ingest_auto_reflection_obeys_gating_over_stdio() {
+    for (provider, endpoint) in [
+        ("openai-responses", "/responses"),
+        ("anthropic", "/messages"),
+    ] {
+        let proposal = r#"{"should_reflect":true,"rationale":"Rollback evidence should tighten commitments.","machine_patch":{"commitment_patch":{"commitments":["prefer:reflect_before_repeating_native_rollback"]}}}"#;
+        let stub =
+            test_support::StubServer::spawn(200, native_stdio_response(provider, proposal)).await;
+        let (mut client, database_url, _database_dir) =
+            test_support::spawn_stdio_client_with_config_and_database(native_stdio_config(
+                provider,
+                &stub.base_url(),
+            ))
+            .await
+            .unwrap();
+        let _ = client.list_all_tools().await.unwrap();
+        client.call_tool("ingest_interaction", json!({
+            "event":{"owner":"Self_", "kind":"Action", "summary":"first native rollback after violating a hard commitment"},
+            "claim_drafts":[], "episode_reference":"episode:native-auto-reflect-0"
+        })).await.unwrap();
+        assert_eq!(
+            stub.request_count().await,
+            0,
+            "{provider}: untriggered ingest must not invoke a model"
+        );
+        let response = client.call_tool("ingest_interaction", json!({
+            "event":{"owner":"Self_", "kind":"Action", "summary":"native rollback after violating a hard commitment"},
+            "claim_drafts":[], "episode_reference":"episode:native-auto-reflect-1", "trigger_hints":["failure", "rollback"]
+        })).await.unwrap();
+        assert_ne!(
+            response["result"]["isError"], true,
+            "{provider}: {response:?}"
+        );
+        let pool = SqlitePool::connect(&database_url).await.unwrap();
+        let reflections = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM reflections")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        let commitments = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM commitments WHERE description = 'prefer:reflect_before_repeating_native_rollback'").fetch_one(&pool).await.unwrap();
+        assert_eq!(reflections, 1, "{provider}");
+        assert_eq!(commitments, 1, "{provider}");
+        assert_eq!(stub.request_count().await, 1);
+        assert_eq!(stub.last_request_path().await.as_deref(), Some(endpoint));
+    }
+}

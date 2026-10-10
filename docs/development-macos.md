@@ -69,8 +69,8 @@ cp examples/agent-llm-mm.dev.example.toml agent-llm-mm.local.toml
 `examples/agent-llm-mm.example.toml` 只是通用入口说明，不再承载所有用途。然后编辑 `agent-llm-mm.local.toml`：
 
 - 固定自己的 `database_url`
-- 选择 `provider`
-- dev/mock profile 不需要 API key；选择 `openai-compatible`、`openrouter` 或 prod-local profile 时，才在已忽略的 `agent-llm-mm.local.toml` 里填写 `base_url`、`model`，并二选一配置本机私有 `api_key` 或 `api_key_env`
+- 选择 `provider`；原生 Responses / Messages 的 TOML 段、密钥环境变量和非流式边界见[快速开始](quickstart.md#5-可选原生模型配置)。这些配置无需 live 调用即可用 doctor 检查，离线检查不构成 live certification。
+- dev/mock profile 不需要 API key；选择 `openai-compatible`、`openrouter`、`openai-responses`、`anthropic` 或 prod-local profile 时，才在已忽略的 `agent-llm-mm.local.toml` 里填写 `base_url`、`model`，并二选一配置本机私有 `api_key` 或 `api_key_env`
 
 建议的 macOS SQLite URL 示例；dev、demo、prod-local 必须使用不同文件。按数据生命周期口径，`prod-local` 对应 formal 数据，`dev` / manual profile 对应 test 数据，demo profile 只对应 demo 数据：
 

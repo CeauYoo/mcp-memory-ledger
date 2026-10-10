@@ -36,6 +36,16 @@ The refactor keeps handler call order, error codes, logging behavior, tool descr
 
 Stage types and helpers remain private to this application module. The model proposes; the existing deterministic policy and transaction path still control commitment. No second durable self-model write path is introduced.
 
+## Model protocols
+
+Model adapters separate three responsibilities:
+
+- `src/adapters/model/prompt.rs`: shared pure prompt construction and decision/self-revision parsing preserve the domain contract across providers.
+- `src/adapters/model/protocol/`: pure Chat Completions, Responses, and Messages mappings and native completion/refusal checks; OpenRouter stays on Chat Completions. `native.rs` wires native mapping to the existing port.
+- `src/adapters/model/transport.rs`: shared HTTP side effects own request timeout, authentication, redirects/status handling, and redacted errors. Requests are single attempts with no automatic retry or fallback.
+
+This is an in-crate boundary, not a new provider framework. It does not change the `ModelPort` port, introduce hosted state, or bypass reflection governance. Native support is text/non-streaming only; see the [provider contract](provider-contract.md).
+
 ## Regression evidence
 
 The extraction reuses behavioral coverage rather than asserting only that source strings exist:

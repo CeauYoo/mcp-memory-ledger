@@ -82,7 +82,7 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Test native memory and lifecycle runtime
-        run: cargo test --lib --test sqlite_lifecycle --test sqlite_store --test correction_atomicity --test feedback_provenance --test feedback_candidates --test experience_workflow --test indexed_text_recall --test temporal_metadata --test sqlite_temporal_store --test reflection_scope_history --test scoped_ledger_export --test schema6_migration --test schema7_migration --test self_model_versions --test version_api --test context_diagnostics --test caller_operation_budget --test mcp_stdio
+        run: cargo test --lib --test sqlite_lifecycle --test sqlite_store --test correction_atomicity --test feedback_provenance --test feedback_candidates --test experience_workflow --test indexed_text_recall --test temporal_metadata --test sqlite_temporal_store --test reflection_scope_history --test scoped_ledger_export --test schema6_migration --test schema7_migration --test self_model_versions --test version_api --test context_diagnostics --test caller_operation_budget --test mcp_stdio --test native_model_protocols --test openai_compatible_model --test provider_config
       - name: Verify installed-binary offline memory workflow
         run: python scripts/local-memory-smoke.py --binary target/debug/agent_llm_mm.exe --output target/reports/local-memory-smoke
       - name: Verify feedback and experience proxy workflow

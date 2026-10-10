@@ -10,6 +10,8 @@ M0 的 scoped snapshot、治理原子性、显式数据库生命周期、loopbac
 
 完整实现清单见[当前状态](project-status.md)；原 A–E 讨论的 70 项要求见[最终核对](plans/2026-10-09-original-plan-final-reconciliation.md)。这组有限代码交付已完成，不能继续称为“下一步待实现”，也不能据此将 M1/M2 的真实用户与发布门自动打勾。
 
+原生 OpenAI Responses 与 Anthropic Messages 的有界文本适配已加入，旧 Chat Completions/OpenRouter 保留，见[协议合同](provider-contract.md)。这是本地配置/协议/stdio fixture 的实现切片，不关闭 M1 用户客户端或 M2 live provider 门；streaming、tools、vision、托管会话与广泛 provider 扩张仍不在本轮范围。
+
 ## Now：关闭 M1 真实用户闭环证据
 
 用实际 MCP 客户端验证：记录 → 重连 → scoped 检索 → 查看证据 → 更正 → 回看历史，并让两个干扰 namespace 不混入结果。

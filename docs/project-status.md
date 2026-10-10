@@ -18,9 +18,18 @@
 | 全局 self-model 追加版本 | 初始化/迁移真实 baseline、CAS、同范围来源 diff 与显式补偿回滚；[实验性单用户合同](self-model-versions.md) |
 | 只读 scoped export | 有界、一致、同范围、无写日志；[交换而非备份](scoped-export.md) |
 | 安全本地生命周期 | 显式 init/migrate、只读 doctor、结构读回、排他 writer admission、迁移前备份/恢复演练；[操作手册](database-operations.md) |
+| 原生模型协议 | `openai-responses` / `anthropic` 非流式文本 decision 与 reflection proposal；保留 Chat Completions/OpenRouter；[离线合同与限制](provider-contract.md) |
 | 内部模块整理 | [SQLite、MCP、自动反思私有模块边界](implementation-module-boundaries.md)，未新增框架或权限 |
 
 新 Claim 有记录时间；历史未知时间保持 null。Reflection 的 origin 与 affected scope 各有职责，后者不是另一项可见性授权。旧 receipt/fingerprint 字节兼容性有迁移回归，不能通过迁移伪造历史或改变已成功请求的含义。
+
+## 本轮交付：原生模型协议
+
+新增显式 `openai-responses` / `[model.openai_responses]` 与 `anthropic` / `[model.anthropic]` 配置，分别使用 Responses 和 Messages 原生请求/响应；原有 Chat Completions/OpenRouter 配置不迁移。共享纯 prompt/领域解析与有界 HTTP 副作用层，拒绝重定向、无自动重试，错误与密钥 Debug 脱敏；只接受完整纯文本结果。未新增工具、streaming、vision、provider 托管状态或第二条 reflection 写路径。
+
+本轮验证范围为配置、协议 fixture、错误/拒绝/截断和实际 MCP stdio 离线路径；具体命令见[测试指南](testing-guide-2026-03-24.md)。本轮未调用付费 API，没有新增 live-certified 声明。下方 schema7 与历史提交测试数字保持当时含义，不作为新增协议代码的通过数量；最终运行结果及精确提交 CI 需单独记录。
+
+本轮本地验证完成：696 项 all-feature Rust 测试通过（0 failed/ignored/filtered），严格 all-target/all-feature Clippy、fmt、33 项状态同步、13 项 Python fixture、40 项包合同测试通过；实际二进制重启/纠错/备份恢复、temporal/scope/export 与固定离线 evaluator 均通过。独立审查发现的 nullable Chat tool_calls、底层隐式重试与 TOML 密钥片段问题已修正并回归。固定 evaluator 仍为 8/10，保留两个不支持的 paraphrase case；不视为真实模型效果。构建缓存空间不足后仅清理可再生 debug cache，使用 debug info 关闭、incremental 关闭的本地验证 profile 重新完整执行；没有跳过测试。精确提交的三平台 CI 结果记录在草稿 PR，不用本地 Linux 结果代替 Windows/macOS。
 
 ## 本轮交付：schema7 全局 self-model 版本
 

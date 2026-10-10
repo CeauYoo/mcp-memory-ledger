@@ -29,6 +29,9 @@ fn ci_covers_linux_and_macos_quality_gates() {
         "schema7_migration",
         "self_model_versions",
         "version_api",
+        "native_model_protocols",
+        "openai_compatible_model",
+        "provider_config",
     ] {
         assert!(
             workflow.contains(&format!("--test {suite}")),

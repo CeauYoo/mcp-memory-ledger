@@ -68,6 +68,44 @@ $env:AGENT_LLM_MM_CONFIG = "C:/Users/you/ledger/ledger-demo.toml"
 
 接着运行[最小请求与完整工作流](runnable-memory-workflow.md)。首次用一个明确 namespace，例如 `project/demo`；把服务返回的 ID 传给后续工具，别手写猜测 ID。
 
+## 5. 可选原生模型配置
+
+先完成 mock 闭环，再按需替换同一私有 TOML 的 `[model]` 部分。不要将下列两组同时作为同一配置粘贴。数据库、transport 和显式 init/migrate 流程保持不变。
+
+OpenAI 原生 Responses：
+
+```toml
+[model]
+provider = "openai-responses"
+
+[model.openai_responses]
+base_url = "https://api.openai.com/v1"
+api_key_env = "OPENAI_API_KEY"
+model = "YOUR_RESPONSES_MODEL"
+timeout_ms = 30000
+max_tokens = 2048
+# temperature = 0.2 # 可选，默认不发送；先确认所选模型支持
+```
+
+Claude 原生 Messages：
+
+```toml
+[model]
+provider = "anthropic"
+
+[model.anthropic]
+base_url = "https://api.anthropic.com/v1"
+api_key_env = "ANTHROPIC_API_KEY"
+model = "YOUR_CLAUDE_MODEL"
+timeout_ms = 30000
+max_tokens = 2048
+# temperature = 0.2 # 可选，默认不发送
+```
+
+在启动 MCP 服务的进程环境中设置对应密钥变量；占位 model 必须换成你账号可用且支持此协议的模型 ID。也可用本机私有 `api_key`，不要提交真实密钥。`base_url` 不含最终 `/responses` 或 `/messages`；适配器会追加 endpoint。原有 `openai-compatible` 与 `openrouter` 配置及 `/chat/completions` 路径继续保留，不需要迁移。
+
+`doctor --read-only` 只检查本地配置/数据库，不发模型请求。执行 decision 或触发旧 ingest 自动反思后，相关 snapshot/prompt 会发送给所选 provider，可能计费；仅在确认数据可发送且接受费用后运行。新增原生路径只支持非流式文本，拒绝 refusal、截断、工具输出及无法识别的响应；不支持 tools、vision 或托管会话。配置和离线 fixture 通过不代表 live 连通或效果认证。完整边界见[provider 合同](provider-contract.md)。
+
 ## 常见阻塞
 
 - 工具未出现：核对绝对 binary 路径、`.exe`、`args = ["serve"]`、环境和 stderr；客户端需重新连接。

@@ -230,6 +230,9 @@ fn redacted_live_probe_error(label: &'static str) -> anyhow::Error {
 
 fn live_model(config: &AppConfig) -> Result<OpenAiCompatibleModel> {
     match &config.model_config {
+        ModelConfig::OpenAiResponses(_) | ModelConfig::Anthropic(_) => Err(anyhow!(
+            "native provider live certification is not implemented; offline adapter support is not live evidence"
+        )),
         ModelConfig::Mock => Err(anyhow!(
             "live provider certification requires openai-compatible or openrouter provider config; mock cannot produce live evidence"
         )),
@@ -295,6 +298,12 @@ fn provider_shape(config: &AppConfig) -> ProviderShape {
         },
         ModelConfig::OpenAiCompatible(provider) | ModelConfig::OpenRouter(provider) => {
             provider_shape_for_openai_compatible(provider)
+        }
+        ModelConfig::OpenAiResponses(provider) | ModelConfig::Anthropic(provider) => {
+            ProviderShape {
+                endpoint_shape: endpoint_shape(&provider.base_url),
+                credential_configured: !provider.api_key.trim().is_empty(),
+            }
         }
     }
 }
@@ -371,13 +380,20 @@ fn forbidden_live_evidence_fragments(config: &AppConfig) -> Vec<String> {
         "provider-live-certification-evidence".to_string(),
     ];
 
-    if let ModelConfig::OpenAiCompatible(provider) | ModelConfig::OpenRouter(provider) =
-        &config.model_config
-    {
-        push_non_empty(&mut fragments, provider.api_key.trim());
-        push_non_empty(&mut fragments, provider.model.trim());
+    let fields = match &config.model_config {
+        ModelConfig::Mock => None,
+        ModelConfig::OpenAiCompatible(provider) | ModelConfig::OpenRouter(provider) => {
+            Some((&provider.api_key, &provider.model, &provider.base_url))
+        }
+        ModelConfig::OpenAiResponses(provider) | ModelConfig::Anthropic(provider) => {
+            Some((&provider.api_key, &provider.model, &provider.base_url))
+        }
+    };
+    if let Some((api_key, model, base_url)) = fields {
+        push_non_empty(&mut fragments, api_key.trim());
+        push_non_empty(&mut fragments, model.trim());
 
-        if let Ok(parsed) = reqwest::Url::parse(&provider.base_url) {
+        if let Ok(parsed) = reqwest::Url::parse(base_url) {
             push_non_empty(&mut fragments, parsed.username());
             if let Some(password) = parsed.password() {
                 push_non_empty(&mut fragments, password);

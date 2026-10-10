@@ -7,7 +7,11 @@ use uuid::Uuid;
 
 use crate::{
     adapters::{
-        model::{mock::MockModel, openai_compatible::OpenAiCompatibleModel},
+        model::{
+            mock::MockModel,
+            native::{NativeModel, NativeProtocol},
+            openai_compatible::OpenAiCompatibleModel,
+        },
         sqlite::SqliteStore,
     },
     domain::event::EventReference,
@@ -41,6 +45,7 @@ pub(super) struct Runtime {
 enum RuntimeModel {
     Mock(MockModel),
     OpenAiCompatible(OpenAiCompatibleModel),
+    Native(NativeModel),
 }
 
 impl Runtime {
@@ -68,6 +73,14 @@ impl Runtime {
 fn build_runtime_model(config: &AppConfig) -> Result<RuntimeModel, AppError> {
     match &config.model_config {
         ModelConfig::Mock => Ok(RuntimeModel::Mock(MockModel)),
+        ModelConfig::OpenAiResponses(model_config) => Ok(RuntimeModel::Native(NativeModel::new(
+            model_config.clone(),
+            NativeProtocol::OpenAiResponses,
+        )?)),
+        ModelConfig::Anthropic(model_config) => Ok(RuntimeModel::Native(NativeModel::new(
+            model_config.clone(),
+            NativeProtocol::Anthropic,
+        )?)),
         ModelConfig::OpenAiCompatible(model_config) => Ok(RuntimeModel::OpenAiCompatible(
             OpenAiCompatibleModel::new(model_config.clone())?,
         )),
@@ -358,6 +371,7 @@ impl ModelPort for Runtime {
         match &self.model {
             RuntimeModel::Mock(model) => model.decide(request).await,
             RuntimeModel::OpenAiCompatible(model) => model.decide(request).await,
+            RuntimeModel::Native(model) => model.decide(request).await,
         }
     }
 
@@ -368,6 +382,7 @@ impl ModelPort for Runtime {
         match &self.model {
             RuntimeModel::Mock(model) => model.propose_self_revision(request).await,
             RuntimeModel::OpenAiCompatible(model) => model.propose_self_revision(request).await,
+            RuntimeModel::Native(model) => model.propose_self_revision(request).await,
         }
     }
 }

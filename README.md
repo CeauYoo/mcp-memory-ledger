@@ -28,6 +28,12 @@
 
 平台脚本与开发细节单独见 [macOS](docs/development-macos.md) / [Windows](docs/development-windows.md)。首次使用建议保留 mock 和隔离测试库；常规 deterministic read 与新反馈/经验工具不需要模型，旧 ingest 自动反思钩子在满足触发条件时可能使用已配置 provider。
 
+## 可选模型协议
+
+默认 `mock` 不访问模型。显式配置可选择原有 `openai-compatible` / `openrouter` Chat Completions，或新增 `openai-responses`（OpenAI 原生 Responses）/ `anthropic`（Claude 原生 Messages）；旧配置不需要迁移。原生路径覆盖纯文本、非流式 decision 与 self-revision proposal，保留本地治理与持久化边界。见[配置示例](docs/quickstart.md#5-可选原生模型配置)和[协议合同](docs/provider-contract.md)。
+
+新增适配器的本地 fixture 不等于 live provider 认证；本轮未运行付费 API。无 streaming、工具调用、vision、多轮托管会话或 provider 路由。OpenAI 仍支持 Chat Completions；Responses 是可选原生路径，不是强制废弃旧接口。
+
 ## 必须知道的边界
 
 - 检索是**字面匹配**：FTS5 和短 CJK fallback 不是 embedding、中文分词或语义理解；同义改写可能找不到。

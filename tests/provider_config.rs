@@ -272,7 +272,7 @@ fn generic_example_config_parses_and_keeps_daemon_disabled() {
 fn provider_matrix_lists_supported_and_future_providers_as_contract_only() {
     let entries = AppConfig::provider_matrix();
 
-    assert_eq!(entries.len(), 5);
+    assert_eq!(entries.len(), 7);
     assert_eq!(entries[0].provider, "mock");
     assert_eq!(entries[0].state, "supported");
     assert!(entries[0].configurable);
@@ -292,7 +292,7 @@ fn provider_matrix_lists_supported_and_future_providers_as_contract_only() {
     );
     assert!(entries[2].missing_implementation.is_empty());
 
-    for entry in &entries[3..] {
+    for entry in &entries[5..] {
         assert_eq!(entry.state, "planned-only");
         assert!(
             !entry.configurable,
@@ -311,7 +311,7 @@ fn provider_matrix_lists_supported_and_future_providers_as_contract_only() {
         );
     }
 
-    let future_names: Vec<_> = entries[3..].iter().map(|entry| entry.provider).collect();
+    let future_names: Vec<_> = entries[5..].iter().map(|entry| entry.provider).collect();
     assert_eq!(future_names, ["azure-openai", "local"]);
 }
 
@@ -338,8 +338,8 @@ provider = "{provider}"
             .expect_err("future provider must not parse as a usable provider");
 
         assert!(
-            error.to_string().contains(provider),
-            "parse error should name the rejected provider {provider}: {error}"
+            error.contains("unsupported configuration value"),
+            "parse error should safely reject provider {provider}: {error}"
         );
     }
 }
@@ -491,7 +491,7 @@ async fn doctor_reports_provider_matrix_without_marking_future_providers_support
 
     let report = run_doctor(config).await.expect("doctor");
 
-    assert_eq!(report.provider_matrix.len(), 5);
+    assert_eq!(report.provider_matrix.len(), 7);
     assert_eq!(report.provider_matrix[0].provider, "mock");
     assert_eq!(
         report.provider_matrix[0].support_state,
@@ -518,7 +518,7 @@ async fn doctor_reports_provider_matrix_without_marking_future_providers_support
     assert!(!report.provider_matrix[2].selected);
     assert!(report.provider_matrix[2].missing_implementation.is_empty());
 
-    for entry in &report.provider_matrix[3..] {
+    for entry in &report.provider_matrix[5..] {
         assert_eq!(entry.support_state, ProviderSupportState::PlannedOnly);
         assert!(!entry.configurable);
         assert!(!entry.selected);
@@ -652,5 +652,209 @@ impl ProcessContextGuard {
 impl Drop for ProcessContextGuard {
     fn drop(&mut self) {
         std::env::set_current_dir(&self.previous_dir).expect("restore current dir");
+    }
+}
+
+#[test]
+fn native_provider_config_defaults_and_explicit_fields_are_supported() {
+    for (provider, section, kind) in [
+        (
+            "openai-responses",
+            "openai_responses",
+            ModelProviderKind::OpenAiResponses,
+        ),
+        ("anthropic", "anthropic", ModelProviderKind::Anthropic),
+    ] {
+        let directory = tempdir().expect("temp dir");
+        let path = directory.path().join("native.toml");
+        let source = format!(
+            r#"
+[model]
+provider = "{provider}"
+[model.{section}]
+base_url = "https://example.test/v1"
+api_key = "native-secret"
+model = "test-model"
+"#
+        );
+        fs::write(&path, &source).expect("write config");
+        let config = AppConfig::load_from_path(&path).expect("native config");
+        config.validate().expect("valid native config");
+        assert_eq!(config.model_provider, kind);
+        let native = match &config.model_config {
+            ModelConfig::OpenAiResponses(native) | ModelConfig::Anthropic(native) => native,
+            other => panic!("wrong native config: {other:?}"),
+        };
+        assert_eq!(native.max_tokens, 2048);
+        assert_eq!(native.timeout_ms, 30_000);
+        assert_eq!(native.temperature, None);
+        assert_eq!(config.doctor_model().as_deref(), Some("test-model"));
+        assert_eq!(
+            config.doctor_base_url().as_deref(),
+            Some("https://example.test/v1")
+        );
+        assert!(!format!("{config:?}").contains("native-secret"));
+        fs::write(
+            &path,
+            format!("{source}\nmax_tokens = 512\ntemperature = 0.5\ntimeout_ms = 10000\n"),
+        )
+        .expect("write config");
+        let config = AppConfig::load_from_path(&path).expect("native config");
+        config.validate().expect("explicit settings valid");
+        let native = match config.model_config {
+            ModelConfig::OpenAiResponses(native) | ModelConfig::Anthropic(native) => native,
+            _ => unreachable!(),
+        };
+        assert_eq!(native.max_tokens, 512);
+        assert_eq!(native.temperature, Some(0.5));
+        assert_eq!(native.timeout_ms, 10_000);
+    }
+}
+
+#[test]
+fn native_provider_validation_rejects_invalid_settings_and_mismatches() {
+    use agent_llm_mm::support::config::NativeModelConfig;
+    let valid = NativeModelConfig {
+        base_url: "https://example.test/v1".into(),
+        api_key: "secret".into(),
+        model: "test-model".into(),
+        timeout_ms: 1000,
+        max_tokens: 2048,
+        temperature: None,
+    };
+    for native in [
+        NativeModelConfig {
+            base_url: " ".into(),
+            ..valid.clone()
+        },
+        NativeModelConfig {
+            api_key: " ".into(),
+            ..valid.clone()
+        },
+        NativeModelConfig {
+            model: " ".into(),
+            ..valid.clone()
+        },
+        NativeModelConfig {
+            timeout_ms: 0,
+            ..valid.clone()
+        },
+        NativeModelConfig {
+            max_tokens: 0,
+            ..valid.clone()
+        },
+        NativeModelConfig {
+            temperature: Some(-0.1),
+            ..valid.clone()
+        },
+        NativeModelConfig {
+            temperature: Some(f32::NAN),
+            ..valid.clone()
+        },
+        NativeModelConfig {
+            temperature: Some(f32::INFINITY),
+            ..valid.clone()
+        },
+        NativeModelConfig {
+            temperature: Some(2.1),
+            ..valid.clone()
+        },
+    ] {
+        assert!(native.validate("openai-responses").is_err());
+        assert!(native.validate("anthropic").is_err());
+    }
+    let higher_temperature = NativeModelConfig {
+        temperature: Some(1.5),
+        ..valid.clone()
+    };
+    assert!(higher_temperature.validate("openai-responses").is_ok());
+    assert!(higher_temperature.validate("anthropic").is_err());
+    assert!(
+        AppConfig {
+            model_provider: ModelProviderKind::Anthropic,
+            model_config: ModelConfig::OpenAiResponses(valid),
+            ..AppConfig::default()
+        }
+        .validate_model_config()
+        .is_err()
+    );
+}
+
+#[test]
+fn native_provider_env_credentials_follow_existing_precedence() {
+    let _guard = EnvGuard::set([("AGENT_LLM_MM_TEST_NATIVE_KEY", Some("native-env-secret"))]);
+    for (provider, section) in [
+        ("openai-responses", "openai_responses"),
+        ("anthropic", "anthropic"),
+    ] {
+        let directory = tempdir().expect("temp dir");
+        let path = directory.path().join("native.toml");
+        for (inline, expected) in [
+            ("", "native-env-secret"),
+            ("inline-secret", "inline-secret"),
+        ] {
+            fs::write(
+                &path,
+                format!(
+                    r#"
+[model]
+provider = "{provider}"
+[model.{section}]
+base_url = "https://example.test/v1"
+api_key = "{inline}"
+api_key_env = "AGENT_LLM_MM_TEST_NATIVE_KEY"
+model = "test-model"
+"#
+                ),
+            )
+            .expect("write config");
+            let config = AppConfig::load_from_path(&path).expect("config");
+            config.validate().expect("valid config");
+            let native = match config.model_config {
+                ModelConfig::OpenAiResponses(native) | ModelConfig::Anthropic(native) => native,
+                _ => unreachable!(),
+            };
+            assert_eq!(native.api_key, expected);
+        }
+    }
+}
+
+#[test]
+fn native_provider_matrix_is_runtime_supported_without_live_certification_claims() {
+    let matrix = AppConfig::provider_matrix();
+    for name in ["openai-responses", "anthropic"] {
+        let entry = matrix
+            .iter()
+            .find(|entry| entry.provider == name)
+            .expect("native entry");
+        assert_eq!(entry.state, "supported");
+        assert!(entry.configurable);
+        assert!(entry.adapter.contains("not live-certified"));
+        assert!(
+            entry
+                .missing_implementation
+                .contains("live provider certification")
+        );
+    }
+}
+
+#[test]
+fn malformed_config_diagnostics_do_not_echo_inline_credentials() {
+    let directory = tempdir().expect("temp dir");
+    let path = directory.path().join("malformed.toml");
+    for (provider, section) in [
+        ("openai-compatible", "openai_compatible"),
+        ("openrouter", "openrouter"),
+        ("openai-responses", "openai_responses"),
+        ("anthropic", "anthropic"),
+    ] {
+        fs::write(&path, format!("[model]\nprovider = \"{provider}\"\n[model.{section}]\napi_key = \"credential-must-never-appear\" extra\n")).expect("write malformed config");
+        let error = AppConfig::load_from_path(&path).expect_err("malformed TOML");
+        assert!(!error.contains("credential-must-never-appear"));
+        assert!(!error.contains("api_key"));
+        assert!(
+            error.contains("line 4"),
+            "safe diagnostic should identify the location: {error}"
+        );
     }
 }

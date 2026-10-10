@@ -18,3 +18,9 @@ env = { AGENT_LLM_MM_CONFIG = "/absolute/path/ledger-demo.toml" }
 # args = ["serve"]
 # env = { AGENT_LLM_MM_CONFIG = "/absolute/path/ledger-demo.toml" }
 # Enable only the entry you intend to use.
+
+# Native OpenAI Responses / Anthropic Messages may be selected in the referenced
+# AGENT_LLM_MM_CONFIG file; see examples/agent-llm-mm.example.toml for sections.
+# Set OPENAI_API_KEY or ANTHROPIC_API_KEY in the server's inherited environment
+# when using those example api_key_env names. Do not put real keys in this file.
+# Native protocol support is offline-tested MVP capability, not live certification.

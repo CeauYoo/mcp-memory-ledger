@@ -1095,6 +1095,13 @@ fn model_shape(config: &AppConfig) -> ModelShape {
             timeout_ms: Some(provider.timeout_ms),
             credential_configured: !provider.api_key.trim().is_empty(),
         },
+        ModelConfig::OpenAiResponses(provider) | ModelConfig::Anthropic(provider) => ModelShape {
+            provider: serde_name(&config.model_provider),
+            base_url: Some(base_url_shape(&provider.base_url)),
+            model: Some(provider.model.clone()),
+            timeout_ms: Some(provider.timeout_ms),
+            credential_configured: !provider.api_key.trim().is_empty(),
+        },
     }
 }
 
