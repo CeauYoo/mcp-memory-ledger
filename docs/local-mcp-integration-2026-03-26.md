@@ -65,3 +65,7 @@ env = { AGENT_LLM_MM_CONFIG = "/absolute/path/ledger-demo.toml" }
 升级与恢复见[数据库操作](database-operations.md)，诊断产物与测试门见[测试指南](testing-guide-2026-03-24.md)。
 
 Schema7 global self-model version/diff and explicit compensation contract: [details](self-model-versions.md). Existing scoped read/export boundaries and experimental single-user limits remain.
+
+## 2026-10-13 接入验收边界
+
+本轮不读取或修改用户现有 Codex 配置。上面的条目是用户自行接入的最小步骤；Python stdio harness 成功只标为隔离运行验证，不标为真实 Codex 客户端或新机器验收。分层结果、费用限制与复现命令见[本轮验收记录](acceptance-2026-10-13.md)。

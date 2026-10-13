@@ -1,3 +1,4 @@
+pub mod metering;
 pub mod mock;
 pub mod native;
 pub mod openai_compatible;

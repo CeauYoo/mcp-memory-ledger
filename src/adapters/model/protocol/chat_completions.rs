@@ -2,8 +2,8 @@ use super::{super::prompt::Prompt, invalid};
 use crate::error::AppError;
 use serde_json::{Value, json};
 
-pub(in crate::adapters::model) fn request(model: &str, prompt: Prompt) -> Value {
-    json!({"model":model,"temperature":0.0,"messages":[
+pub(in crate::adapters::model) fn request(model: &str, prompt: Prompt, max_tokens: u32) -> Value {
+    json!({"model":model,"temperature":0.0,"max_tokens":max_tokens,"stream":false,"messages":[
         {"role":"system","content":prompt.instructions},
         {"role":"user","content":prompt.input}
     ]})

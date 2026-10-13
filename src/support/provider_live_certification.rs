@@ -8,7 +8,13 @@ use chrono::Utc;
 use serde::Serialize;
 
 use crate::{
-    adapters::model::openai_compatible::OpenAiCompatibleModel,
+    adapters::model::{
+        metering::{
+            CertificationMeter, MAX_INPUT_BYTES, MAX_OUTPUT_TOKENS, MAX_REQUESTS, RequestUsage,
+        },
+        native::{NativeModel, NativeProtocol},
+        openai_compatible::OpenAiCompatibleModel,
+    },
     domain::{
         self_revision::{SelfRevisionRequest, TriggerType},
         snapshot::SelfSnapshot,
@@ -49,6 +55,38 @@ pub struct ProviderLiveCertificationReport {
     pub evidence_dir: String,
     pub generated_evidence: Vec<GeneratedEvidenceFile>,
     pub non_claims: Vec<String>,
+    pub accounting: CertificationAccounting,
+}
+
+/// Attempts may have incurred charges even when HTTP or parsing fails.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct CertificationAccounting {
+    pub max_requests: usize,
+    pub max_serialized_input_bytes_per_request: usize,
+    pub max_output_tokens_per_request: u32,
+    pub implicit_retries: usize,
+    pub requests_attempted: usize,
+    pub requests: Vec<RequestUsage>,
+    pub price_status: &'static str,
+    pub actual_cost_usd: Option<String>,
+    pub software_enforced_usd_cap: bool,
+    pub real_mcp_client_acceptance: bool,
+}
+
+fn accounting(meter: &CertificationMeter) -> CertificationAccounting {
+    let requests = meter.snapshot();
+    CertificationAccounting {
+        max_requests: MAX_REQUESTS,
+        max_serialized_input_bytes_per_request: MAX_INPUT_BYTES,
+        max_output_tokens_per_request: MAX_OUTPUT_TOKENS,
+        implicit_retries: 0,
+        requests_attempted: requests.len(),
+        requests,
+        price_status: "unknown; reconcile provider billing, including failed requests",
+        actual_cost_usd: None,
+        software_enforced_usd_cap: false,
+        real_mcp_client_acceptance: false,
+    }
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -107,8 +145,7 @@ fn write_stub_evidence(
         .evidence_root
         .join(EVIDENCE_DIR_TEMPLATE)
         .join(&provider);
-    fs::create_dir_all(&evidence_dir)
-        .with_context(|| format!("create evidence directory {}", evidence_dir.display()))?;
+    reserve_evidence_dir(&evidence_dir)?;
 
     let non_claims = stub_non_claims();
     let mut generated_evidence = Vec::with_capacity(EVIDENCE_FILES.len());
@@ -146,6 +183,7 @@ fn write_stub_evidence(
         evidence_dir: evidence_dir.to_string_lossy().to_string(),
         generated_evidence,
         non_claims,
+        accounting: accounting(&CertificationMeter::default()),
     })
 }
 
@@ -156,94 +194,172 @@ fn write_live_evidence(
         .config
         .validate()
         .map_err(|error| anyhow!("provider configuration is not valid: {error}"))?;
-
     let provider = options.config.model_provider.as_str().to_string();
     let generated_at = Utc::now().to_rfc3339();
     let shape = provider_shape(&options.config);
-    let model = live_model(&options.config)?;
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .context("build provider live certification runtime")?;
-
-    runtime.block_on(async {
-        model
-            .decide(live_decision_request())
-            .await
-            .map_err(|_| redacted_live_probe_error("live decision path"))?;
-        model
-            .propose_self_revision(live_self_revision_request())
-            .await
-            .map_err(|_| redacted_live_probe_error("live self-revision path"))?;
-        Ok::<(), anyhow::Error>(())
-    })?;
-
+    let meter = CertificationMeter::default();
+    let model = live_model(&options.config, meter.clone())?;
     let evidence_dir = options
         .evidence_root
         .join(EVIDENCE_DIR_TEMPLATE)
         .join(&provider);
-    fs::create_dir_all(&evidence_dir)
-        .with_context(|| format!("create evidence directory {}", evidence_dir.display()))?;
-
-    let non_claims = live_non_claims();
-    let mut generated_evidence = Vec::with_capacity(EVIDENCE_FILES.len());
+    // Reserve before any potentially billable request; never overwrite earlier results.
+    reserve_evidence_dir(&evidence_dir)?;
+    let loopback = options
+        .config
+        .doctor_base_url()
+        .and_then(|url| reqwest::Url::parse(&url).ok())
+        .is_some_and(|url| {
+            url.host_str().is_some_and(|host| {
+                host.eq_ignore_ascii_case("localhost")
+                    || host
+                        .trim_matches(['[', ']'])
+                        .parse::<std::net::IpAddr>()
+                        .is_ok_and(|ip| ip.is_loopback())
+            })
+        });
+    let mode = if loopback {
+        "offline/protocol-fixture"
+    } else {
+        "live"
+    };
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .context("build provider live certification runtime")?;
+    write_accounting(&evidence_dir, &meter)?;
+    let mut decision_passed = false;
+    let mut revision_passed = false;
+    let outcome = runtime.block_on(async {
+        let decision = model.decide(live_decision_request()).await;
+        write_accounting(&evidence_dir, &meter)?;
+        decision.map_err(|_| redacted_live_probe_error("live decision path"))?;
+        decision_passed = true;
+        let revision = model
+            .propose_self_revision(live_self_revision_request())
+            .await;
+        write_accounting(&evidence_dir, &meter)?;
+        revision.map_err(|_| redacted_live_probe_error("live self-revision path"))?;
+        revision_passed = true;
+        Ok::<(), anyhow::Error>(())
+    });
+    let mut non_claims = live_non_claims();
+    non_claims.extend([
+        "not real MCP client acceptance".into(),
+        "input byte limit is not a tokenizer-exact input token limit".into(),
+        "unknown prices and provider billing prevent a software-enforced dollar cap".into(),
+        "successful generation does not test provider error handling or constitute human redaction review".into(),
+    ]);
+    if loopback {
+        non_claims.retain(|claim| claim != "live provider endpoint evidence only");
+        non_claims.push("offline protocol fixture; not real live provider evidence".into());
+    }
+    let mut generated_evidence = Vec::new();
     for (file_name, evidence_kind) in EVIDENCE_FILES {
+        let passed = match *evidence_kind {
+            "live_decision" => decision_passed,
+            "live_self_revision" => revision_passed,
+            _ => false,
+        };
+        let status = if passed {
+            "passed"
+        } else if matches!(
+            *evidence_kind,
+            "provider_error_handling" | "redaction_review"
+        ) {
+            "not_tested"
+        } else {
+            "failed_or_not_run"
+        };
         let evidence = ProviderLiveEvidence {
             provider: provider.clone(),
-            status: "passed",
+            status,
             evidence_kind,
             generated_at: generated_at.clone(),
-            local_only: false,
+            local_only: loopback,
             endpoint_shape: shape.endpoint_shape.clone(),
             credential_configured: shape.credential_configured,
-            mode: "live",
-            endpoint_reached: true,
-            redaction_reviewed: true,
-            request_outcome: "passed",
-            command_evidence: vec![live_command_evidence()],
+            mode,
+            endpoint_reached: meter
+                .snapshot()
+                .iter()
+                .any(|request| request.http_status.is_some()),
+            redaction_reviewed: false,
+            request_outcome: status,
+            // This library observes probes, not the shell command's eventual exit.
+            command_evidence: Vec::new(),
             non_claims: non_claims.clone(),
         };
         let path = evidence_dir.join(file_name);
         write_live_json(&path, &evidence, &options.config)?;
         generated_evidence.push(GeneratedEvidenceFile {
             evidence_kind,
-            status: "passed",
-            path: path.to_string_lossy().to_string(),
+            status,
+            path: path.to_string_lossy().into_owned(),
         });
     }
-
-    Ok(ProviderLiveCertificationReport {
+    let report = ProviderLiveCertificationReport {
         generated_at,
         kind: "provider_live_certification_evidence_run",
         provider,
-        status: "passed",
-        mode: "live",
-        evidence_dir: evidence_dir.to_string_lossy().to_string(),
+        status: if outcome.is_ok() { "passed" } else { "failed" },
+        mode,
+        evidence_dir: evidence_dir.to_string_lossy().into_owned(),
         generated_evidence,
         non_claims,
-    })
+        accounting: accounting(&meter),
+    };
+    write_live_json(
+        &evidence_dir.join("run-accounting.json"),
+        &report,
+        &options.config,
+    )?;
+    outcome?;
+    Ok(report)
+}
+
+// This schema contains only fixed labels, numbers and booleans. It deliberately
+// excludes config and paths, so the fallback ledger survives report redaction failures.
+fn write_accounting(directory: &Path, meter: &CertificationMeter) -> Result<()> {
+    fs::write(
+        directory.join("request-accounting.json"),
+        serde_json::to_vec_pretty(&accounting(meter))?,
+    )
+    .context("could not persist request accounting; stop and reconcile provider billing")
+}
+
+fn reserve_evidence_dir(path: &Path) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::create_dir(path)
+        .context("evidence directory must be new; previous evidence is never overwritten")
 }
 
 fn redacted_live_probe_error(label: &'static str) -> anyhow::Error {
     anyhow!("{label} failed; raw provider request and response details were not serialized")
 }
 
-fn live_model(config: &AppConfig) -> Result<OpenAiCompatibleModel> {
-    match &config.model_config {
-        ModelConfig::OpenAiResponses(_) | ModelConfig::Anthropic(_) => Err(anyhow!(
-            "native provider live certification is not implemented; offline adapter support is not live evidence"
-        )),
-        ModelConfig::Mock => Err(anyhow!(
-            "live provider certification requires openai-compatible or openrouter provider config; mock cannot produce live evidence"
-        )),
+fn live_model(config: &AppConfig, meter: CertificationMeter) -> Result<Box<dyn ModelPort>> {
+    let model: Box<dyn ModelPort> = match &config.model_config {
+        ModelConfig::Mock => return Err(anyhow!("mock cannot produce live evidence")),
+        ModelConfig::OpenAiResponses(provider) => Box::new(
+            NativeModel::new(provider.clone(), NativeProtocol::OpenAiResponses)?
+                .with_certification_meter(meter),
+        ),
+        ModelConfig::Anthropic(provider) => Box::new(
+            NativeModel::new(provider.clone(), NativeProtocol::Anthropic)?
+                .with_certification_meter(meter),
+        ),
         ModelConfig::OpenAiCompatible(provider) => {
-            OpenAiCompatibleModel::new(provider.clone()).map_err(|error| anyhow!(error.to_string()))
+            Box::new(OpenAiCompatibleModel::new(provider.clone())?.with_certification_meter(meter))
         }
-        ModelConfig::OpenRouter(provider) => {
-            OpenAiCompatibleModel::new_for_provider(provider.clone(), "openrouter")
-                .map_err(|error| anyhow!(error.to_string()))
-        }
-    }
+        ModelConfig::OpenRouter(provider) => Box::new(
+            OpenAiCompatibleModel::new_for_provider(provider.clone(), "openrouter")?
+                .with_certification_meter(meter),
+        ),
+    };
+    Ok(model)
 }
 
 fn live_decision_request() -> ModelDecisionRequest {
@@ -272,15 +388,6 @@ fn certification_snapshot() -> SelfSnapshot {
         claims: vec!["provider.certification.mode=live".to_string()],
         evidence: vec!["event:provider-live-certification-evidence".to_string()],
         episodes: vec!["episode:provider-live-certification".to_string()],
-    }
-}
-
-fn live_command_evidence() -> ProviderLiveCommandEvidence {
-    ProviderLiveCommandEvidence {
-        name: "provider-live-certification",
-        command: "./scripts/provider-live-certification-run.sh --live",
-        status: "passed",
-        exit_code: 0,
     }
 }
 

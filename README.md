@@ -1,5 +1,10 @@
 # MCP Memory Ledger
 
+## 2026-10-13 验收工具更新
+
+三协议验收器已覆盖 Chat、Responses、Anthropic；新增请求/输入/输出限制与失败用量记录。回环 fixture 与真实调用分层，未知价格不声明美元硬上限；真实模型与用户客户端仍待验收。候选包增加更正重放、跨 namespace 直接查询/历史隔离及恢复后的历史/证据比对。当前步骤和证据口径见[本轮验收记录](docs/acceptance-2026-10-13.md)。
+
+
 让本地 AI 客户端记住有来源的信息，找回证据，并在纠错后保留历史。
 
 这是 Rust + SQLite 实现的 MCP `stdio` 记忆服务，当前定位是 **local-first technical MVP**。可以离线验证记录、检索、反馈纠错和备份恢复；尚未完成正式 Local Alpha、fresh-machine 安装和真实模型效果验收。

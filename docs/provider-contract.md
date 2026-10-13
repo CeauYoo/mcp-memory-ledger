@@ -93,9 +93,25 @@ Responses explicitly sends `store: false`; that request flag is not a general
 promise about the provider's data-retention policy. Local HTTP fixtures verify
 wire contracts and both decision/reflection paths without paid API calls. They
 do not establish endpoint reachability, model quality, live certification, or a
-release gate. The existing live certification runner rejects native providers;
-preflight keeps `live_certified = false` for both, including when evidence files
-are supplied. Extending that runner requires separate work and authorization.
+release gate. The bounded certification runner now supports all three wire protocols.
+It records loopback endpoints as `offline/protocol-fixture`, never live evidence.
+Two successful probes do not establish error handling or human redaction review;
+those evidence items remain `not_tested`, so the overall preflight stays blocked
+until those separate gates are satisfied. See [acceptance boundaries](acceptance-2026-10-13.md).
+
+Legacy Chat Completions/OpenRouter now always send `max_tokens: 2048` and `stream: false`.
+This does not claim compatibility with every Chat model: providers/models requiring
+`max_completion_tokens` should use a supported Responses configuration or require
+a separately tested adapter option. There is no field-switch retry. The requested
+`gpt-6.1-luna` model remains unverified; confirm gateway protocol support separately.
+The certification runner lowers the output ceiling to 512 tokens (or a smaller
+configured native limit), caps the serialized JSON request at 16 KiB, and allows
+at most two sends with zero retries. Limits apply per invocation, not cumulatively
+across invocations. Byte caps are not tokenizer-exact input token caps. Usage,
+HTTP status and attempted sends are recorded without payloads, including failures;
+missing usage and USD cost remain unknown. No software-enforced USD cap is claimed.
+Use the provider's billing/quota controls for a monetary ceiling. Unknown model
+prices, cache/reasoning billing and failed requests require provider reconciliation.
 
 The detailed legacy test-name lists below remain a Chat Completions compatibility
 baseline. Native protocol and integration tests supplement them, rather than

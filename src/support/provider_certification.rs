@@ -88,15 +88,9 @@ pub fn summarize_provider_certification(
         .filter(|entry| entry.status != "present")
         .map(|entry| entry.name.to_string())
         .collect::<Vec<_>>();
-    let native_without_live_runner = matches!(
-        options.config.model_config,
-        ModelConfig::OpenAiResponses(_) | ModelConfig::Anthropic(_)
-    );
-    let live_certified = !native_without_live_runner
-        && config_preflight_error.is_none()
-        && missing_live_evidence.is_empty();
+    let live_certified = config_preflight_error.is_none() && missing_live_evidence.is_empty();
     let live_certification_status = if live_certified { "passed" } else { "blocked" };
-    let mut non_claims = vec![
+    let non_claims = vec![
         "not provider quality certification".to_string(),
         "not provider SLA evidence".to_string(),
         "not provider gateway certification".to_string(),
@@ -104,9 +98,6 @@ pub fn summarize_provider_certification(
         "not live self-revision quality evidence".to_string(),
         "not release approval".to_string(),
     ];
-    if native_without_live_runner {
-        non_claims.push("native protocol adapters are verified offline only; native live certification runner is not implemented".to_string());
-    }
     let markdown = render_markdown(
         &provider,
         config_preflight_status,

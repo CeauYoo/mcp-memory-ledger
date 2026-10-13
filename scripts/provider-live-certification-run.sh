@@ -7,7 +7,9 @@ usage() {
 usage: ./scripts/provider-live-certification-run.sh (--live | --stub-evidence) [config_path] [evidence_root]
 
 Generates provider certification evidence files. --live calls the configured
-provider endpoint and writes bounded, redacted evidence. --stub-evidence writes
+provider endpoint (at most two sends, 16 KiB input JSON and 512 output tokens per
+request, no retry). Unknown prices prevent a software-enforced dollar cap.
+Use a new evidence root; loopback fixtures are offline evidence. --stub-evidence writes
 explicit stub/simulated evidence that does not satisfy live certification.
 
 Omitted or conflicting mode is rejected; choose --live or --stub-evidence.

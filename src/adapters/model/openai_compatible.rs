@@ -16,6 +16,7 @@ use async_trait::async_trait;
 pub struct OpenAiCompatibleModel {
     transport: Transport,
     model: String,
+    max_tokens: u32,
     provider_name: &'static str,
 }
 
@@ -38,14 +39,25 @@ impl OpenAiCompatibleModel {
                 Authentication::Bearer,
             )?,
             model: config.model,
+            max_tokens: 2048,
             provider_name,
         })
+    }
+
+    pub fn with_certification_meter(mut self, meter: super::metering::CertificationMeter) -> Self {
+        self.transport = self.transport.with_meter(meter);
+        self.max_tokens = super::metering::MAX_OUTPUT_TOKENS;
+        self
     }
 
     async fn generate(&self, prompt: prompt::Prompt) -> Result<String, AppError> {
         let body = self
             .transport
-            .send(chat_completions::request(&self.model, prompt))
+            .send(chat_completions::request(
+                &self.model,
+                prompt,
+                self.max_tokens,
+            ))
             .await?;
         chat_completions::text(body, self.provider_name)
     }

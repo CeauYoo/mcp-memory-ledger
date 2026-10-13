@@ -1,4 +1,5 @@
 //! The only HTTP effect boundary. A generation is sent once, with no implicit retry.
+use super::metering::CertificationMeter;
 use crate::error::AppError;
 use reqwest::{
     header::{AUTHORIZATION, HeaderMap, HeaderValue},
@@ -8,6 +9,7 @@ use serde_json::Value;
 
 #[derive(Clone)]
 pub(super) struct Transport {
+    meter: Option<CertificationMeter>,
     client: reqwest::Client,
     endpoint: reqwest::Url,
     provider: &'static str,
@@ -72,20 +74,37 @@ impl Transport {
             .build()
             .map_err(|_| invalid())?;
         Ok(Self {
+            meter: None,
             client,
             endpoint,
             provider,
         })
     }
 
+    pub fn with_meter(mut self, meter: CertificationMeter) -> Self {
+        self.meter = Some(meter);
+        self
+    }
+
     pub async fn send(&self, payload: Value) -> Result<Value, AppError> {
+        let bytes = serde_json::to_vec(&payload)
+            .map_err(|_| AppError::Message("could not encode model request".into()))?;
+        let index = self
+            .meter
+            .as_ref()
+            .map(|meter| meter.begin(&payload, bytes.len()))
+            .transpose()?;
         let response = self
             .client
             .post(self.endpoint.clone())
-            .json(&payload)
+            .header(reqwest::header::CONTENT_TYPE, "application/json")
+            .body(bytes)
             .send()
             .await
             .map_err(|error| self.network_error(error.is_timeout()))?;
+        if let (Some(meter), Some(index)) = (&self.meter, index) {
+            meter.status(index, response.status().as_u16());
+        }
         if !response.status().is_success() {
             // Provider bodies, request IDs and URL paths can contain credentials or prompt data.
             return Err(AppError::Message(format!(
@@ -94,13 +113,17 @@ impl Transport {
                 response.status().as_u16()
             )));
         }
-        response.json().await.map_err(|error| {
+        let body = response.json().await.map_err(|error| {
             if error.is_timeout() {
                 self.network_error(true)
             } else {
                 AppError::Message(format!("{} response could not be parsed", self.provider))
             }
-        })
+        })?;
+        if let (Some(meter), Some(index)) = (&self.meter, index) {
+            meter.usage(index, &body);
+        }
+        Ok(body)
     }
 
     fn network_error(&self, timeout: bool) -> AppError {

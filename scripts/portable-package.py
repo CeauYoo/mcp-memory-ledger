@@ -563,15 +563,28 @@ def smoke(binary, root, output):
         feedback = client.tool("ingest_interaction", {"request_id": "package-correction", "event": {
             "owner": "World", "namespace": "project/package/a", "kind": "Observation", "summary": "portable violet correction"},
             "claim_drafts": [], "episode_reference": "episode:package/correction"})
-        client.tool("supersede_memory", {"request_id": "package-supersede", "namespace": "project/package/a",
+        correction_args = {"request_id": "package-supersede", "namespace": "project/package/a",
             "claim_reference": old, "replacement_claim": {"owner": "World", "namespace": "project/package/a",
             "subject": "package-test", "predicate": "color", "object": "violet", "mode": "Observed"},
-            "replacement_evidence_event_ids": [feedback["event_id"]], "summary": "synthetic package smoke correction"})
+            "replacement_evidence_event_ids": [feedback["event_id"]], "summary": "synthetic package smoke correction"}
+        correction = client.tool("supersede_memory", correction_args)
+        require(client.tool("supersede_memory", correction_args) == correction, "correction replay changed result")
         current = client.tool("recall_memory", {"namespace": "project/package/a", "query": "violet"})
         require(any(x["record"].get("object") == "violet" and x["record"].get("status") == "Active"
                     for x in current["records"]), "corrected Claim not returned")
         history = client.tool("get_reflection_history", {"namespace": "project/package/a", "claim_reference": old})
         require(bool(history["reflections"]), "correction audit history missing")
+        for record_type, reference in (("Claim", old), ("Event", event_id),
+                                       ("Event", feedback["event_id"]),
+                                       ("Reflection", history["reflections"][0]["reflection_id"])):
+            foreign = client.tool("get_memory", {"namespace": "project/package/b",
+                                  "record_type": record_type, "id": reference})
+            require(foreign["record"] is None, "cross-namespace direct lookup disclosed a record")
+        foreign_history = client.tool("get_reflection_history", {"namespace": "project/package/b", "claim_reference": old})
+        require(not foreign_history["reflections"], "cross-namespace correction history disclosed")
+        foreign_recall = client.tool("recall_memory", {"namespace": "project/package/b", "query": "violet"})
+        require(not foreign_recall["records"], "correction leaked into foreign namespace recall")
+
     backup, restored = state / "backup.sqlite", state / "restored.sqlite"
     backup_restore(database, backup, restored)
     # Explicitly switch only this synthetic smoke configuration to the new path.
@@ -585,6 +598,12 @@ def smoke(binary, root, output):
         client.initialize()
         after = client.tool("recall_memory", {"namespace": "project/package/a", "query": "violet"})
         require(after == current, "restored MCP recall changed the recorded result")
+        restored_history = client.tool("get_reflection_history", {"namespace": "project/package/a", "claim_reference": old})
+        require(restored_history == history, "restored correction history changed")
+        restored_claim = client.tool("get_memory", {"namespace": "project/package/a", "record_type": "Claim", "id": old})
+        require(restored_claim["record"]["status"] == "Superseded", "old Claim lost superseded status")
+        require(restored_claim["record"]["provenance"]["evidence_event_references"] ==
+                inspected["record"]["provenance"]["evidence_event_references"], "restored source evidence changed")
     # Avoid persisting private absolute temporary paths in portable evidence.
     def write_evidence(name, value):
         data = canonical(value).decode("utf-8")
@@ -597,6 +616,8 @@ def smoke(binary, root, output):
     write_evidence("mcp-transcript.json", transcript)
     return {"init": True, "doctor_read_only": True, "mcp_initialize": True, "mcp_tools_list": True,
             "mcp_ingest_restart_recall": True, "mcp_inspect_correct_history": True,
+            "correction_replay": True, "foreign_direct_lookup_and_history_isolated": True,
+            "restored_history_and_provenance": True,
             "sqlite_integrity": True, "backup_restore_to_new_path": True,
             "restored_read_only_doctor_and_mcp_recall": True,
             "namespace_leaks": 0, "provider": "mock", "remote_model_calls": 0,

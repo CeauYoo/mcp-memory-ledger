@@ -57,6 +57,15 @@ impl NativeModel {
         })
     }
 
+    pub fn with_certification_meter(mut self, meter: super::metering::CertificationMeter) -> Self {
+        self.transport = self.transport.with_meter(meter);
+        self.config.max_tokens = self
+            .config
+            .max_tokens
+            .min(super::metering::MAX_OUTPUT_TOKENS);
+        self
+    }
+
     async fn generate(&self, prompt: prompt::Prompt) -> Result<String, AppError> {
         let payload = match self.protocol {
             NativeProtocol::OpenAiResponses => responses::request(&self.config, prompt),

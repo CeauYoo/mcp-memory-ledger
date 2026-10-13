@@ -1,5 +1,10 @@
 # 当前实现状态
 
+## 2026-10-13 验收工具更新
+
+三协议验收器已覆盖 Chat、Responses、Anthropic；新增请求/输入/输出限制与失败用量记录。回环 fixture 与真实调用分层，未知价格不声明美元硬上限；真实模型与用户客户端仍待验收。候选包增加更正重放、跨 namespace 直接查询/历史隔离及恢复后的历史/证据比对。当前步骤和证据口径见[本轮验收记录](acceptance-2026-10-13.md)。
+
+
 更新：2026-10-10。当前定位：**local-first technical MVP，尚未正式发布 binary package**。历史运行时实现基线为 `9ba0050d3ffb9228b02e2d0895b4e76d11ead989`；本轮新增源代码绑定的本地 portable package 构建/解包验证，Windows wrapper 行为测试和修复，以及 schema7 全局 self-model 追加版本。包可在本地生成，不代表人工发布批准。
 
 ## 已实现

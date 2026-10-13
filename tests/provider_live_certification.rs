@@ -383,7 +383,7 @@ fn preflight_rejects_minimal_spoofed_live_evidence_files() {
 }
 
 #[test]
-fn live_runner_generates_preflight_accepted_evidence_files() {
+fn loopback_runner_records_bounded_offline_evidence_without_certifying_live() {
     let temp_dir = tempdir().expect("temp dir");
     let server = BlockingChatServer::spawn(vec![
         serde_json::json!({
@@ -414,7 +414,7 @@ fn live_runner_generates_preflight_accepted_evidence_files() {
 
     assert_eq!(report.provider, "openrouter");
     assert_eq!(report.status, "passed");
-    assert_eq!(report.mode, "live");
+    assert_eq!(report.mode, "offline/protocol-fixture");
     assert_eq!(report.generated_evidence.len(), EVIDENCE_FILES.len());
     assert_eq!(server.request_count(), 2);
     assert!(
@@ -438,17 +438,19 @@ fn live_runner_generates_preflight_accepted_evidence_files() {
         let value: Value =
             serde_json::from_slice(&fs::read(&path).expect("read evidence")).expect("json");
         assert_eq!(value["provider"], "openrouter");
-        assert_eq!(value["status"], "passed");
-        assert_eq!(value["evidence_kind"], *evidence_kind);
-        assert_eq!(value["mode"], "live");
-        assert_eq!(value["local_only"], false);
-        assert_eq!(value["endpoint_reached"], true);
-        assert_eq!(value["redaction_reviewed"], true);
-        assert_eq!(value["request_outcome"], "passed");
         assert_eq!(
-            value["command_evidence"][0]["command"],
-            "./scripts/provider-live-certification-run.sh --live"
+            value["status"],
+            if evidence_kind.starts_with("live_") {
+                "passed"
+            } else {
+                "not_tested"
+            }
         );
+        assert_eq!(value["evidence_kind"], *evidence_kind);
+        assert_eq!(value["mode"], "offline/protocol-fixture");
+        assert_eq!(value["local_only"], true);
+        assert_eq!(value["endpoint_reached"], true);
+        assert_eq!(value["redaction_reviewed"], false);
     }
 
     let summary = summarize_provider_certification(ProviderCertificationOptions {
@@ -459,17 +461,14 @@ fn live_runner_generates_preflight_accepted_evidence_files() {
     })
     .expect("provider certification preflight");
 
-    assert!(summary.live_certified);
-    assert_eq!(summary.live_certification_status, "passed");
-    assert!(summary.missing_live_evidence.is_empty());
-    assert!(
-        summary
-            .live_evidence
-            .iter()
-            .all(|entry| entry.status == "present"),
-        "live runner evidence should satisfy preflight: {:?}",
-        summary.live_evidence
-    );
+    assert!(!summary.live_certified);
+    assert_eq!(summary.live_certification_status, "blocked");
+    assert_eq!(report.accounting.requests_attempted, 2);
+    assert!(!report.accounting.software_enforced_usd_cap);
+    assert_eq!(report.accounting.actual_cost_usd, None);
+    for request in server.request_bodies() {
+        assert_eq!(request["max_tokens"], 512);
+    }
 }
 
 #[test]
@@ -588,6 +587,18 @@ fn live_provider_errors_do_not_serialize_raw_response_payloads() {
         );
     }
     assert_eq!(server.request_count(), 1);
+    let accounting: Value =
+        serde_json::from_slice(
+            &fs::read(temp_dir.path().join(
+                "target/reports/provider-certification/openai-compatible/run-accounting.json",
+            ))
+            .unwrap(),
+        )
+        .unwrap();
+    assert_eq!(accounting["status"], "failed");
+    assert_eq!(accounting["accounting"]["requests_attempted"], 1);
+    assert_eq!(accounting["accounting"]["requests"][0]["http_status"], 500);
+    assert!(accounting["accounting"]["actual_cost_usd"].is_null());
 }
 
 #[test]
@@ -624,6 +635,7 @@ fn default_cli_mode_requires_explicit_live_or_stub_and_mock_live_is_rejected() {
 }
 
 #[test]
+#[cfg(not(windows))]
 fn wrapper_rejects_conflicting_live_modes_before_treating_mode_as_path() {
     let output = Command::new("bash")
         .arg("scripts/provider-live-certification-run.sh")
@@ -649,7 +661,9 @@ fn explicit_live_flag_generates_evidence_by_cli_and_wrapper() {
     let server = BlockingChatServer::spawn(vec![
         live_decision_response(),
         live_self_revision_response(),
+        #[cfg(not(windows))]
         live_decision_response(),
+        #[cfg(not(windows))]
         live_self_revision_response(),
     ]);
     let config_path = temp_dir.path().join("config.toml");
@@ -677,27 +691,32 @@ fn explicit_live_flag_generates_evidence_by_cli_and_wrapper() {
     );
     let cli_stdout: Value =
         serde_json::from_slice(&cli_output.stdout).expect("CLI live report JSON");
-    assert_eq!(cli_stdout["mode"], "live");
+    assert_eq!(cli_stdout["mode"], "offline/protocol-fixture");
     assert_eq!(cli_stdout["status"], "passed");
 
-    let wrapper_output = Command::new("bash")
-        .arg("scripts/provider-live-certification-run.sh")
-        .arg("--live")
-        .arg(&config_path)
-        .arg(temp_dir.path())
-        .output()
-        .expect("run provider live certification wrapper");
+    #[cfg(not(windows))]
+    {
+        let wrapper_output = Command::new("bash")
+            .arg("scripts/provider-live-certification-run.sh")
+            .arg("--live")
+            .arg(&config_path)
+            .arg(temp_dir.path().join("wrapper"))
+            .output()
+            .expect("run provider live certification wrapper");
 
-    assert!(
-        wrapper_output.status.success(),
-        "explicit wrapper live mode should generate bounded evidence: stderr={}",
-        String::from_utf8_lossy(&wrapper_output.stderr)
-    );
-    let wrapper_stdout: Value =
-        serde_json::from_slice(&wrapper_output.stdout).expect("wrapper live report JSON");
-    assert_eq!(wrapper_stdout["mode"], "live");
-    assert_eq!(wrapper_stdout["status"], "passed");
-    assert_eq!(server.request_count(), 4);
+        assert!(
+            wrapper_output.status.success(),
+            "explicit wrapper live mode should generate bounded evidence: stderr={}",
+            String::from_utf8_lossy(&wrapper_output.stderr)
+        );
+        let wrapper_stdout: Value =
+            serde_json::from_slice(&wrapper_output.stdout).expect("wrapper live report JSON");
+        assert_eq!(wrapper_stdout["mode"], "offline/protocol-fixture");
+        assert_eq!(wrapper_stdout["status"], "passed");
+        assert_eq!(server.request_count(), 4);
+    }
+    #[cfg(windows)]
+    assert_eq!(server.request_count(), 2);
 }
 
 fn openrouter_config() -> AppConfig {
@@ -802,6 +821,7 @@ struct BlockingChatServer {
     port: u16,
     request_paths: Arc<Mutex<Vec<String>>>,
     expected_requests: usize,
+    request_bodies: Arc<Mutex<Vec<Value>>>,
     handle: Option<thread::JoinHandle<()>>,
 }
 
@@ -812,10 +832,13 @@ impl BlockingChatServer {
         let expected_requests = responses.len();
         let request_paths = Arc::new(Mutex::new(Vec::new()));
         let paths = Arc::clone(&request_paths);
+        let request_bodies = Arc::new(Mutex::new(Vec::new()));
+        let bodies = Arc::clone(&request_bodies);
         let handle = thread::spawn(move || {
             for response in responses {
                 let (mut stream, _) = listener.accept().expect("accept request");
-                let path = read_request_path(&mut stream);
+                let (path, body) = read_request(&mut stream);
+                bodies.lock().unwrap().push(body);
                 paths.lock().expect("paths lock").push(path);
                 let body = response.to_string();
                 let response = format!(
@@ -834,6 +857,7 @@ impl BlockingChatServer {
             port: address.port(),
             request_paths,
             expected_requests,
+            request_bodies,
             handle: Some(handle),
         }
     }
@@ -852,6 +876,10 @@ impl BlockingChatServer {
 
     fn request_count(&self) -> usize {
         self.request_paths.lock().expect("paths lock").len()
+    }
+
+    fn request_bodies(&self) -> Vec<Value> {
+        self.request_bodies.lock().unwrap().clone()
     }
 
     fn request_paths(&self) -> Vec<String> {
@@ -935,19 +963,53 @@ impl Drop for FailingChatServer {
 }
 
 fn read_request_path(stream: &mut TcpStream) -> String {
-    let mut buffer = [0_u8; 16 * 1024];
-    let bytes_read = stream.read(&mut buffer).expect("read request");
-    let request = String::from_utf8_lossy(&buffer[..bytes_read]);
-    request
+    read_request(stream).0
+}
+
+fn read_request(stream: &mut TcpStream) -> (String, Value) {
+    stream
+        .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+        .unwrap();
+    let mut bytes = Vec::new();
+    let mut buffer = [0_u8; 4096];
+    let header_end = loop {
+        let count = stream.read(&mut buffer).unwrap();
+        assert!(count > 0);
+        bytes.extend_from_slice(&buffer[..count]);
+        if let Some(end) = bytes.windows(4).position(|window| window == b"\r\n\r\n") {
+            break end + 4;
+        }
+    };
+    let header = String::from_utf8_lossy(&bytes[..header_end]).into_owned();
+    let length = header
+        .lines()
+        .find_map(|line| {
+            let (name, value) = line.split_once(':')?;
+            name.eq_ignore_ascii_case("content-length")
+                .then(|| value.trim().parse::<usize>().unwrap())
+        })
+        .unwrap_or(0);
+    while bytes.len() < header_end + length {
+        let count = stream.read(&mut buffer).unwrap();
+        assert!(count > 0);
+        bytes.extend_from_slice(&buffer[..count]);
+    }
+    let path = header
         .lines()
         .next()
-        .and_then(|line| line.split_whitespace().nth(1))
-        .unwrap_or("<missing-path>")
-        .to_string()
+        .unwrap()
+        .split_whitespace()
+        .nth(1)
+        .unwrap()
+        .to_owned();
+    (
+        path,
+        serde_json::from_slice(&bytes[header_end..header_end + length]).unwrap_or(Value::Null),
+    )
 }
 
 #[test]
-fn native_providers_support_redacted_stub_evidence_but_reject_live_certification() {
+fn native_stub_evidence_stays_offline_and_unsafe_urls_fail_before_network() {
     use agent_llm_mm::support::config::NativeModelConfig;
     for kind in [
         ModelProviderKind::OpenAiResponses,
@@ -998,10 +1060,165 @@ fn native_providers_support_redacted_stub_evidence_but_reject_live_certification
             mode: ProviderLiveCertificationMode::Live,
         })
         .expect_err("native live runner must not silently route to chat completions");
-        assert!(
-            error
-                .to_string()
-                .contains("native provider live certification is not implemented")
+        assert!(error.to_string().contains("invalid HTTP configuration"));
+    }
+}
+
+#[test]
+fn native_certification_uses_native_paths_caps_and_usage_without_live_claims() {
+    use agent_llm_mm::support::config::NativeModelConfig;
+    for kind in [
+        ModelProviderKind::OpenAiResponses,
+        ModelProviderKind::Anthropic,
+    ] {
+        let text = [
+            "read_identity_core",
+            r#"{"should_reflect":false,"rationale":"fixture"}"#,
+        ];
+        let responses = text.map(|text| if kind == ModelProviderKind::OpenAiResponses {
+            serde_json::json!({"status":"completed", "output":[{"type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":text}]}],"usage":{"input_tokens":70,"output_tokens":20}})
+        } else {
+            serde_json::json!({"type":"message","role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":text}],"usage":{"input_tokens":70,"output_tokens":20,"cache_read_input_tokens":5}})
+        });
+        let server = BlockingChatServer::spawn(responses.to_vec());
+        let native = NativeModelConfig {
+            base_url: server.base_url(),
+            api_key: "native-fixture-key".into(),
+            model: "native-fixture-model".into(),
+            timeout_ms: 2000,
+            max_tokens: 1024,
+            temperature: None,
+        };
+        let config = AppConfig {
+            model_provider: kind,
+            model_config: if kind == ModelProviderKind::OpenAiResponses {
+                ModelConfig::OpenAiResponses(native)
+            } else {
+                ModelConfig::Anthropic(native)
+            },
+            ..AppConfig::default()
+        };
+        let dir = tempdir().unwrap();
+        let report = run_provider_live_certification(ProviderLiveCertificationOptions {
+            config: config.clone(),
+            evidence_root: dir.path().into(),
+            mode: ProviderLiveCertificationMode::Live,
+        })
+        .unwrap();
+        assert_eq!(report.mode, "offline/protocol-fixture");
+        assert_eq!(report.accounting.requests_attempted, 2);
+        let (path, field) = if kind == ModelProviderKind::OpenAiResponses {
+            ("/responses", "max_output_tokens")
+        } else {
+            ("/messages", "max_tokens")
+        };
+        assert!(server.request_paths().iter().all(|value| value == path));
+        for body in server.request_bodies() {
+            assert_eq!(body[field], 512);
+        }
+        for request in &report.accounting.requests {
+            assert_eq!(request.input_tokens, Some(70));
+            assert_eq!(request.output_tokens, Some(20));
+            assert_eq!(request.http_status, Some(200));
+            assert!(request.serialized_input_bytes <= 16384);
+        }
+        let error = run_provider_live_certification(ProviderLiveCertificationOptions {
+            config,
+            evidence_root: dir.path().into(),
+            mode: ProviderLiveCertificationMode::Live,
+        })
+        .unwrap_err();
+        assert!(format!("{error:#}").contains("must be new"));
+        assert_eq!(
+            server.request_count(),
+            2,
+            "duplicate evidence root must fail before sending"
         );
     }
+}
+
+#[test]
+fn oversized_request_is_stopped_before_http_and_recorded_as_zero_attempts() {
+    let directory = tempdir().unwrap();
+    let server = BlockingChatServer::spawn(vec![]);
+    let mut config = openrouter_config_with_base_url(server.base_url());
+    if let ModelConfig::OpenRouter(ref mut provider) = config.model_config {
+        provider.model = "m".repeat(17000);
+    }
+    let error = run_provider_live_certification(ProviderLiveCertificationOptions {
+        config,
+        evidence_root: directory.path().into(),
+        mode: ProviderLiveCertificationMode::Live,
+    })
+    .unwrap_err();
+    assert!(error.to_string().contains("live decision path failed"));
+    let ledger: Value = serde_json::from_slice(
+        &fs::read(
+            directory
+                .path()
+                .join("target/reports/provider-certification/openrouter/request-accounting.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(ledger["requests_attempted"], 0);
+    assert_eq!(server.request_count(), 0);
+}
+
+#[test]
+fn accounting_survives_later_evidence_redaction_failure() {
+    let directory = tempdir().unwrap();
+    let server = BlockingChatServer::spawn(vec![
+        live_decision_response(),
+        live_self_revision_response(),
+    ]);
+    let mut config = openrouter_config_with_base_url(server.base_url());
+    // Synthetic collision with an evidence field causes the redaction guard to fail.
+    if let ModelConfig::OpenRouter(ref mut provider) = config.model_config {
+        provider.api_key = "redaction_review".into();
+    }
+    let error = run_provider_live_certification(ProviderLiveCertificationOptions {
+        config,
+        evidence_root: directory.path().into(),
+        mode: ProviderLiveCertificationMode::Live,
+    })
+    .unwrap_err();
+    assert!(error.to_string().contains("redaction check failed"));
+    let ledger = fs::read_to_string(
+        directory
+            .path()
+            .join("target/reports/provider-certification/openrouter/request-accounting.json"),
+    )
+    .unwrap();
+    assert!(!ledger.contains("redaction_review"));
+    let ledger: Value = serde_json::from_str(&ledger).unwrap();
+    assert_eq!(ledger["requests_attempted"], 2);
+    assert!(ledger["actual_cost_usd"].is_null());
+}
+
+#[test]
+fn second_probe_failure_preserves_first_success_without_fabricating_command_exit() {
+    let directory = tempdir().unwrap();
+    let server = BlockingChatServer::spawn(vec![
+        live_decision_response(),
+        serde_json::json!({"error":"synthetic failure"}),
+    ]);
+    let config = openrouter_config_with_base_url(server.base_url());
+    run_provider_live_certification(ProviderLiveCertificationOptions {
+        config,
+        evidence_root: directory.path().into(),
+        mode: ProviderLiveCertificationMode::Live,
+    })
+    .unwrap_err();
+    let root = directory
+        .path()
+        .join("target/reports/provider-certification/openrouter");
+    let decision: Value =
+        serde_json::from_slice(&fs::read(root.join("live-decision.json")).unwrap()).unwrap();
+    assert_eq!(decision["status"], "passed");
+    assert_eq!(decision["command_evidence"], serde_json::json!([]));
+    let report: Value =
+        serde_json::from_slice(&fs::read(root.join("run-accounting.json")).unwrap()).unwrap();
+    assert_eq!(report["status"], "failed");
+    assert_eq!(report["accounting"]["requests_attempted"], 2);
 }

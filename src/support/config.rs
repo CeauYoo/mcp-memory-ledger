@@ -241,14 +241,14 @@ impl AppConfig {
                 state: "supported",
                 configurable: true,
                 adapter: "native OpenAI Responses; offline-tested, not live-certified",
-                missing_implementation: "live provider certification runner",
+                missing_implementation: "live provider certification evidence and client acceptance",
             },
             ProviderMatrixEntry {
                 provider: "anthropic",
                 state: "supported",
                 configurable: true,
                 adapter: "native Anthropic Messages; offline-tested, not live-certified",
-                missing_implementation: "live provider certification runner",
+                missing_implementation: "live provider certification evidence and client acceptance",
             },
             ProviderMatrixEntry {
                 provider: "azure-openai",

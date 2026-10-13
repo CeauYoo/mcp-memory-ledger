@@ -63,7 +63,7 @@ fn main() -> Result<()> {
 
 fn print_usage() {
     eprintln!(
-        "usage: provider_live_certification_run (--live | --stub-evidence) [--config-path <path>] [--evidence-root <path>]\n\n--live calls the configured provider endpoint and writes bounded, redacted evidence. --stub-evidence writes explicit stub/simulated evidence that does not satisfy live certification."
+        "usage: provider_live_certification_run (--live | --stub-evidence) [--config-path <path>] [--evidence-root <path>]\n\n--live sends at most two requests (16 KiB input JSON and 512 output tokens each, zero retries). It records usage with unknown USD cost; it cannot enforce a dollar cap. Loopback fixtures are offline evidence. Use a new evidence directory. --stub-evidence writes explicit stub/simulated evidence that does not satisfy live certification."
     );
 }
 
