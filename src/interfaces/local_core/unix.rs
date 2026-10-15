@@ -91,6 +91,11 @@ impl CoreHandle {
     pub fn active_requests(&self) -> usize {
         self.dispatch_gate.active_count()
     }
+    /// Authorized tool dispatches still executing, including their final audit.
+    /// Unlike active_requests, this excludes cancellable preflight handlers.
+    pub fn dispatched_requests(&self) -> usize {
+        self.dispatch_gate.dispatched_count()
+    }
     pub async fn stop(mut self) {
         if let Some(task) = self.task.take() {
             if let Some(shutdown) = self.shutdown.take() {

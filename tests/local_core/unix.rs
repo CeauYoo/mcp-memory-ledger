@@ -796,12 +796,12 @@ async fn stopping_core_drains_admitted_transaction_before_releasing_database_loc
     input["request_id"] = json!("shutdown-receipt");
     client.send(json!({"jsonrpc":"2.0","id":900,"method":"tools/call","params":{"name":"ingest_interaction","arguments":input}})).unwrap();
     tokio::time::timeout(Duration::from_secs(2), async {
-        while core.active_requests() == 0 {
+        while core.dispatched_requests() == 0 {
             tokio::task::yield_now().await;
         }
     })
     .await
-    .expect("request must enter before shutdown");
+    .expect("tool must pass the final cancellation check before shutdown");
     let stop = tokio::spawn(core.stop());
     // A signal-based barrier confirms stop has begun: the listener is closed and
     // bridges lose their connection, while the actual admitted transaction waits.
@@ -905,13 +905,12 @@ async fn cancellation_is_connection_local_and_admitted_writes_are_not_rolled_bac
         .unwrap();
     a.send(json!({"jsonrpc":"2.0","id":900,"method":"tools/call","params":{"name":"ingest_interaction","arguments":ingest("synthetic admitted cancellation")}})).unwrap();
     tokio::time::timeout(Duration::from_secs(2), async {
-        while core.active_requests() == 0 {
+        while core.dispatched_requests() == 0 {
             tokio::task::yield_now().await;
         }
     })
     .await
     .unwrap();
-    tokio::time::sleep(Duration::from_millis(50)).await;
     for _ in 0..100 {
         a.send(
             json!({"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":900}}),

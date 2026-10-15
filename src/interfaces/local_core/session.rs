@@ -44,10 +44,12 @@ pub(crate) struct SessionDispatchGate {
 struct DispatchState {
     closed: bool,
     active: usize,
+    dispatched: usize,
 }
 
 pub(crate) struct SessionDispatchGuard<'a> {
     gate: &'a SessionDispatchGate,
+    dispatched: bool,
 }
 
 impl SessionDispatchGate {
@@ -64,7 +66,10 @@ impl SessionDispatchGate {
             return None;
         }
         state.active += 1;
-        Some(SessionDispatchGuard { gate: self })
+        Some(SessionDispatchGuard {
+            gate: self,
+            dispatched: false,
+        })
     }
 
     /// Read-only host diagnostics; never exposed as authority to MCP arguments.
@@ -73,6 +78,15 @@ impl SessionDispatchGate {
             .lock()
             .expect("session dispatch gate lock poisoned")
             .active
+    }
+
+    /// Calls that passed authorization and the final pre-dispatch cancellation
+    /// check. Handler entry alone must not be treated as an admitted DB write.
+    pub(crate) fn dispatched_count(&self) -> usize {
+        self.state
+            .lock()
+            .expect("session dispatch gate lock poisoned")
+            .dispatched
     }
 
     pub(crate) async fn close_and_wait(&self) {
@@ -97,6 +111,19 @@ impl SessionDispatchGate {
     }
 }
 
+impl SessionDispatchGuard<'_> {
+    fn mark_dispatched(&mut self) {
+        if !self.dispatched {
+            self.gate
+                .state
+                .lock()
+                .expect("session dispatch gate lock poisoned")
+                .dispatched += 1;
+            self.dispatched = true;
+        }
+    }
+}
+
 impl Drop for SessionDispatchGuard<'_> {
     fn drop(&mut self) {
         let idle = {
@@ -106,6 +133,9 @@ impl Drop for SessionDispatchGuard<'_> {
                 .lock()
                 .expect("session dispatch gate lock poisoned");
             state.active -= 1;
+            if self.dispatched {
+                state.dispatched -= 1;
+            }
             state.active == 0
         };
         if idle {
@@ -312,7 +342,7 @@ impl ServerHandler for BoundSession {
         mut request: CallToolRequestParam,
         context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, McpError> {
-        let _dispatch = self.dispatch_gate.enter().ok_or_else(stopping_error)?;
+        let mut dispatch = self.dispatch_gate.enter().ok_or_else(stopping_error)?;
         ensure_not_cancelled(&context)?;
         // Resolve the name to the static inventory before attribution: an unknown
         // caller-controlled name must never enter audit history or live events.
@@ -365,6 +395,9 @@ impl ServerHandler for BoundSession {
             }
         };
         ensure_not_cancelled(&context)?;
+        // Admission is after the last cancellation check. From here the tool
+        // and its audit finish under the lifetime guard, even on disconnect.
+        dispatch.mark_dispatched();
         request.arguments = Some(approved.args);
         let result = self.server.call_tool(request, context).await;
         let succeeded = result
@@ -620,6 +653,46 @@ mod tests {
                 .unwrap()
                 .unwrap();
         }
+    }
+
+    #[tokio::test]
+    async fn dispatch_diagnostics_distinguish_preflight_from_admitted_work_and_drain_both() {
+        let gate = Arc::new(SessionDispatchGate::new());
+        let preflight = gate.enter().unwrap();
+        assert_eq!(gate.active_count(), 1);
+        assert_eq!(gate.dispatched_count(), 0);
+        // A cancelled preflight may finish without ever executing a tool.
+        drop(preflight);
+        assert_eq!(gate.active_count(), 0);
+        assert_eq!(gate.dispatched_count(), 0);
+        let preflight = gate.enter().unwrap();
+        let mut admitted = gate.enter().unwrap();
+        admitted.mark_dispatched();
+        admitted.mark_dispatched();
+        assert_eq!(gate.active_count(), 2);
+        assert_eq!(gate.dispatched_count(), 1);
+        let closing_gate = gate.clone();
+        let closing = tokio::spawn(async move { closing_gate.close_and_wait().await });
+        timeout(Duration::from_secs(2), async {
+            while !gate.state.lock().unwrap().closed {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        assert!(gate.enter().is_none());
+        assert!(!closing.is_finished());
+        drop(preflight);
+        assert_eq!(gate.active_count(), 1);
+        assert_eq!(gate.dispatched_count(), 1);
+        assert!(!closing.is_finished());
+        drop(admitted);
+        timeout(Duration::from_secs(2), closing)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(gate.active_count(), 0);
+        assert_eq!(gate.dispatched_count(), 0);
     }
 
     #[tokio::test]

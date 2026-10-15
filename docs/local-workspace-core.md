@@ -117,3 +117,6 @@ AGENT_LLM_MM_CONFIG=/absolute/local-state/core.toml /absolute/bin/agent_llm_mm c
 使用 `scripts/verify-local-core.py --binary /absolute/bin/agent_llm_mm --output /absolute/isolated-output` 做无 Rust 运行 PATH、两项目写入、重连、证据、更正、历史、强制终止、回执重放及恢复到新路径核验。它只操作自己创建的进程和数据库，运行结果保留在显式输出目录。该脚本实现/通过状态以[矩阵](workspace-core-acceptance.md)为准。
 
 恢复必须同时保留所需的数据库备份及工作空间注册表：稳定 ID 决定 namespace。恢复到新目录后显式绑定根，不能重新生成 ID 并假定旧记忆会自动归属。管理员 `grant --read false --write false` 可撤销个人共享；完整数据库恢复、旧版本回退继续遵守[数据库操作](database-operations.md)，不在活动核心上做原地迁移。
+
+
+核心生命周期诊断区分 `active_requests()`（含仍可取消的鉴权前处理）与 `dispatched_requests()`（已通过授权及最后取消检查的工具调用，计数保留至审计结束）。关闭仍等待所有已进入 handler 的工作结束后才释放数据库锁；已进入 handler 不表示工具一定执行，取消可在 dispatch 前使它正常提前结束。恢复/取消验收必须等待后者的明确接纳信号，不能用 handler 数量或固定睡眠推断数据库写入已开始。
