@@ -58,6 +58,9 @@ jobs:
         shell: bash
         run: python -m unittest discover -s tests -p 'test_portable_package.py' -v
 
+      - name: Test staged experience acceptance and loopback live monitor offline
+        run: python -B -m unittest discover -s tools/experience -p 'test_*.py' -v
+
       - name: Build exact-source portable archive and verify without Rust
         shell: bash
         run: |
@@ -100,6 +103,9 @@ jobs:
       - name: Test portable archive safety contracts
         shell: bash
         run: python -m unittest discover -s tests -p 'test_portable_package.py' -v
+
+      - name: Test staged experience acceptance and loopback live monitor offline
+        run: python -B -m unittest discover -s tools/experience -p 'test_*.py' -v
 
       - name: Build exact-source portable archive and verify without Rust
         shell: bash

@@ -1,5 +1,9 @@
 # macOS 开发与接入指南
 
+## 2026-10-15 体验与客户端验收
+
+仓库根目录执行 `python3 -E -s -B tools/experience/run.py`（或双击 `tools/experience/Start-Retest.command`）：用户一次隐藏输入后执行定向→全量复测，并自动打开本机动态端口实时网页。无凭据检查用 `python3 -E -s -B -m unittest discover -s tools/experience -p 'test_*.py' -v`。实际已安装 Codex 的无模型脚本、Memory-chan Live Desk 启用方式及边界见[本轮验收记录](acceptance-2026-10-15.md)。
+
 ## 2026-10-13 验收工具更新
 
 三协议验收器已覆盖 Chat、Responses、Anthropic；新增请求/输入/输出限制与失败用量记录。回环 fixture 与真实调用分层，未知价格不声明美元硬上限；真实模型与用户客户端仍待验收。候选包增加更正重放、跨 namespace 直接查询/历史隔离及恢复后的历史/证据比对。当前步骤和证据口径见[本轮验收记录](acceptance-2026-10-13.md)。

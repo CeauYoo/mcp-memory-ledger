@@ -1,5 +1,9 @@
 # Self-Agent MCP 测试指南（2026-03-24，按 2026-07-15 fresh 验证更新）
 
+## 2026-10-15 体验与客户端验收
+
+新增 `python3 -E -s -B -m unittest discover -s tools/experience -p 'test_*.py' -v`，也用 `-O` 检查断言优化不改变运行保护。覆盖真实本地 MCP、合成 HTTP、102 次两阶段路径、实时网页和失败账本；三平台 CI 执行离线套件。实际 Codex 客户端单独用已安装 CLI 运行 `tools/codex_client/acceptance.py`，不调用模型。命令、历史复核与未关闭门禁见[本轮验收记录](acceptance-2026-10-15.md)。
+
 ## 2026-10-13 验收工具更新
 
 三协议验收器已覆盖 Chat、Responses、Anthropic；新增请求/输入/输出限制与失败用量记录。回环 fixture 与真实调用分层，未知价格不声明美元硬上限；真实模型与用户客户端仍待验收。候选包增加更正重放、跨 namespace 直接查询/历史隔离及恢复后的历史/证据比对。当前步骤和证据口径见[本轮验收记录](acceptance-2026-10-13.md)。

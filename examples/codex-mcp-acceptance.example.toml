@@ -1,0 +1,11 @@
+# Proposal only: copy into a dedicated trusted project's .codex/config.toml
+# after reviewing persistent configuration/trust changes with the user.
+# Replace both paths; initialize a NEW synthetic mock database first.
+# Never include credentials or point this at the user's existing memory database.
+[mcp_servers.memory-ledger-acceptance]
+command = "/absolute/path/to/agent_llm_mm"
+args = ["serve"]
+env = { AGENT_LLM_MM_CONFIG = "/absolute/path/to/isolated-mock.toml" }
+startup_timeout_sec = 20
+tool_timeout_sec = 60
+enabled_tools = ["ingest_interaction", "recall_memory", "get_memory", "supersede_memory", "get_reflection_history"]

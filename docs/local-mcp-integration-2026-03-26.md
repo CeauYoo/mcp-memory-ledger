@@ -1,5 +1,9 @@
 # 本机 MCP 接入
 
+## 2026-10-15 体验与客户端验收
+
+已安装 Codex 的 experimental app-server MCP API 已完成无模型合成闭环；脚本 `tools/codex_client/acceptance.py` 用进程配置和独立 HOME，不修改现有配置/项目信任。桌面持续注册仍需用户确认独立项目配置与信任；使用[最小五工具示例](../examples/codex-mcp-acceptance.example.toml)。运行命令、17 次工具调用结果和正式运行监控入口见[验收记录](acceptance-2026-10-15.md)。
+
 更新：2026-10-10。文件名保留历史链接兼容性；本页描述当前 schema7 / 32 工具版本。
 
 先完成[快速开始](quickstart.md)的 build、明确配置、`init` 和 `doctor --read-only`。客户端负责启动服务进程；不要把自己的 shell 环境、工作目录或相对 SQLite 路径当作客户端必然继承的状态。

@@ -2,6 +2,9 @@
 # First build agent_llm_mm, prepare an explicit mock/local configuration,
 # then run init (new DB only) and doctor --read-only with that same config.
 # See docs/quickstart.md and docs/local-mcp-integration-2026-03-26.md.
+# For the isolated five-tool acceptance proposal, see codex-mcp-acceptance.example.toml.
+# The no-model app-server runner and UI registration boundaries are documented in
+# docs/acceptance-2026-10-15.md; the runner does not modify persistent configuration.
 [mcp_servers.memory-ledger]
 command = "/absolute/path/mcp-memory-ledger/target/debug/agent_llm_mm"
 args = ["serve"]
