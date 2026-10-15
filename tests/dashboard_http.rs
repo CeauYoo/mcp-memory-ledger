@@ -328,6 +328,8 @@ async fn dashboard_rejects_write_methods_on_read_only_routes() {
     for method in [Method::POST, Method::PUT, Method::PATCH, Method::DELETE] {
         for path in [
             "/",
+            "/api/status",
+            "/assets/app.mjs",
             "/api/summary",
             "/api/events",
             "/api/events/op_1",
@@ -355,35 +357,107 @@ fn sqlite_url(path: std::path::PathBuf) -> String {
     format!("sqlite://{}", path.to_string_lossy().replace('\\', "/"))
 }
 
-#[test]
-fn dashboard_html_preserves_readable_visual_contract() {
-    let html = agent_llm_mm::interfaces::dashboard::assets::DASHBOARD_HTML;
-
-    assert!(html.contains("Memory-chan Live Desk"));
-    assert!(html.contains("<span><b>live</b> desk</span>"));
-    assert!(html.contains("repeat(auto-fit, minmax(190px, 1fr))"));
-    assert!(html.contains("repeat(auto-fit, minmax(156px, 1fr))"));
-    assert!(html.contains(".event-id"));
-    assert!(html.contains("text-overflow: ellipsis"));
-    assert!(html.contains("object-fit: contain"));
-    assert!(html.contains("grid-template-columns: minmax(0, 1fr);"));
-}
-
-#[test]
-fn dashboard_html_preserves_mobile_layout_contract() {
-    let html = agent_llm_mm::interfaces::dashboard::assets::DASHBOARD_HTML;
-
-    assert!(html.contains("@media (max-width: 760px)"));
-    assert!(html.contains(".live-strip { display: grid; grid-template-columns: 1fr;"));
-    assert!(html.contains(".strip-item { border-left: 0; padding: 4px 0;"));
-    assert!(
-        html.contains(
-            ".top-pills { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));"
-        )
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn dashboard_base_path_redirect_assets_and_instance_metadata() {
+    let mut settings = config("/nested/desk/");
+    settings.sse_enabled = false;
+    let handle = start_dashboard_service(settings, recorder_with_event(), runtime())
+        .await
+        .unwrap();
+    let base = handle.base_url();
+    let client = Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .unwrap();
+    let redirect = client.get(&base).send().await.unwrap();
+    assert_eq!(redirect.status(), StatusCode::PERMANENT_REDIRECT);
+    assert_eq!(redirect.headers()[header::LOCATION], "/nested/desk/");
+    let html = client
+        .get(format!("{base}/"))
+        .send()
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap();
+    assert!(html.contains("type=\"module\" src=\"assets/app.mjs\""));
+    for name in [
+        "dashboard.css",
+        "app.mjs",
+        "state.mjs",
+        "transport.mjs",
+        "render.mjs",
+        "i18n.mjs",
+    ] {
+        let response = client
+            .get(format!("{base}/assets/{name}"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK, "{name}");
+        assert!(
+            response.headers()[header::CONTENT_TYPE]
+                .to_str()
+                .unwrap()
+                .starts_with(if name.ends_with("css") {
+                    "text/css"
+                } else {
+                    "text/javascript"
+                })
+        );
+        assert!(!response.text().await.unwrap().is_empty());
+    }
+    assert_eq!(
+        client
+            .get(format!("{base}/assets/not-bundled.mjs"))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::NOT_FOUND
     );
-    assert!(html.contains(".hero::before {"));
-    assert!(html.contains("clip-path: none;"));
-    assert!(html.contains("linear-gradient(90deg, rgba(232, 250, 255, .96)"));
-    assert!(html.contains(".hero img { object-position: 18% 50%; }"));
-    assert!(html.contains(".hero-deco { display: none; }"));
+    assert_eq!(
+        client
+            .get(format!("{base}/api/events/stream"))
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::NOT_FOUND
+    );
+    let status: serde_json::Value = client
+        .get(format!("{base}/api/status"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(status["process_id"], std::process::id());
+    assert_eq!(status["event_capacity"], 20);
+    assert_eq!(status["history_available"], false);
+    assert_eq!(status["sse_enabled"], false);
+    assert_eq!(status["read_only"], true);
+    let again: serde_json::Value = client
+        .get(format!("{base}/api/status"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(status["instance_id"], again["instance_id"]);
+    assert_eq!(status["started_at"], again["started_at"]);
+    let second = start_dashboard_service(config("/"), recorder_with_event(), runtime())
+        .await
+        .unwrap();
+    let other: serde_json::Value = client
+        .get(format!("{}/api/status", second.base_url()))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_ne!(status["instance_id"], other["instance_id"]);
 }

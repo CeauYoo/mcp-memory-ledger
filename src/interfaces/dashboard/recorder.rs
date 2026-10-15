@@ -27,6 +27,10 @@ impl OperationRecorder {
         }
     }
 
+    pub fn capacity(&self) -> usize {
+        self.capacity
+    }
+
     pub fn append(&self, event: OperationEvent) {
         let mut events = self
             .events

@@ -54,6 +54,9 @@ jobs:
           python3 -m unittest discover -s tests/fixtures/memory-evaluation -p 'test_*.py'
           python3 scripts/temporal-scope-export-smoke.py --binary target/debug/agent_llm_mm --output target/reports/temporal-scope-export
 
+      - name: Test dashboard frontend contracts
+        run: node --test tests/dashboard/frontend.test.mjs
+
       - name: Test portable archive safety contracts
         shell: bash
         run: python -m unittest discover -s tests -p 'test_portable_package.py' -v
@@ -85,7 +88,7 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Test native memory and lifecycle runtime
-        run: cargo test --lib --test sqlite_lifecycle --test sqlite_store --test correction_atomicity --test feedback_provenance --test feedback_candidates --test experience_workflow --test indexed_text_recall --test temporal_metadata --test sqlite_temporal_store --test reflection_scope_history --test scoped_ledger_export --test schema6_migration --test schema7_migration --test self_model_versions --test version_api --test context_diagnostics --test caller_operation_budget --test mcp_stdio --test native_model_protocols --test openai_compatible_model --test provider_config
+        run: cargo test --lib --test sqlite_lifecycle --test sqlite_store --test correction_atomicity --test feedback_provenance --test feedback_candidates --test experience_workflow --test indexed_text_recall --test temporal_metadata --test sqlite_temporal_store --test reflection_scope_history --test scoped_ledger_export --test schema6_migration --test schema7_migration --test self_model_versions --test version_api --test context_diagnostics --test caller_operation_budget --test mcp_stdio --test native_model_protocols --test openai_compatible_model --test provider_config --test dashboard_config --test dashboard_recorder --test dashboard_projection --test dashboard_http
       - name: Test bounded provider certification with offline fixtures
         run: cargo test --features release-tools --test provider_live_certification
       - name: Verify installed-binary offline memory workflow
@@ -99,6 +102,9 @@ jobs:
 
       - name: Verify actual PowerShell wrapper behavior
         run: python scripts/test-windows-wrapper.py
+
+      - name: Test dashboard frontend contracts
+        run: node --test tests/dashboard/frontend.test.mjs
 
       - name: Test portable archive safety contracts
         shell: bash

@@ -28,6 +28,7 @@ pub struct DashboardSummary {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct OperationDetail {
     pub id: String,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
     pub operation: String,
     pub kind: OperationKind,
     pub status: OperationStatus,
@@ -59,6 +60,7 @@ pub fn build_summary(
 pub fn project_event_detail(event: &OperationEvent) -> OperationDetail {
     OperationDetail {
         id: event.id.clone(),
+        timestamp: event.timestamp,
         operation: event.operation.clone(),
         kind: event.kind,
         status: event.status,
@@ -95,13 +97,21 @@ pub fn project_from_log_entry(entry: &OperationLogEntry) -> OperationDetail {
     };
     OperationDetail {
         id: entry.operation_id.clone(),
+        timestamp: entry.occurred_at,
         operation: entry.entrypoint.clone(),
         kind,
         status,
         namespace: entry.namespace.clone(),
         correlation_id: entry.correlation_id.clone(),
         summary: entry.response_summary_json.clone().unwrap_or_default(),
-        payload: serde_json::json!({}),
+        payload: serde_json::json!({
+            "actor_kind": entry.actor_kind,
+            "actor_id": entry.actor_id,
+            "request_summary_json": entry.request_summary_json,
+            "response_summary_json": entry.response_summary_json,
+            "diagnostic_summary_json": entry.diagnostic_summary_json,
+            "redaction_version": entry.redaction_version,
+        }),
         read_only: true,
     }
 }

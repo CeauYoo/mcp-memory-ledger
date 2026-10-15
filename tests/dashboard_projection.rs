@@ -57,3 +57,40 @@ fn detail_projection_preserves_payload_and_read_only_boundary() {
     assert_eq!(detail.payload["reflection_id"], "reflection-1");
     assert_eq!(detail.correlation_id.as_deref(), Some("corr-1"));
 }
+
+#[test]
+fn historical_detail_preserves_original_time_and_nullable_summaries() {
+    use agent_llm_mm::domain::operation_log::{
+        ActorKind, OperationLogEntry, OperationLogKind, OperationLogStatus,
+    };
+    use agent_llm_mm::interfaces::dashboard::project_from_log_entry;
+    let entry = OperationLogEntry {
+        operation_id: "old-record".into(),
+        occurred_at: "2020-01-02T03:04:05Z".parse().unwrap(),
+        namespace: Some("scope/a".into()),
+        actor_kind: ActorKind::System,
+        actor_id: "mcp-stdio".into(),
+        entrypoint: "build_self_snapshot".into(),
+        operation_kind: OperationLogKind::Tool,
+        status: OperationLogStatus::Ok,
+        correlation_id: Some("corr".into()),
+        request_summary_json: None,
+        response_summary_json: Some("{}".into()),
+        diagnostic_summary_json: Some(r#"{"category":"synthetic"}"#.into()),
+        redaction_version: 1,
+    };
+    let detail = project_from_log_entry(&entry);
+    assert_eq!(detail.timestamp, entry.occurred_at);
+    assert_eq!(detail.kind, OperationKind::Tool);
+    assert_eq!(
+        detail.payload["request_summary_json"],
+        serde_json::Value::Null
+    );
+    assert_eq!(detail.payload["response_summary_json"], "{}");
+    assert_eq!(
+        detail.payload["diagnostic_summary_json"],
+        r#"{"category":"synthetic"}"#
+    );
+    assert_eq!(detail.payload["actor_id"], "mcp-stdio");
+    assert_eq!(detail.payload["redaction_version"], 1);
+}

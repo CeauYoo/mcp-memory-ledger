@@ -285,6 +285,8 @@ port = 8787
 
 浏览器访问 `http://127.0.0.1:8787/`。该面板只读，不会调用 `run_reflection` 或修改 SQLite。启用 dashboard 时，配置校验只接受 `localhost` 或 loopback IP；`0.0.0.0`、LAN IP 和域名会在启动前被拒绝。`base_path = "/agent-llm-mm"` 只表示路径挂载，不是认证、授权或公网暴露控制。不要在没有单独产品化 gate / auth 决策前把 dashboard 暴露到公网反向代理。
 
+页面提供简体中文、English、日本語，支持真实导航、筛选、历史、暂停/刷新和只读 HTTP 健康检查；统计仅覆盖当前进程缓冲，历史列表最多 100 条。非根 `base_path` 入口会规范化尾斜杠。隔离 Chrome 验证命令和部署更新边界见 [Live Desk](dashboard-live-desk.md)。已启动二进制内嵌旧资源，更新需要经用户同意安排 MCP 重连，单纯刷新浏览器不会加载新构建。
+
 当前面板标题为 `Memory-chan Live Desk`，内嵌两份生成图物料：
 
 - `src/interfaces/dashboard/static/memory_chan_hero.png`

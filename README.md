@@ -50,6 +50,7 @@
 - namespace 是数据范围，不是多用户认证；反馈来源标签不证明真实性，可选 caller budget 不是服务端配额。
 - legacy 全局 self-model / decision 路径仍是实验性能力；不得当作完整可信策略执行器或统一隔离边界。
 - export 是交换格式，不是可恢复备份或自动脱敏；保留全部历史与成功写回执，不自动删除。
+- [Memory-chan Live Desk](docs/dashboard-live-desk.md) 支持中英日、真实导航/筛选、进程缓冲与持久历史、断线反馈和只读健康检查；统计范围与最近 100 条窗口明确。
 - dashboard 仅限 loopback 且无认证；没有生产级远程/团队服务、后台写入自治或已发布安装包。
 
 ## 验证到了哪里

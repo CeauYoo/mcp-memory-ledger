@@ -1,13 +1,13 @@
-use std::{convert::Infallible, net::SocketAddr, sync::Arc};
+use std::{convert::Infallible, net::SocketAddr, sync::Arc, time::Duration};
 
 use anyhow::Result;
 use axum::{
     Json, Router,
-    extract::{Path, Query, State},
+    extract::{OriginalUri, Path, Query, State},
     http::{StatusCode, header},
     response::{
-        Html, IntoResponse,
-        sse::{Event, Sse},
+        Html, IntoResponse, Redirect,
+        sse::{Event, KeepAlive, Sse},
     },
     routing::get,
 };
@@ -36,6 +36,9 @@ struct DashboardState {
     recorder: OperationRecorder,
     runtime: DashboardRuntimeInfo,
     operation_log: Option<SqliteStore>,
+    instance_id: String,
+    started_at: chrono::DateTime<chrono::Utc>,
+    sse_enabled: bool,
 }
 
 pub struct DashboardHandle {
@@ -98,6 +101,9 @@ pub async fn start_dashboard_service_with_operation_log(
         recorder,
         runtime,
         operation_log,
+        instance_id: uuid::Uuid::new_v4().to_string(),
+        started_at: chrono::Utc::now(),
+        sse_enabled: config.sse_enabled,
     };
     let app = router(state, &base_path, config.sse_enabled);
     let task = tokio::spawn(async move {
@@ -118,6 +124,8 @@ fn router(state: DashboardState, base_path: &str, sse_enabled: bool) -> Router {
         .route("/", get(index))
         .route("/assets/memory-chan-hero.png", get(memory_chan_hero))
         .route("/assets/memory-chan-sidebar.png", get(memory_chan_sidebar))
+        .route("/assets/{name}", get(frontend_asset))
+        .route("/api/status", get(status))
         .route("/api/summary", get(summary))
         .route("/api/events", get(events))
         .route("/api/events/{id}", get(event_detail))
@@ -133,7 +141,9 @@ fn router(state: DashboardState, base_path: &str, sse_enabled: bool) -> Router {
     if base_path == "/" {
         routes
     } else {
-        Router::new().nest(base_path, routes)
+        Router::new()
+            .nest(base_path, routes)
+            .route(&format!("{base_path}/"), get(index))
     }
 }
 
@@ -146,8 +156,35 @@ fn normalized_base_path(base_path: &str) -> String {
     }
 }
 
-async fn index() -> Html<&'static str> {
-    Html(DASHBOARD_HTML)
+async fn index(OriginalUri(uri): OriginalUri) -> axum::response::Response {
+    if uri.path().ends_with('/') {
+        Html(DASHBOARD_HTML).into_response()
+    } else {
+        Redirect::permanent(&format!("{}/", uri.path())).into_response()
+    }
+}
+
+async fn frontend_asset(Path(name): Path<String>) -> impl IntoResponse {
+    match super::assets::frontend_asset(&name) {
+        Some((content_type, body)) => {
+            ([(header::CONTENT_TYPE, content_type)], body).into_response()
+        }
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+async fn status(State(state): State<Arc<DashboardState>>) -> Json<serde_json::Value> {
+    Json(json!({
+        "instance_id": state.instance_id,
+        "process_id": std::process::id(),
+        "started_at": state.started_at,
+        "server_time": chrono::Utc::now(),
+        "event_capacity": state.recorder.capacity(),
+        "history_available": state.operation_log.is_some(),
+        "sse_enabled": state.sse_enabled,
+        "poll_interval_ms": 2500,
+        "read_only": true,
+    }))
 }
 
 async fn memory_chan_hero() -> impl IntoResponse {
@@ -292,7 +329,7 @@ async fn event_stream(
         }))),
         Err(_) => None,
     });
-    Sse::new(stream)
+    Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(15)))
 }
 
 async fn health() -> Json<serde_json::Value> {

@@ -1268,6 +1268,7 @@ http://127.0.0.1:8787/
 
 ```zsh
 cargo test --test dashboard_config --test dashboard_recorder --test dashboard_projection --test dashboard_http
+node --test tests/dashboard/frontend.test.mjs
 cargo test --test mcp_stdio dashboard_enabled_does_not_corrupt_mcp_stdout_and_records_tool_event -v
 ```
 
@@ -1286,7 +1287,8 @@ command-level tracing 在解析 CLI 后初始化并固定写入 stderr。`doctor
 如果改动涉及 dashboard 视觉或静态物料，还需要确认：
 
 - `GET /` 包含 `Memory-chan Live Desk`
-- 静态 HTML visual contract 覆盖动态 ID 省略、指标卡/operation chain 自适应网格、侧栏贴纸 `contain` 显示、移动端顶部状态条重排、hero 文案遮罩和移动端无横向溢出
+- 使用 [Live Desk 隔离浏览器脚本](dashboard-live-desk.md) 验证真实点击、选中/焦点保持、断线恢复、历史、中英日、320–1440px 和缩放重排；不再用静态 HTML 字符串断言代替实际交互
+- HTTP 回归覆盖非根入口重定向、模块白名单、只读实例元数据和禁用 SSE；历史投影回归保留原时间与 nullable 摘要
 - `GET /assets/memory-chan-hero.png` 返回 `content-type: image/png`
 - `GET /assets/memory-chan-sidebar.png` 返回 `content-type: image/png`
 - 生成图物料的仓库归属说明已经同步到 `NOTICE`

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light"><title>Memory-chan Live Desk</title><link rel="icon" href="data:,"><link rel="stylesheet" href="assets/dashboard.css"></head>
+<body>
+<a class="skip" href="#workspace" data-i18n="skip">Skip to operations</a>
+<div class="shell">
+<aside class="sidebar">
+  <a class="brand" href="./" aria-label="Memory-chan Live Desk"><span class="brand-mark" aria-hidden="true"></span><span>agent-llm-mm<br><small><b>live</b> desk</small></span></a>
+  <p class="eyebrow" data-i18n="workspace">VIEWS</p>
+  <nav id="navigation" data-i18n-aria="navigation">
+    <button data-view="all" aria-pressed="true"><span aria-hidden="true">H</span><span data-i18n="all">Live operations</span></button>
+    <button data-view="reflections" aria-pressed="false"><span aria-hidden="true">R</span><span data-i18n="reflections">Reflections</span></button>
+    <button data-view="decisions" aria-pressed="false"><span aria-hidden="true">D</span><span data-i18n="decisions">Decisions</span></button>
+    <button data-view="snapshots" aria-pressed="false"><span aria-hidden="true">S</span><span data-i18n="snapshots">Snapshots</span></button>
+    <button data-view="history" aria-pressed="false"><span aria-hidden="true">T</span><span data-i18n="history">History</span></button>
+    <button data-view="health" aria-pressed="false"><span aria-hidden="true">+</span><span data-i18n="health">HTTP health</span></button>
+  </nav>
+  <div class="side-cards"><div><strong id="side-total">—</strong><span data-i18n="total">Records</span></div><div><strong id="side-reflections">—</strong><span data-i18n="reflectionRecords">Reflections</span></div><div><strong id="side-failed">—</strong><span data-i18n="failed">Failed</span></div></div>
+  <div class="sidebar-card"><img src="assets/memory-chan-sidebar.png" alt="" width="200" height="180"></div>
+</aside>
+<main id="workspace" tabindex="-1">
+  <section class="connection panel" data-i18n-aria="connection"><span id="connection" role="status" aria-live="polite" class="badge">Connecting…</span><strong id="latest-operation">—</strong><span id="latest-meta">—</span><span id="freshness"></span></section>
+  <header class="topbar"><div class="top-pills"><span id="runtime-transport" class="pill transport">MCP</span><span class="pill" data-i18n="local">Local</span><span class="pill read-only" data-i18n="readOnly">Read only</span></div><label class="language"><span data-i18n="language">Language</span><select id="locale"><option value="en">English</option><option value="zh-CN">简体中文</option><option value="ja">日本語</option></select></label></header>
+  <section class="hero panel"><img src="assets/memory-chan-hero.png" alt="" width="1280" height="400"><div class="hero-title"><h1>Memory-chan</h1><span>Live Desk</span></div><div class="hero-note" data-i18n="heroNote">Observing · Reflecting · Evolving</div><span class="hero-spark" aria-hidden="true">✦</span></section>
+  <div class="main-grid"><div class="content-col">
+  <section class="metrics" data-i18n-aria="metrics"><div class="metric"><i aria-hidden="true">M</i><span data-i18n="total">Records</span><strong id="metric-total">—</strong></div><div class="metric"><i aria-hidden="true">C</i><span data-i18n="tools">Tool records</span><strong id="metric-tools">—</strong></div><div class="metric"><i aria-hidden="true">✦</i><span data-i18n="reflectionRecords">Reflections</span><strong id="metric-reflections">—</strong></div><div class="metric"><i aria-hidden="true">!</i><span data-i18n="failed">Failed</span><strong id="metric-failed">—</strong></div></section>
+  <p id="scope" class="scope"></p>
+  <section class="panel operations"><div class="section-heading"><h2 id="view-title">Live operations</h2><div class="actions"><button id="pause" data-i18n="pause">Pause</button><button id="refresh" class="primary" data-i18n="refresh">Refresh</button></div></div>
+    <div id="filters" class="filters">
+      <label><span data-i18n="source">Source</span><select id="source"><option value="live" data-i18n="liveSource">This process</option><option value="history" data-i18n="historySource">History</option></select></label>
+      <label><span data-i18n="status">Status</span><select id="status-filter"><option value="" data-i18n="anyStatus">All statuses</option><option value="started" data-i18n="status_started">Started</option><option value="ok" data-i18n="status_ok">OK</option><option value="handled" data-i18n="status_handled">Handled</option><option value="suppressed" data-i18n="status_suppressed">Suppressed</option><option value="rejected" data-i18n="status_rejected">Rejected</option><option value="failed" data-i18n="status_failed">Failed</option></select></label>
+      <label><span data-i18n="namespace">Namespace (exact)</span><input id="namespace-filter" type="search" autocomplete="off" data-i18n-placeholder="namespaceHint"></label>
+      <label class="search"><span data-i18n="search">Search</span><input id="search-filter" type="search" autocomplete="off" data-i18n-placeholder="searchHint"></label>
+      <button id="clear" data-i18n="clear">Clear</button>
+    </div>
+    <div class="list-caption"><p id="window-note" class="scope"></p><p id="result-count" class="scope" role="status"></p></div><p id="error" class="notice error" role="alert" hidden></p>
+    <div id="health-view" hidden><dl id="health-fields" class="fields"></dl></div>
+    <div id="records-layout" class="records-layout"><div class="record-column"><p id="empty" class="notice" hidden></p><div class="record-head" aria-hidden="true"><span data-i18n="time">Time</span><span data-i18n="operation">Operation</span><span data-i18n="kind">Kind</span><span data-i18n="summary">Summary</span><span data-i18n="status">Status</span></div><ol id="records" class="records"></ol></div></div>
+  </section><div class="bottom-stickers" aria-hidden="true"><span>✦</span><span>♡</span><span>✧</span></div></div>
+  <section id="detail" class="detail" tabindex="-1" data-i18n-aria="detail"><div class="detail-heading"><h3 data-i18n="detail">Selected operation</h3><button id="close-detail" hidden data-i18n="close">Close</button></div><p id="selection-note" class="scope" hidden></p><p id="detail-message" data-i18n="selectRecord">Select a record.</p><div id="detail-content" hidden><dl id="detail-fields" class="fields"></dl><h4 data-i18n="payload">Payload inspector</h4><pre id="payload" tabindex="0"></pre></div></section>
+  </div>
+  <footer><span>Memory-chan Live Desk</span><span data-i18n="mvp">MVP</span></footer>
+</main></div><script type="module" src="assets/app.mjs"></script>
+</body></html>
