@@ -1,15 +1,19 @@
 # MCP Memory Ledger 路线图
 
-## 2026-10-15 体验与客户端验收
+## 2026-10-15 本机核心与工作空间方向
 
-实际 Codex app-server 的无模型 MCP 闭环已取得本机证据；M1 剩余桌面持续注册与日常用户聊天。定向及全量真实复测工具、实时监控已准备，实际模型身份/费用及修复后语义效果仍待用户执行和复核。fresh-machine 与发布门保持开放。详见[验收范围](acceptance-2026-10-15.md)。
+用户已批准在本地主线补齐单核心服务、轻量 stdio 桥、稳定 workspace 绑定、服务端范围授权、个人记忆显式共享与统一监控。当前 **M1.W1 进行中，新核心/桥待验收、未部署**；具体顺序只由[唯一 active plan](plans/2026-07-10-product-replan.md)管理，[验收矩阵](workspace-core-acceptance.md)记录证据与未测边界。
+
+旧版 d9e33d3 的正式 Mac 已有直接 MCP、网页及一个真实自然语言召回/更正样本；不能再笼统说真实客户端完全未测，也不能把它们当作新架构通过。当前 Codex roots 实测67条断言通过，但未提供自动跟随项目的依据：连接固定绑定，移动会话不会自动重绑。新核心首期为 macOS/Linux Unix sockets；Windows 保持现有 stdio，新核心暂不支持。正式部署与现有配置保持不变。
+
+早期 app-server、体验工具及模型效果边界仍见[2026-10-15验收范围](acceptance-2026-10-15.md)。fresh-machine、真实模型效果/费用与发布门保持开放。
 
 ## 2026-10-13 验收工具更新
 
 三协议验收器已覆盖 Chat、Responses、Anthropic；新增请求/输入/输出限制与失败用量记录。回环 fixture 与真实调用分层，未知价格不声明美元硬上限；真实模型与用户客户端仍待验收。候选包增加更正重放、跨 namespace 直接查询/历史隔离及恢复后的历史/证据比对。当前步骤和证据口径见[本轮验收记录](acceptance-2026-10-13.md)。
 
 
-状态：`active summary` · 更新：2026-10-10
+状态：`active summary` · 更新：2026-10-15
 
 目标是可信、可检索、可审计、可恢复的本地记忆。当前仍为 technical MVP；[状态页](project-status.md)列实际能力，[唯一 active plan](plans/2026-07-10-product-replan.md)列任务、依赖、证据门与停止条件。本页不是第二份任务队列。
 
@@ -21,17 +25,20 @@ M0 的 scoped snapshot、治理原子性、显式数据库生命周期、loopbac
 
 原生 OpenAI Responses 与 Anthropic Messages 的有界文本适配已加入，旧 Chat Completions/OpenRouter 保留，见[协议合同](provider-contract.md)。这是本地配置/协议/stdio fixture 的实现切片，不关闭 M1 用户客户端或 M2 live provider 门；streaming、tools、vision、托管会话与广泛 provider 扩张仍不在本轮范围。
 
-## Now：关闭 M1 真实用户闭环证据
+## Now：M1.W1 本机核心与可信工作空间
 
-用实际 MCP 客户端验证：记录 → 重连 → scoped 检索 → 查看证据 → 更正 → 回看历史，并让两个干扰 namespace 不混入结果。
+按 active plan 的 W1→W2→W3→W4 依赖推进，不重做已完成的账本/检索/更正基础：
 
-- 复用[可执行离线工作流](runnable-memory-workflow.md)，不要重新复制一套合同。
-- 精确提交 CI 已有实现基线证据；新 head 仍必须单独核验。
-- 客户端、OS 和数据库路径须明确记录；mock 协议 smoke 不代替真实用户客户端验收。
+- 先完成稳定 registry、固定 `--workspace-id`/`--workspace-root` 或一次全局 `--registry` 配置的启动cwd精确绑定与逐调用授权刷新；个人读写显式授予，撤销也约束旧连接和回放。
+- Unix核心统一持库与observer，多个stdio桥连接；普通workspace隐藏/拒绝七个全局工具，core ingest关闭自动反思，未知工具默认拒绝。
+- 再补全客户端聚合、成功召回历史、管理员能力隔离与恢复验证；核心默认关闭监控HTTP，显式管理员CLI与内存登录只作隔离合成验证，真实核心网页端到端仍待验收。
+- 以隔离候选、独立审查和精确提交CI收口，再分别验证实际客户端协议和自然语言体验。正式切换、全局配置及开机服务另行确认。
+
+现有端口接管补丁只处理旧架构局部生命周期问题，不能替代上述架构。M1.3.1原冻结故事及新workspace授权故事须逐项对齐；少量实际样本不自动关闭全部M1退出门。
 
 ## Next：M2 Local Product Alpha
 
-本轮先实现不依赖外部账号的源代码绑定 portable build/解包验证和 Windows wrapper 行为测试；它们提供 M2 的实现基础，不能自动关闭 M1 真实客户端门。当前进度以[状态页](project-status.md)和[本地包合同](portable-packages.md)为准。
+源代码绑定 portable build/解包验证与实际 Windows wrapper 行为测试已有实现和历史精确提交证据；无需重复领取。新核心/桥须扩展候选验证，并区分 macOS/Linux 新路径与 Windows legacy stdio。当前进度以[状态页](project-status.md)、[本地包合同](portable-packages.md)及[本轮验收矩阵](workspace-core-acceptance.md)为准。
 
 在 M1 退出门基础上补齐：
 
@@ -56,9 +63,9 @@ M0 的 scoped snapshot、治理原子性、显式数据库生命周期、loopbac
 
 ## 不排期：M4 Remote / Autonomy
 
-Streamable HTTP、认证/授权/多租户、remote dashboard、write-capable daemon、队列重试、experimental tasks、多 Agent 调度和自治流程仍需独立需求、威胁模型与权限。经验候选 activation 不构成执行授权。
+Streamable HTTP、远程/团队认证授权与多租户、remote dashboard、write-capable autonomous daemon、队列重试、experimental tasks、多 Agent 调度和自治流程仍需独立需求、威胁模型与权限。本轮已批准的本机workspace授权和手动启动核心不属于这些后置方向，也不授权安装service manager。经验候选 activation 不构成执行授权。
 
-顺序保持 `M0 → M1 → M2 → M3 → 条件性 M4`。正式化差距见[验收映射](formalization-improvement-plan-2026-08-25.md)，不是扩展开发范围的默认许可。
+主线保持 `M0 → M1（含本次W1–W4）→ M2 → M3 → 条件性 M4`；已批准的有限实现前移及仍开放外部门以active plan为准。正式化差距见[验收映射](formalization-improvement-plan-2026-08-25.md)，不是扩展开发范围的默认许可。
 
 ## 历史与依据
 

@@ -1,10 +1,11 @@
 import {applyLocale, chooseLocale} from './i18n.mjs';
 import {initialState, latestFirst, validRecords, WINDOW_LIMIT} from './state.mjs';
-import {requestJson, singleFlight} from './transport.mjs';
+import {requestJson, singleFlight, setCapability, clearCapability, openEventStream} from './transport.mjs';
 import {render} from './render.mjs';
 const $ = id => document.getElementById(id), base = new URL('../', import.meta.url);
 let saved; try { saved = localStorage.getItem('memory-ledger-locale'); } catch { /* Private mode still works. */ }
 const state = initialState(chooseLocale(saved,navigator.languages));
+let authEpoch = 0, authController;
 let epoch = 0, detailEpoch = 0, controller, detailController, stream, streamTimer, pollTimer, manualRefresh = false;
 const draw = () => render(state);
 const api = path => new URL(path,base);
@@ -17,12 +18,13 @@ function closeStream() {
 function syncStream() {
   if (state.paused || !state.metadata?.sse_enabled) { closeStream(); return; }
   if (stream) return;
-  stream = new EventSource(api('api/events/stream'));
-  stream.onopen = () => { state.stream = true; draw(); };
-  stream.onerror = () => { state.stream = false; draw(); }; // Polling remains the resynchronization path.
-  stream.onmessage = () => {
-    if (!streamTimer) streamTimer = setTimeout(() => { streamTimer = null; if (!state.paused) void refresh(); },200);
-  };
+  stream = openEventStream(api('api/events/stream'), {
+    onopen: () => { state.stream = true; draw(); },
+    onerror: () => { closeStream(); draw(); },
+    onmessage: () => {
+      if (!streamTimer) streamTimer = setTimeout(() => { streamTimer = null; if (!state.paused) void refresh(); },200);
+    }
+  });
 }
 const validSummary = value => value?.runtime && typeof value.runtime.provider === 'string'
   && ['total_events','tool_events','reflection_events','failed_events'].every(key => Number.isInteger(value[key]) && value[key] >= 0);
@@ -53,6 +55,7 @@ const refresh = singleFlight(async () => {
     state.lastSuccess = Date.now(); state.error = null; syncStream();
   } catch (error) {
     if (generation !== epoch) return;
+    if (error.status === 401) lock();
     state.error = {code:error.code,status:error.status,resource:healthView ? 'healthResource' : source === 'history' ? 'historyResource' : 'liveResource'};
   } finally {
     requestController.abort(); // A failed sibling must not outlive this refresh group.
@@ -115,6 +118,32 @@ $('pause').addEventListener('click', () => {
 });
 $('refresh').addEventListener('click', () => { manualRefresh = true; void refresh(); });
 window.addEventListener('online', () => { if (!state.paused) void refresh(); });
-window.addEventListener('pagehide', () => { state.paused = true; epoch++; controller?.abort(); detailController?.abort(); closeStream(); clearTimeout(pollTimer); });
-window.addEventListener('pageshow', event => { if (event.persisted) { state.paused = false; void refresh(); } });
-applyLocale(state.locale); draw(); void refresh();
+window.addEventListener('pagehide', () => { if (!$('owner-logout').hidden) lock(); authEpoch++; authController?.abort(); clearCapability(); state.paused = true; epoch++; controller?.abort(); detailController?.abort(); closeStream(); clearTimeout(pollTimer); });
+window.addEventListener('pageshow', event => { if (event.persisted) void start(); });
+function lock() {
+  authEpoch++; authController?.abort();
+  epoch++; detailEpoch++; controller?.abort(); detailController?.abort(); closeStream(); clearTimeout(pollTimer);
+  clearCapability(); state.paused = true;
+  Object.assign(state, {live:[],history:null,summary:null,metadata:null,selected:null,detail:null,detailState:"idle",lastSuccess:0,health:null,healthChecked:0,busy:false,error:null});
+  $('detail-fields').replaceChildren(); $('payload').textContent = ''; $('health-fields').replaceChildren();
+  draw(); if (!$('owner-auth').open) $('owner-auth').showModal(); $('owner-token').focus();
+}
+$('owner-logout').addEventListener('click', lock);
+$('owner-auth').addEventListener('cancel', event => event.preventDefault());
+$('owner-login').addEventListener('submit', async event => {
+  event.preventDefault(); const button = $('owner-submit'); button.disabled = true;
+  const generation = ++authEpoch; authController?.abort(); authController = new AbortController();
+  setCapability($('owner-token').value); $('owner-token').value = '';
+  try {
+    await requestJson(api('api/health'), {validate:validHealth,signal:authController.signal});
+    if (generation !== authEpoch) return;
+    $('owner-auth').close(); $('owner-error').hidden = true; $('owner-logout').hidden = false;
+    state.paused = false; void refresh();
+  } catch { if (generation !== authEpoch) return; clearCapability(); $('owner-error').hidden = false; $('owner-token').focus(); }
+  finally { button.disabled = false; }
+});
+async function start() {
+  try { await requestJson(api('api/health'), {validate:validHealth}); state.paused = false; void refresh(); }
+  catch (error) { if (error.status === 401) lock(); else { state.paused = false; void refresh(); } }
+}
+applyLocale(state.locale); draw(); void start();

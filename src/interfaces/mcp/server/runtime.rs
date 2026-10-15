@@ -38,6 +38,8 @@ use crate::{
 pub(super) struct Runtime {
     pub(super) store: SqliteStore,
     model: RuntimeModel,
+    pub(super) scoped_session: bool,
+    pub(super) audit_enabled: bool,
     pub(super) dashboard: DashboardObserver,
 }
 
@@ -59,10 +61,21 @@ impl Runtime {
         let runtime = Self {
             store,
             model: build_runtime_model(config)?,
+            scoped_session: false,
+            audit_enabled: true,
             dashboard,
         };
         runtime.validate_default_identity().await?;
         Ok(runtime)
+    }
+
+    /// The dispatcher owns one final audit outcome for fallback tools. Disable
+    /// only diagnostics in its clone; application execution and scope stay intact.
+    pub(super) fn without_audit(&self) -> Self {
+        let mut runtime = self.clone();
+        runtime.audit_enabled = false;
+        runtime.dashboard = DashboardObserver::disabled();
+        runtime
     }
 
     async fn validate_default_identity(&self) -> Result<(), AppError> {

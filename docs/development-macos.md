@@ -1,5 +1,19 @@
 # macOS 开发与接入指南
 
+## 2026-10-15 可选本机核心：隔离集成中
+
+旧`serve`仍是兼容入口；新Unix `core`＋`bridge`的[明确配置步骤](local-workspace-core.md)与[桥TOML](../examples/codex-workspace-bridge.toml)用于隔离目录，不替换当前正式d9e33d3部署。先注册真实canonical root，再用固定`--workspace-id`/`--workspace-root`连接，或按[全局桥样例](../examples/codex-workspace-bridge-global.toml)使用`--registry`精确解析启动cwd。固定cwd客户端须保留显式模式；移动会话不会自动重绑。核心与旧`serve`不要同时写同一正式库，已有库不得隐式init/migrate。
+
+新模式25个范围工具、7个全局工具隐藏/拒绝，core ingest关闭自动反思，个人读写单独授权且逐调用刷新。默认监控HTTP关闭；管理员CLI与标签页内存登录入口已接入，静态壳无数据、API/SSE须独立Bearer；实际核心端到端仍待验收，未配置生产凭据。保持原UI样式，旧端口接管补丁与单核心验收分别记录。
+
+本机roots67条断言、registry11项、管理员7项和legacy HTTP6项是定向证据；历史首轮完整集成3项失败的相关路径已续建，最终同源回归仍待完成。最大64会话/共享32个业务执行及每连接8个待完成请求/4 MiB输出等限制仍须集成验收，不是容量保证。测试入口和不依赖Rust的候选验证见[测试指南](testing-guide-2026-03-24.md)与[验收矩阵](workspace-core-acceptance.md)。
+
+旧部署已有20项协议、11项网页与一个真实自然语言召回/来源/更正样本；新架构客户端、新机器、模型效果/费用仍未验收。不要为复现读取凭据、替换正式二进制、修改全局配置或重启正常用户进程。
+
+## dashboard 端口占用与 MCP 会话
+
+新的源码行为：多个 MCP 会话使用同一 dashboard 端口且 `required = false` 时，后启动的会话每秒等待空闲端口，存活会话可在原监听会话退出后接管；等待随 MCP 关闭而取消。`required = true` 仍立即报告绑定失败。不同数据库请使用不同端口。检查 `/api/status` 的实例/PID，不能把其他进程的“历史”记录当成本进程实时事件。安装二进制不会随仓库更新；切换仍需独立安排。本轮没有再次替换或重启用户部署。
+
 ## 2026-10-15 体验与客户端验收
 
 仓库根目录执行 `python3 -E -s -B tools/experience/run.py`（或双击 `tools/experience/Start-Retest.command`）：用户一次隐藏输入后执行定向→全量复测，并自动打开本机动态端口实时网页。无凭据检查用 `python3 -E -s -B -m unittest discover -s tools/experience -p 'test_*.py' -v`。实际已安装 Codex 的无模型脚本、Memory-chan Live Desk 启用方式及边界见[本轮验收记录](acceptance-2026-10-15.md)。

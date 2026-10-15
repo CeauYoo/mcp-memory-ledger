@@ -24,6 +24,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "sqlx",
+ "subtle",
  "tar",
  "tempfile",
  "thiserror",

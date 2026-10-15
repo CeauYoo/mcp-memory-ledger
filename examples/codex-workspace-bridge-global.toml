@@ -1,0 +1,11 @@
+# macOS/Linux: register each trusted project explicitly, then configure this once.
+# Each newly launched bridge resolves its exact canonical starting cwd in registry.
+# No parent search, automatic registration or user/default fallback.
+# Do not set cwd to the installation directory. Clients that force a fixed cwd
+# must use codex-workspace-bridge.toml with an explicit project binding instead.
+# Moving a running conversation does not rebind: start a new bridge connection.
+[mcp_servers.memory-ledger]
+command = "/absolute/bin/agent_llm_mm"
+args = ["bridge", "--socket", "/absolute/local-state/ipc/core.sock", "--registry", "/absolute/local-state/workspaces.json", "--client-label", "codex"]
+# Start core separately; this entry never opens a ledger or loads provider secrets.
+# Windows keeps legacy serve; Unix core/bridge is unsupported there.

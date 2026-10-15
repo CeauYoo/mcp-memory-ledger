@@ -1,0 +1,12 @@
+# Opt-in macOS/Linux local-core bridge. Replace every placeholder explicitly.
+# Register the exact workspace root first; copy the returned canonical UUID.
+# Start core in a separate terminal using its explicit mock/local configuration.
+# This entry never loads provider config, opens the DB, or starts the core.
+# Do not enable legacy serve against the same active core database.
+# Moving a Codex conversation does not update an existing bridge binding:
+# reconnect with the intended root/id. Unknown roots fail closed.
+[mcp_servers.memory-ledger]
+command = "/absolute/bin/agent_llm_mm"
+args = ["bridge", "--socket", "/absolute/local-state/ipc/core.sock", "--workspace-id", "REPLACE-WITH-REGISTERED-UUID", "--workspace-root", "/absolute/project-a", "--client-label", "codex"]
+# No env credentials or AGENT_LLM_MM_CONFIG are needed for bridge.
+# Windows: new core/bridge is currently unsupported; retain the legacy example.

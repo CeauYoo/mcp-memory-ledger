@@ -1,8 +1,12 @@
 # MCP Memory Ledger
 
-## 2026-10-15 体验与客户端验收
+## 2026-10-15 本机核心与验收进度
 
-新增定向 12 轮后全量 90 轮的一次隐藏输入入口与本机实时网页；离线回归覆盖预算、来源、正文日期及监控。实际 Codex app-server 已完成 17 次无模型 MCP 调用；桌面注册、修复后真实复测、新机器仍待验收。历史真实 90 轮人工复核发现 4 个问题轮次，原记录保持不变。详见[本轮验收记录](docs/acceptance-2026-10-15.md)。
+已安装旧版 `d9e33d3` 的 Mac 验收完成 20 项直接 MCP 协议检查、11 项网页检查，以及一个真实用户自然语言主动 `recall_memory` → `get_memory`、后续更正样本；该样本也发现重复召回。原始记录保留本机，范围见[验收矩阵](docs/workspace-core-acceptance.md)。这不等于新架构、长期稳定性或模型效果通过。
+
+可选的[本机核心＋固定工作空间桥](docs/local-workspace-core.md)正在集成：核心统一持库和监控缓冲，桥固定绑定已注册 workspace，支持[一次全局配置](examples/codex-workspace-bridge-global.toml)在启动时按 cwd 精确解析；固定 cwd 客户端须用显式绑定，个人读写显式授权；25 个范围工具允许，7 个全局工具隐藏并拒绝，core ingest 禁用自动反思。核心默认关闭监控 HTTP，新增显式管理员 CLI 与标签页内存登录入口，尚待真实核心端到端验收。新路径首期为 macOS/Linux；Windows 保留旧 stdio，新核心暂不支持。完整集成与新架构真实客户端仍待验收，正式部署未替换。
+
+早期定向/全量体验工具、17 次无模型 app-server 调用及历史90轮的4个问题轮次仍见[当时验收记录](docs/acceptance-2026-10-15.md)；不改写历史结果。fresh-machine、真实模型/费用与发布门保持开放。
 
 ## 2026-10-13 验收工具更新
 
@@ -26,7 +30,7 @@
 - **版本化全局 self-model**：identity/commitment 追加版本、同范围可见 diff、expected-version 冲突检测和显式组件补偿回滚；仍受既有 Claim、证据与全局写边界约束。详见[合同](docs/self-model-versions.md)。
 - **本地数据运维**：显式初始化/迁移、默认只读诊断、索引检查/重建、备份恢复，以及有界只读 scoped export。
 
-当前注册 **32 个 MCP 工具**，按用途见[工具与合同索引](docs/tool-reference.md)。二进制/crate 兼容名称仍是 `agent_llm_mm`，脚本和配置前缀仍是 `agent-llm-mm`。
+原 standalone `serve` 注册 **32 个 MCP 工具**；新核心工作空间会话按设计只开放其中 **25 个**，其余7个全局入口拒绝，集成验收仍进行中。工具用途见[工具与合同索引](docs/tool-reference.md)，模式差异见[本机核心合同](docs/local-workspace-core.md)。二进制/crate 兼容名称仍是 `agent_llm_mm`，脚本和配置前缀仍是 `agent-llm-mm`。
 
 ## 从这里开始
 
@@ -51,7 +55,8 @@
 - legacy 全局 self-model / decision 路径仍是实验性能力；不得当作完整可信策略执行器或统一隔离边界。
 - export 是交换格式，不是可恢复备份或自动脱敏；保留全部历史与成功写回执，不自动删除。
 - [Memory-chan Live Desk](docs/dashboard-live-desk.md) 支持中英日、真实导航/筛选、进程缓冲与持久历史、断线反馈和只读健康检查；统计范围与最近 100 条窗口明确。
-- dashboard 仅限 loopback 且无认证；没有生产级远程/团队服务、后台写入自治或已发布安装包。
+- 多 MCP 共用 dashboard 端口时，非必需监听会在会话存活期间等待并接管已释放端口；进程缓冲仍各自独立，详见 [Live Desk 生命周期](docs/dashboard-live-desk.md#多个-mcp-会话共用端口)。
+- 旧 standalone dashboard 仅限 loopback 且无认证。新核心默认关闭监控 HTTP，管理员能力独立隔离验证，不复用旧无认证入口；没有生产级远程/团队服务、后台写入自治或已发布安装包。
 
 ## 验证到了哪里
 
@@ -63,4 +68,4 @@
 
 ## 参与开发
 
-阅读 [CONTRIBUTING](CONTRIBUTING.md)、[项目起点与原则](docs/origin-and-principles.md) 和[路线图](docs/roadmap.md)。唯一执行队列是 [active plan](docs/plans/2026-07-10-product-replan.md)；历史计划、阶段证据和发布草案不能替代它。
+阅读 [CONTRIBUTING](CONTRIBUTING.md)、[项目起点与原则](docs/origin-and-principles.md) 和[路线图](docs/roadmap.md)。报告问题见 [SUPPORT](SUPPORT.md)，安全问题先核实 [SECURITY](SECURITY.md) 所述私密渠道；[协作准则](CODE_OF_CONDUCT.md)仍是拟定稿，[CHANGELOG](CHANGELOG.md)不构成发布批准。唯一执行队列是 [active plan](docs/plans/2026-07-10-product-replan.md)；历史计划、阶段证据和发布草案不能替代它。

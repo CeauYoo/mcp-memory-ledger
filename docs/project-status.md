@@ -1,12 +1,24 @@
 # 当前实现状态
 
+## 2026-10-15 当前切片：工作空间核心（进行中）
+
+[本机核心与固定桥](local-workspace-core.md)纳入[唯一 active plan](plans/2026-07-10-product-replan.md)。Unix 核心统一持有数据库和 observer；桥按 `--workspace-id`/`--workspace-root` 显式固定绑定，或通过 `--registry` 在启动时按真实 cwd 精确解析；后者可全局配置一次，但固定 cwd 客户端须用显式模式，连接不会跟随项目移动。registry 每次调用刷新个人读写授权。25 个范围工具允许，7 个全局工具隐藏/拒绝；core ingest 关闭自动反思。核心默认不开监控 HTTP，管理员 CLI 与标签页内存登录入口已接入，公开静态壳不含运行数据，API/SSE 继续独立 Bearer；真实核心端到端尚待验收，未配置生产凭据。
+
+当前只取得定向证据：registry 11 项、实际 Codex roots 67 条断言、管理员监控 7 项及 legacy HTTP 6 项。历史首轮完整集成有 3 项失败；云端续建已修补相关路径，最终同源回归仍待完成，**不能报告全套通过**。设计上限为64会话、共享32个业务执行；每连接8个待完成请求和4 MiB有界输出的传输保护正在实现，仍待背压/取消/超限验收。具体合同与最终同源结果以[验收矩阵](workspace-core-acceptance.md)为准。
+
+正式 Mac 仍运行 `d9e33d3`：20项协议、11项浏览器检查及一个真实自然语言主动召回/来源/更正样本已有证据，重复召回问题保留。协议直接调用与自然语言样本分别记账；这些结果不认证新核心。新路径首期macOS/Linux，Windows继续支持原stdio，新核心暂不支持。新架构真实客户端、fresh-machine、完整精确提交CI和发布门仍开；本轮未替换部署、改全局配置或安装开机服务。
+
+## dashboard 会话生命周期补丁（2026-10-15）
+
+已在源码补齐 optional dashboard 端口占用后的等待接管；MCP 关闭时取消等待与监听，required 端口失败语义不变。三项隔离 stdio 回归覆盖正常 EOF 后接管、等待者退出无遗留监听和 required 失败。该补丁尚未替换已安装运行时；不代表多客户端实时聚合或进程退出根因已经解决。合同与限制见 [Live Desk](dashboard-live-desk.md#多个-mcp-会话共用端口)。
+
 ## 2026-10-15 Live Desk 修复
 
 面板已移除硬编码冲突/写路径/操作链，导航、筛选、持久历史、只读健康检查与刷新控制接入真实数据；提供中英日、稳定选中/焦点、网络失败反馈及移动端详情定位。统计只代表当前进程缓冲，历史窗口最多 100 条。代码按 HTML/CSS/i18n/纯状态/网络/渲染/交互拆分。详见 [Live Desk 合同与隔离验证](dashboard-live-desk.md)及[本轮验收证据](acceptance-dashboard-2026-10-15.md)。仓库更新不等于部署进程更新；用户服务未由本次修复重启。
 
 ## 2026-10-15 体验与客户端验收
 
-体验复测工具及实时网页已纳入仓库；实际 Codex app-server 在独立 HOME/mock 库完成 3 进程、2 次重连、17 次 MCP 工具调用、0 模型轮次。历史真实 90 轮的人工复核有 4 个问题轮次；修复后的付费复测、桌面持续注册和 fresh-machine 未验证。详见[本轮验收记录](acceptance-2026-10-15.md)。下方带日期段落保留历史证据。
+此前体验复测工具及实时网页已纳入仓库；实际 Codex app-server 在独立 HOME/mock 库完成 3 进程、2 次重连、17 次 MCP 工具调用、0 模型轮次。历史真实 90 轮的人工复核有 4 个问题轮次。此后旧部署的桌面自然语言样本证据见顶部当前切片；修复后的付费复测和 fresh-machine 仍未验证。详见[本轮验收记录](acceptance-2026-10-15.md)。下方带日期段落保留历史证据。
 
 ## 2026-10-13 验收工具更新
 
@@ -19,7 +31,7 @@
 
 | 能力 | 当前合同与证据入口 |
 | --- | --- |
-| 32 个 MCP stdio 工具 | [按用途索引](tool-reference.md)，以运行时 `tools/list` 的 schema 为准 |
+| 原 standalone stdio 的32个工具 | [按用途索引](tool-reference.md)，以运行时 `tools/list` 的 schema 为准；新核心25允许/7拒绝属于顶部进行中切片 |
 | Scoped Event / Claim / Episode / Reflection 浏览、lookup、修订与证据关系 | 显式 namespace、scope-first 查询、不跨范围扩大；[工作流](runnable-memory-workflow.md) |
 | 原子 Claim 纠错与持久 request_id 回执 | [更正工作流](runnable-memory-workflow.md)、[反馈候选合同](memory-feedback-experience.md) |
 | 持久反馈候选 | 提案、确定性验证、拒绝、事务内再验证与原子提交；来源标签不认证真实性 |
@@ -88,7 +100,7 @@
 
 ## 尚未关闭的产品与研究门
 
-1. 用户真实 MCP 客户端闭环及 fresh-machine 安装证据。
+1. 原M1冻结故事的完整对齐、新架构真实MCP客户端/自然语言闭环及fresh-machine安装证据；旧部署已有上方有限真实客户端样本，不再视为完全未测。
 2. 正式发行包与人工 release approval、实际用户机器支持范围及 rollback note；本地构建器和 CI wrapper 验证属于实现基础。
 3. 经单独授权和预算约束的真实同模型效果 / token / 成本实验。
 4. 更广泛 self-model 生命周期政策、语义检索，以及需独立需求和权限的 remote/team/autonomy。

@@ -22,7 +22,10 @@ python3 scripts/portable-package.py build --candidate local-mvp-ci-rc.1 --source
 cache. The command has no upload, release, tag, installer, service registration,
 credential, or model-call step. It runs `cargo build --locked --release --bin
 agent_llm_mm --target <native-target>` in an isolated `git archive` snapshot.
-Dirty and untracked checkout files are excluded. Compiler/wrapper overrides are
+Dirty and untracked checkout files are excluded. Use the packager from the same
+source revision for historical archives: the required payload inventory now
+includes workspace assets, so this revision does not accept older inventories
+as a new-core candidate. Existing archives are not rewritten. Compiler/wrapper overrides are
 cleared, Cargo compiler/wrapper settings are pinned for the command, and toolchain
 versions are measured inside that committed snapshot. The running packager must
 exactly match the script in that source commit; commit a changed script before
@@ -64,6 +67,8 @@ Each archive contains one named top-level directory, with:
 - `LICENSE` and `NOTICE`
 - the conservative mock-provider example configuration
 - this guide, database lifecycle guidance, and the MCP tool reference
+- workspace/core guidance, explicit and global bridge configuration examples,
+  and the exact-source `scripts/verify-local-core.py` verifier
 - `BUILD-MANIFEST.json`
 
 The manifest records the exact Git commit and tree, source commit timestamp,
@@ -77,6 +82,14 @@ A checksum received alongside a modified artifact is not independent proof of
 authenticity; obtain expected source identity and receipts from a trusted build.
 
 ## Verify an unpacked archive
+
+On macOS/Linux, verification now also runs the bundled local-core verifier
+against the unpacked executable, with no Rust or provider credentials in its
+child environment. A failed core check blocks the package's passed summary.
+Its synthetic evidence is retained under `local-core/` and included in the
+recursive checksums. Windows continues to verify standalone stdio; the Unix
+core is explicitly unsupported, not silently counted as passed. This is still
+an isolated candidate simulation, not fresh-machine or real-client evidence.
 
 Record the full expected source commit and tree independently, for example with
 `git rev-parse HEAD` and `git rev-parse HEAD^{tree}` in the intended source

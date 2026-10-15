@@ -1158,3 +1158,5 @@ footer{
   .record .badge { max-width: 100%; }
   .record-bottom { grid-column: 1; grid-row: 1; flex-direction: column; gap: 4px; }
 }
+
+#owner-auth{border:1px solid #e8dce2;border-radius:20px;padding:28px;max-width:min(420px,90vw);background:#fffaf9;color:#473842}#owner-auth::backdrop{background:rgba(60,40,50,.45);backdrop-filter:blur(4px)}#owner-login{display:grid;gap:18px}#owner-login label{display:grid;gap:8px}#owner-token{width:100%;min-width:0}#owner-error{color:#9d3147}

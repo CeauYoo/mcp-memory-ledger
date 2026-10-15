@@ -61,6 +61,26 @@ jobs:
         shell: bash
         run: python -m unittest discover -s tests -p 'test_portable_package.py' -v
 
+      - name: Verify local core and bridges without Rust on child PATH (Unix)
+        run: python3 scripts/verify-local-core.py --binary "$(pwd)/target/debug/agent_llm_mm" --output "$(pwd)/target/core-verification"
+
+      - name: Prepare Node for owner-login browser QA
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Verify owner-login page in real Chrome with isolated Rust core
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          chrome="$(command -v google-chrome || command -v google-chrome-stable)"
+          test -n "$chrome"
+          node scripts/dashboard-admin-browser-check.mjs --chrome "$chrome" --binary "$(pwd)/target/debug/agent_llm_mm" --output "$RUNNER_TEMP/admin-browser-verification"
+
+      - name: Test local-core verifier safety contracts (Unix)
+        run: python3 -B -m unittest discover -s tests -p 'test_local_core_verifier.py' -v
+
       - name: Test staged experience acceptance and loopback live monitor offline
         run: python -B -m unittest discover -s tools/experience -p 'test_*.py' -v
 
@@ -75,6 +95,21 @@ jobs:
           test "${#receipts[@]}" -eq 1
           python scripts/portable-package.py verify --archive "${archives[0]}" --receipt "${receipts[0]}" --expected-commit "$(git rev-parse HEAD)" --expected-tree "$(git rev-parse 'HEAD^{tree}')" --output target/portable-package-verify
 
+      - name: Preserve synthetic candidate verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: local-core-and-package-${{ matrix.os }}
+          if-no-files-found: warn
+          path: |
+            target/core-verification/summary.json
+            target/portable-package-verify/summary.json
+            target/portable-package-verify/SHA256SUMS
+            target/portable-package-verify/local-core/summary.json
+            ${{ runner.temp }}/admin-browser-verification/report.json
+            ${{ runner.temp }}/admin-browser-verification/cleanup.json
+            ${{ runner.temp }}/admin-browser-verification/*.png
+
   windows-runtime:
     name: Windows native runtime / Rust 1.95.0
     runs-on: windows-latest
@@ -88,7 +123,7 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Test native memory and lifecycle runtime
-        run: cargo test --lib --test sqlite_lifecycle --test sqlite_store --test correction_atomicity --test feedback_provenance --test feedback_candidates --test experience_workflow --test indexed_text_recall --test temporal_metadata --test sqlite_temporal_store --test reflection_scope_history --test scoped_ledger_export --test schema6_migration --test schema7_migration --test self_model_versions --test version_api --test context_diagnostics --test caller_operation_budget --test mcp_stdio --test native_model_protocols --test openai_compatible_model --test provider_config --test dashboard_config --test dashboard_recorder --test dashboard_projection --test dashboard_http
+        run: cargo test --lib --test workspace_registry --test mcp_session_policy --test local_core_cli --test local_core --test sqlite_lifecycle --test sqlite_store --test correction_atomicity --test feedback_provenance --test feedback_candidates --test experience_workflow --test indexed_text_recall --test temporal_metadata --test sqlite_temporal_store --test reflection_scope_history --test scoped_ledger_export --test schema6_migration --test schema7_migration --test self_model_versions --test version_api --test context_diagnostics --test caller_operation_budget --test mcp_stdio --test native_model_protocols --test openai_compatible_model --test provider_config --test dashboard_config --test dashboard_recorder --test dashboard_projection --test dashboard_http
       - name: Test bounded provider certification with offline fixtures
         run: cargo test --features release-tools --test provider_live_certification
       - name: Verify installed-binary offline memory workflow

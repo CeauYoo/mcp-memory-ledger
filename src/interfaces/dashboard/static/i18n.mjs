@@ -1,6 +1,12 @@
 // UI labels only; record content remains verbatim.
 export const messages = {
   "en": {
+    "ownerHeading": "Local owner · all workspaces",
+    "ownerToken": "Owner capability",
+    "ownerError": "Unable to sign in.",
+    "ownerLogin": "Unlock",
+    "ownerLogout": "Lock",
+
     "outsideWindow": "Selected record is outside this view.",
     "skip": "Skip to operations",
     "workspace": "VIEWS",
@@ -103,6 +109,12 @@ export const messages = {
     "local": "Local"
   },
   "zh-CN": {
+    "ownerHeading": "本机所有者 · 全部工作空间",
+    "ownerToken": "所有者凭据",
+    "ownerError": "登录失败。",
+    "ownerLogin": "解锁",
+    "ownerLogout": "锁定",
+
     "outsideWindow": "所选记录不在当前视图中。",
     "skip": "跳转到操作记录",
     "workspace": "视图",
@@ -205,6 +217,12 @@ export const messages = {
     "local": "本机"
   },
   "ja": {
+    "ownerHeading": "ローカル所有者 · 全ワークスペース",
+    "ownerToken": "所有者の認証情報",
+    "ownerError": "ログインできません。",
+    "ownerLogin": "解除",
+    "ownerLogout": "ロック",
+
     "outsideWindow": "選択中の記録はこのビューの範囲外です。",
     "skip": "操作記録へ移動",
     "workspace": "ビュー",

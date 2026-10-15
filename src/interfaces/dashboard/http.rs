@@ -5,6 +5,7 @@ use axum::{
     Json, Router,
     extract::{OriginalUri, Path, Query, State},
     http::{StatusCode, header},
+    middleware,
     response::{
         Html, IntoResponse, Redirect,
         sse::{Event, KeepAlive, Sse},
@@ -23,7 +24,9 @@ use crate::{
 };
 
 use super::{
-    DashboardRuntimeInfo, EventQuery, OperationKind, OperationRecorder, OperationStatus,
+    DashboardObserver, DashboardRuntimeInfo, EventQuery, OperationKind, OperationRecorder,
+    OperationStatus,
+    admin::{AdminGate, require_admin},
     assets::{DASHBOARD_HTML, MEMORY_CHAN_HERO_PNG, MEMORY_CHAN_SIDEBAR_PNG},
     build_summary, project_event_detail, project_from_log_entry,
 };
@@ -93,8 +96,47 @@ pub async fn start_dashboard_service_with_operation_log(
     runtime: DashboardRuntimeInfo,
     operation_log: Option<SqliteStore>,
 ) -> Result<DashboardHandle> {
+    start_service(config, recorder, runtime, operation_log, None).await
+}
+
+/// Opt-in administrator surface for an already-running core. This does not create
+/// an observer, reset its sequence, issue or persist a credential. The browser keeps a supplied capability in tab memory.
+pub async fn start_admin_dashboard_service(
+    config: DashboardConfig,
+    runtime: DashboardRuntimeInfo,
+    observer: DashboardObserver,
+    operation_log: Option<SqliteStore>,
+    gate: AdminGate,
+) -> Result<DashboardHandle> {
+    anyhow::ensure!(config.enabled, "admin dashboard must be explicitly enabled");
+    let recorder = observer
+        .recorder()
+        .ok_or_else(|| anyhow::anyhow!("admin dashboard requires the core's enabled observer"))?;
+    start_service(config, recorder, runtime, operation_log, Some(gate)).await
+}
+
+async fn start_service(
+    config: DashboardConfig,
+    recorder: OperationRecorder,
+    runtime: DashboardRuntimeInfo,
+    operation_log: Option<SqliteStore>,
+    gate: Option<AdminGate>,
+) -> Result<DashboardHandle> {
     config.validate().map_err(anyhow::Error::msg)?;
-    let listener = TcpListener::bind((config.host.as_str(), config.port)).await?;
+    let listener = if gate.is_some() {
+        // Validate resolution before binding too: even a modified localhost mapping
+        // must never make the administrator listener reachable off this machine.
+        let addresses: Vec<_> = tokio::net::lookup_host((config.host.as_str(), config.port))
+            .await?
+            .collect();
+        anyhow::ensure!(
+            !addresses.is_empty() && addresses.iter().all(|address| address.ip().is_loopback()),
+            "admin dashboard must bind only loopback addresses"
+        );
+        TcpListener::bind(addresses.as_slice()).await?
+    } else {
+        TcpListener::bind((config.host.as_str(), config.port)).await?
+    };
     let address = listener.local_addr()?;
     let base_path = normalized_base_path(&config.base_path);
     let state = DashboardState {
@@ -106,6 +148,14 @@ pub async fn start_dashboard_service_with_operation_log(
         sse_enabled: config.sse_enabled,
     };
     let app = router(state, &base_path, config.sse_enabled);
+    // Layer the complete router, including aliases, redirects and fallback paths.
+    let app = match gate {
+        Some(gate) => app.layer(middleware::from_fn_with_state(
+            gate.bind(address, &base_path),
+            require_admin,
+        )),
+        None => app,
+    };
     let task = tokio::spawn(async move {
         if let Err(error) = axum::serve(listener, app).await {
             tracing::warn!(error = %error, "dashboard service stopped with error");

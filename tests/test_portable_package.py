@@ -76,6 +76,72 @@ class PackageTests(unittest.TestCase):
     def validate(self, receipt):
         return package.validate_package(self.path, receipt, COMMIT, TREE)
 
+    def test_workspace_assets_are_required_and_source_bound(self):
+        for name in ("scripts/verify-local-core.py", "docs/local-workspace-core.md",
+                     "examples/codex-workspace-bridge-global.toml"):
+            self.assertIn(name, package.ASSETS)
+            payload = dict(self.payload)
+            del payload[name]
+            with self.assertRaisesRegex(package.PackageError, "required files"):
+                self.validate(self.archive(payload))
+
+    def test_windows_skips_unix_core_without_executing_verifier(self):
+        with patch.object(package.subprocess, "run") as run:
+            result = package.verify_local_core(self.root, "bin/agent_llm_mm.exe", self.root,
+                                               self.root / "output", "windows-x86_64")
+        self.assertEqual(result["status"], "unsupported")
+        run.assert_not_called()
+
+    def test_unix_verifier_failure_blocks_candidate_and_keeps_evidence(self):
+        (self.root / "core").mkdir()
+        (self.root / "core" / "summary.json").write_text('{"status":"failed"}')
+        output = self.root / "output"
+        output.mkdir()
+        with patch.object(package.subprocess, "run") as run:
+            run.return_value.returncode = 1
+            with self.assertRaisesRegex(package.PackageError, "verification failed"):
+                package.verify_local_core(self.root, "bin/agent_llm_mm", self.root, output, "linux-x86_64")
+        self.assertTrue((output / "local-core" / "summary.json").is_file())
+        self.assertIn("-I", run.call_args.args[0])
+        self.assertEqual(run.call_args.kwargs["env"]["PATH"], "")
+
+    def test_unix_verifier_keeps_regular_evidence_but_not_symlinks(self):
+        core = self.root / "core"
+        core.mkdir()
+        binary = self.root / "candidate"
+        binary.write_bytes(b"synthetic binary")
+        summary = {"status": "passed", "model_requests": 0, "cleanup": {"passed": True},
+                   "binary_sha256": package.sha(binary.read_bytes())}
+        (core / "summary.json").write_text(json.dumps(summary))
+        outside = self.root / "private"
+        outside.write_text("not evidence")
+        try:
+            (core / "outside-link").symlink_to(outside)
+        except (OSError, NotImplementedError):
+            pass  # Windows may not grant symlink privilege; the Unix path tests it.
+        if hasattr(os, "mkfifo"):
+            os.mkfifo(core / "non-file")
+        output = self.root / "output"
+        output.mkdir()
+        with patch.object(package.subprocess, "run") as run:
+            run.return_value.returncode = 0
+            result = package.verify_local_core(self.root, "candidate", self.root, output, "linux-x86_64")
+        self.assertEqual(result["status"], "passed")
+        self.assertEqual(sorted(p.name for p in (output / "local-core").iterdir()), ["summary.json"])
+
+    def test_unix_verifier_rejects_wrong_binary_evidence(self):
+        core = self.root / "core"
+        core.mkdir()
+        (self.root / "candidate").write_bytes(b"synthetic binary")
+        (core / "summary.json").write_text(json.dumps({"status": "passed", "model_requests": 0,
+            "cleanup": {"passed": True}, "binary_sha256": "wrong"}))
+        output = self.root / "output"
+        output.mkdir()
+        with patch.object(package.subprocess, "run") as run:
+            run.return_value.returncode = 0
+            with self.assertRaisesRegex(package.PackageError, "identity mismatch"):
+                package.verify_local_core(self.root, "candidate", self.root, output, "linux-x86_64")
+
     def test_native_header_fixtures_validate_without_execution(self):
         for target in ("linux-x86_64", "macos-aarch64", "macos-x86_64", "windows-x86_64"):
             with self.subTest(target=target):
@@ -323,7 +389,9 @@ class PackageTests(unittest.TestCase):
                 raise OSError("synthetic checksum write failure")
             original_write(path, data)
         with patch.object(package, "native_target", return_value=("linux-x86_64", "x86_64-unknown-linux-gnu")), \
-             patch.object(package, "smoke", return_value={}), patch.object(package, "write_new", injected_failure), \
+             patch.object(package, "smoke", return_value={}), \
+             patch.object(package, "verify_local_core", return_value={"status": "passed"}), \
+             patch.object(package, "write_new", injected_failure), \
              self.assertRaisesRegex(OSError, "checksum write failure"):
             package.verify(args)
         self.assertFalse((args.output / "summary.json").exists())

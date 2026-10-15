@@ -25,3 +25,4 @@ pub mod remote_team;
 pub mod status_sync;
 pub mod support_bundle;
 pub mod tracing;
+pub mod workspace_registry;

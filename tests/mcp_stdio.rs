@@ -16,6 +16,12 @@ use tokio::{
     sync::oneshot,
 };
 
+#[path = "mcp_stdio/dashboard_lifecycle.rs"]
+mod dashboard_lifecycle;
+
+#[path = "mcp_stdio/operation_audit.rs"]
+mod operation_audit;
+
 #[path = "mcp_stdio/caller_budget.rs"]
 mod caller_budget;
 
@@ -6706,7 +6712,7 @@ mod test_support {
         _database_dir: Option<TempDir>,
         child: Child,
         initialized: bool,
-        stdin: ChildStdin,
+        stdin: Option<ChildStdin>,
         stdout: BufReader<ChildStdout>,
     }
 
@@ -6769,9 +6775,32 @@ mod test_support {
                 _database_dir: database_dir,
                 child,
                 initialized: false,
-                stdin,
+                stdin: Some(stdin),
                 stdout: BufReader::new(stdout),
             })
+        }
+
+        pub fn process_id(&self) -> u32 {
+            self.child.id()
+        }
+
+        pub async fn close_transport(&mut self) -> io::Result<std::process::ExitStatus> {
+            drop(self.stdin.take());
+            tokio::time::timeout(std::time::Duration::from_secs(10), async {
+                loop {
+                    if let Some(status) = self.child.try_wait()? {
+                        return Ok(status);
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+                }
+            })
+            .await
+            .map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "child did not exit after stdin EOF",
+                )
+            })?
         }
 
         pub async fn list_all_tools(&mut self) -> io::Result<Vec<Tool>> {
@@ -6844,8 +6873,11 @@ mod test_support {
             let mut body = serde_json::to_vec(&payload)
                 .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
             body.push(b'\n');
-            self.stdin.write_all(&body)?;
-            self.stdin.flush()
+            let stdin = self.stdin.as_mut().ok_or_else(|| {
+                io::Error::new(io::ErrorKind::BrokenPipe, "child stdin is closed")
+            })?;
+            stdin.write_all(&body)?;
+            stdin.flush()
         }
 
         fn read_message(&mut self) -> io::Result<Value> {

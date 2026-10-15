@@ -1,5 +1,11 @@
 # Windows 开发与接入指南
 
+## 2026-10-15 平台边界
+
+Windows继续使用下方现有standalone `serve`路径和[兼容配置](../examples/codex-mcp-config.toml)。新[本机核心＋固定工作空间桥](local-workspace-core.md)首期只使用macOS/Linux Unix sockets，Windows的`core`/`bridge`暂不支持；跨平台纯registry/授权测试通过也不能称Windows核心运行成功。不要复制Unix socket桥样例作为Windows接入方案。
+
+新核心25允许/7拒绝、逐调用授权、关闭自动反思和默认关闭监控HTTP属于独立进行中切片。当前定向证据与首轮集成3项失败的修复状态见[矩阵](workspace-core-acceptance.md)，不报告三平台核心全通过。旧部署Mac的20项协议、11项网页和一个自然语言样本也不替代Windows客户端或fresh-machine验证。现有Windows native、PowerShell wrapper和精确提交CI范围保持不变。
+
 2026-10-09 文档导航：首次使用见[快速开始](quickstart.md)，当前操作见[数据库手册](database-operations.md)，可执行协议示例见[完整工作流](runnable-memory-workflow.md)。实现基线三平台验证与 Windows native / wrapper 区别见[当前状态](project-status.md)；下方分阶段追加记录不代表新的发布批准。
 
 这份文档面向在 Windows 上开发、验证和接入 `agent_llm_mm` 的协作者。

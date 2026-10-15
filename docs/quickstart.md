@@ -4,6 +4,8 @@
 
 如果维护者已用[portable package 流程](portable-packages.md)构建与你平台匹配的候选包，可按包内说明直接运行二进制，最终用户无需 Rust。包必须有可核对的来源与校验值；当前仓库尚未发布经过人工批准的发行包。下面保留源码开发路径。
 
+需要多个客户端共享一个核心时，直接使用[本机核心最小接入](local-workspace-core.md)：显式初始化隔离库、登记可信项目、手动启动核心，再选择[一次全局桥配置](../examples/codex-workspace-bridge-global.toml)或[固定项目桥配置](../examples/codex-workspace-bridge.toml)。全局模式要求客户端启动桥时提供真实项目 cwd；连接不会跟随会话移动，个人读写另行显式授权。该新路径仅 macOS/Linux，Windows继续使用下方旧stdio。旧项目 namespace 不自动迁移，不替换正式部署。
+
 ## 1. 环境与构建
 
 - 安装 Rust/rustup，仓库 `rust-toolchain.toml` 固定 **1.95.0**；详见[工具链政策](toolchain-policy.md)。

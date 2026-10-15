@@ -6,6 +6,27 @@
 
 本文件把“做成正式项目”拆成可验收的改进项，并记录当前本地代码进入 GitHub 主线的同步路径。它是跨领域差距矩阵，不是第二份任务队列；具体实现顺序仍以 [active project plan](plans/2026-07-10-product-replan.md) 为唯一执行来源。
 
+## 2026-10-15 当前差距对照
+
+以下为当前实现核对，后文 2026-08-25 数字/矩阵保持历史基线，不重新变成待开发清单。执行顺序仍只由 active plan 管理。
+
+| 范围 | 当前分类 | 依据与剩余条件 |
+| --- | --- | --- |
+| CORE-01 / CORE-03 | 已实现 | current-schema 结构读回与排他 init/migrate；见当前状态及生命周期测试 |
+| CORE-02 | 部分实现 / 外部验收门 | 旧部署有实际协议/自然语言有限样本；新核心完整真实客户端故事尚未验收 |
+| REL-01 / REL-03 | 有限实现 | 精确源码 portable 构建/校验/解包及 Windows wrapper 已有历史证据；新 Unix 核心候选须新证据，Windows 仅旧 stdio |
+| GOV-01 / SEC-01 / SEC-04 / GIT-04 | 文档已补，治理门保留 | SECURITY、SUPPORT、拟定协作准则、CHANGELOG、Issue/PR 模板存在；未确认负责人，不伪造 CODEOWNERS、私密报告渠道可用性、响应 SLA 或签名 release |
+| DATA-01 | 有限实现 / 非目标 | 显式备份恢复及 scoped export 已实现；retain-all，不擅自增加 destructive retention/compaction |
+| DATA-02 | 未实施，须数据政策 | legacy Unknown owner 仅只读盘点；旧项目 namespace 到新 workspace ID 也没有自动 adopt/重写，不变更正式数据 |
+| OPS-01 / OPS-02 / OPS-03 | 有限实现 | 有规模测量、索引与有界日志；新核心共享 observer，不等于生产容量/SLO、全历史计数或长期 soak |
+| OPS-04 | 部分实现 | 新核心隔离崩溃/重连/恢复验证入口已纳入候选验证；断电、磁盘满、任意写入中断仍不得由正常重启推断 |
+| UX-01 / UX-03 | 部分实现 | 核心接入、全局桥/显式桥样例、平台与数据切换边界已补；真实十分钟新机体验仍未测 |
+| SEC-02 | 未实施 / 工具评估门 | 依赖漏洞/license/secret scanning 尚无已验证 CI 门；本轮不擅自安装新工具或创造例外负责人 |
+| REL-02 / REL-04 / GIT-01–03 | 外部证据 / 执行动作门 | fresh-machine、人工 release、远端同步/保护/合并需各自当前证据和授权，不由本地文件更新关闭 |
+| REL-05 / UX-02 / REMOTE-01–02 | 后置 / 独立需求 | SBOM/attestation、协议库升级、远程团队服务不扩大为当前核心必做项 |
+
+本次只在助手云端实现并验证，不访问 Mac、不推送、不改正式客户端配置、不启用后台服务、不调用收费模型。新增代码、隔离测试通过、精确提交 CI、真实客户端与正式部署分别报告。
+
 ## 1. 结论
 
 当前仓库已经是一个边界清楚、测试较完整的 local-first technical MVP，但还不能称为正式发布产品、Local Alpha、Beta、GA 或 production-ready 系统。

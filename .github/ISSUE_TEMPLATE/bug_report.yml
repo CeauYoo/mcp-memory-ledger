@@ -1,0 +1,54 @@
+name: Bug report
+description: Report a reproducible problem using synthetic data and bounded evidence.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This repository is a technical demo / MVP. Do not report suspected vulnerabilities publicly; follow SECURITY.md and verify a private reporting channel first.
+        Do not include credentials, configuration files, raw databases/logs, private memory, or user chat transcripts. Paid model requests are not required for this form.
+  - type: textarea
+    id: environment
+    attributes:
+      label: Version and environment
+      description: Binary version or commit SHA, OS/architecture, client/version, known schema version, and entry path (standalone stdio, core/bridge, dashboard or CLI). Use synthetic paths.
+    validations:
+      required: true
+  - type: dropdown
+    id: evidence_level
+    attributes:
+      label: Verification level
+      description: Select the evidence actually collected, not the intended test.
+      options:
+        - Offline mock or protocol fixture
+        - Direct MCP protocol call
+        - Real natural-language client session
+        - Isolated package run without Rust in PATH
+        - Fresh-machine run
+        - Separately authorized live-model run
+        - Not yet reproduced
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal synthetic reproduction
+      description: List exact steps and synthetic inputs. Distinguish a client reconnect from restarting a shared core; do not paste a private registry or provider config.
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Expected and actual result
+      description: Include a short manually sanitized error or correlation identifier if useful. State failures and untested boundaries; keep raw evidence local.
+    validations:
+      required: true
+  - type: checkboxes
+    id: data_review
+    attributes:
+      label: Before submitting
+      options:
+        - label: I used synthetic data and reviewed this report for credentials and private content; it contains no raw database, config, unrestricted log or private transcript.
+          required: true
+        - label: This is not a public disclosure of a suspected vulnerability; security reports will use a verified private channel.
+          required: true

@@ -1,5 +1,32 @@
 # Self-Agent MCP 测试指南（2026-03-24，按 2026-07-15 fresh 验证更新）
 
+## 2026-10-15 工作空间核心验证（进行中）
+
+按[唯一active plan](plans/2026-07-10-product-replan.md)与[验收矩阵](workspace-core-acceptance.md)执行，不把源码存在或定向测试当全套通过。当前已有registry11项、实际Codex roots67条断言、管理员监控7项及legacy HTTP6项定向证据；历史首轮完整集成发现3项失败；云端已续建，最终同源回归仍待完成。最终总数、独立审查与精确提交CI尚待收口，以下命令只是复现入口。
+
+```sh
+cargo test --test workspace_registry --test mcp_session_policy --test local_core_cli
+cargo test --test local_core --test dashboard_admin --test dashboard_http
+```
+
+在明确的隔离目录准备mock配置、数据库和非正式端口；新核心/桥的实际进程测试只在macOS/Linux运行。Windows继续执行可用的registry/纯策略及legacy stdio回归，新核心不可标为supported或passed。不要运行测试去停止用户核心、迁移正式库或读取现有provider配置/凭据。
+
+必须覆盖：两个workspace与个人R/W授权/撤销、七全局工具隐藏及直接拒绝、所有允许工具的嵌套scope/owner/来源、receipt回放前重新授权、core ingest无模型/自动反思、相同RPC id跨连接不串响应、bridge EOF不关core、默认无HTTP及管理员全路由能力。资源目标为64会话、共享32个业务执行、每连接8个待完成请求和4 MiB输出缓冲；传输保护正在实现，需超限/背压/取消负例，不能用配置常量证明上限有效。
+
+[核心指南](local-workspace-core.md)提供`verify-local-core.py`候选运行入口：只给已构建二进制和新输出目录，无Cargo/Rust运行PATH，测试重连、更正/来源/历史、强制结束自有进程、回放和恢复到新路径。实现与实际执行结果分别记录；这仍是隔离运行，不是fresh-machine。任何脚本都不得操作正常用户进程。
+
+新增候选回归入口：
+
+```sh
+python3 -B -m unittest discover -s tests -p 'test_portable_package.py' -v
+python3 -B -m unittest discover -s tests -p 'test_local_core_verifier.py' -v
+python3 scripts/verify-local-core.py --binary /absolute/bin/agent_llm_mm --output /absolute/new-short-output
+```
+
+本次云端 Python 定向检查为45项包合同、17项验证器安全测试通过。环境在创建 Unix socket 时返回系统 `EPERM`，实际核心进程闭环在此受阻，不能计为通过，也不将测试改成跳过。Ubuntu/macOS CI 的 full Rust tier、独立核心验证器、精确源码包解包验证均为失败即阻断；Windows只保留旧stdio包验收。包中验证器、workspace指南和显式/全局桥样例随源码哈希绑定，CI保存合成摘要；新机与自然语言验收仍单列。
+
+实际Codex roots探针仅证明本版本固定连接的目录行为，无模型回合；移动会话不自动重绑。旧部署d9e33d3的20项协议、11项浏览器及一个真实自然语言召回/来源/更正样本另列，不能替代新架构自然语言验收。拒绝/失败轨迹、原始尝试与未测边界保留，实际模型/费用请求需要单独授权。
+
 ## 2026-10-15 体验与客户端验收
 
 新增 `python3 -E -s -B -m unittest discover -s tools/experience -p 'test_*.py' -v`，也用 `-O` 检查断言优化不改变运行保护。覆盖真实本地 MCP、合成 HTTP、102 次两阶段路径、实时网页和失败账本；三平台 CI 执行离线套件。实际 Codex 客户端单独用已安装 CLI 运行 `tools/codex_client/acceptance.py`，不调用模型。命令、历史复核与未关闭门禁见[本轮验收记录](acceptance-2026-10-15.md)。
@@ -26,7 +53,7 @@ git diff --check
 
 全套测试包含原生适配器 request/response 单元与集成覆盖；检查原生 endpoint、headers、`store: false`、token budget、默认省略 temperature，以及 decision/self-revision 共享解析。错误覆盖应包含 timeout、非成功 status、畸形 JSON、空文本、拒绝、截断、不支持的工具响应、重定向及不泄漏 key/URL/body。实际 MCP stdio 测试验证 config-selected provider 及自动反思路径，不只测试独立 JSON helper。
 
-本节给出验证入口，不预先声明新总数或精确提交 CI 已通过。离线 fixture 与 doctor 通过都不是新增原生协议的 live 认证；现有 live runner 拒绝 native provider，preflight 对两者保持 `live_certified = false`；真实 endpoint、输出质量、同模型收益和费用实验仍需单独授权及证据。
+本节保留2026-10-10的协议验证入口，不预先声明新总数或精确提交CI已通过。当时live runner尚拒绝native provider；2026-10-13已扩展至Chat、Responses、Anthropic三协议，见[验收器记录](acceptance-2026-10-13.md)。离线fixture和doctor仍不是live认证；真实endpoint、输出质量、同模型收益与费用需要各自授权和证据。
 
 ## 2026-10-10 portable package 与 wrapper 验证
 
@@ -1270,7 +1297,10 @@ http://127.0.0.1:8787/
 cargo test --test dashboard_config --test dashboard_recorder --test dashboard_projection --test dashboard_http
 node --test tests/dashboard/frontend.test.mjs
 cargo test --test mcp_stdio dashboard_enabled_does_not_corrupt_mcp_stdout_and_records_tool_event -v
+cargo test --test mcp_stdio dashboard_lifecycle -v
 ```
+
+`dashboard_lifecycle` 使用 mock、独立数据库与随机 loopback 端口，覆盖两进程竞争、首个 MCP 正常 stdin EOF 后接管、等待期间事件保留、最后 EOF 释放监听、等待者关闭取消接管及 required 端口失败。只终止测试自身子进程，不操作正式监听；属于隔离运行验证。
 
 dashboard HTTP 测试会监听本机端口，受限沙箱中可能需要在允许本地监听的环境运行。启用 dashboard 时，`DashboardConfig::validate` 只接受 `localhost` 或 loopback IP，明确拒绝 `0.0.0.0`、LAN IP 与域名；disabled 配置可以保留未启用的 host 值但不会启动监听。该面板只读，不会调用 `run_reflection` 或修改 SQLite；`dashboard_rejects_write_methods_on_read_only_routes` 覆盖 POST / PUT / PATCH / DELETE 返回 `405 Method Not Allowed`，`dashboard_serves_html_summary_events_detail_and_health` 覆盖 HTML、JSON API、health 和 SSE 只读 GET surface。
 

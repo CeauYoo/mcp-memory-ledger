@@ -8,7 +8,9 @@ MCP Memory Ledger は、長期記憶・自己スナップショット・反省�
 
 ## 現在のスコープ
 
-現在の 32 ツールと能力は[実装状態](project-status.md)と[ツール索引](tool-reference.md)に集約しています。schema7、フィードバック訂正、字面検索・context、経験候補の版管理は実装済みです。実ユーザークライアント、fresh-machine、実モデル効果、公開承認の gate は未完了です。
+従来のstandaloneモードの32ツールと能力は[実装状態](project-status.md)と[ツール索引](tool-reference.md)を参照してください。schema7、フィードバック訂正、字面検索・context、経験候補の版管理は実装済みです。Macの既存d9e33d3ではプロトコル20項目、ブラウザ11項目、実ユーザーによる自然言語の想起・出典確認・訂正1例を確認しています。全クライアントの検証完了を意味しません。
+
+[ローカルコアと固定workspaceブリッジ](local-workspace-core.md)は統合中です。25ツールを許可し、7つのグローバルツールを拒否します。個人メモリの権限は明示的に付与し、core ingestの自動反省と監視HTTPは既定で無効です。新方式はmacOS/Linuxが対象で、Windowsは従来のstdioを継続します。新コアの統合・実クライアント、fresh-machine、実モデル効果、公開承認は未検証のままです。既存の配置は置き換えていません。
 
 ## 適した用途
 
@@ -31,3 +33,5 @@ MCP Memory Ledger は、長期記憶・自己スナップショット・反省�
 このリポジトリは、OpenAI Codex を協調的な開発ツールとして活用しながら、実装・議論・文書整理を進めてきました。このようなワークフローを可能にするツール群と研究エコシステムを提供している OpenAI に感謝します。
 
 Schema7 global self-model version/diff and explicit compensation contract: [details](self-model-versions.md). Existing scoped read/export boundaries and experimental single-user limits remain.
+
+問題報告は[サポート案内](../SUPPORT.md)、安全性の懸念は[非公開窓口の確認手順](../SECURITY.md)を参照してください。[協業ガイドライン案](../CODE_OF_CONDUCT.md)と[変更履歴](../CHANGELOG.md)は、対応期限やリリース承認を約束するものではありません。

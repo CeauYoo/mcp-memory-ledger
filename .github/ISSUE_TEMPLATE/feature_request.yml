@@ -1,0 +1,35 @@
+name: Feature request
+description: Propose a concrete memory workflow with a bounded acceptance condition.
+title: "[Feature]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Start from the active plan in docs/plans/2026-07-10-product-replan.md. Historical or optional roadmap items are not automatically approved work.
+        Do not include credentials, private memories or raw artifacts. A request does not authorize deployment, live-model spending, data deletion or remote/team services.
+  - type: textarea
+    id: problem
+    attributes:
+      label: User task and current limitation
+      description: Describe the record, recall, evidence, correction or recovery task, with a synthetic example and relevant current behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Proposed scope and boundaries
+      description: Describe the smallest useful change, what it reads or writes, workspace/personal-scope permissions, and anything explicitly outside scope.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Observable acceptance condition
+      description: Explain how the result could fail or pass. Separate offline/protocol checks, real-client behavior, fresh-machine setup and any separately authorized model experiment.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Existing capability or alternative
+      description: Link the active-plan item or contract if known, and describe why existing functionality does not meet the task. Unknown is acceptable.

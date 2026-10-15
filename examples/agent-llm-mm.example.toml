@@ -11,6 +11,11 @@
 # It does not create secrets, overwrite local config, run doctor, or start serve.
 #
 # Do not reuse one database_url for formal data, manual tests, and demos.
+# Optional Unix core uses this TOML only in the core process; bridge does not load it.
+# Keep dashboard and daemon disabled for workspace core. Legacy dashboard settings
+# are not the separate administrator Bearer API, which is fixture-only this phase.
+# See docs/local-workspace-core.md and examples/codex-workspace-bridge.toml.
+# New core/bridge is under acceptance on macOS/Linux and unsupported on Windows.
 
 transport = "stdio"
 database_url = "sqlite:///absolute/path/to/agent-llm-mm.local.sqlite"
@@ -49,7 +54,9 @@ max_concurrent_tasks = 1
 
 # Native protocol alternatives. Replace [model] above and select ONE section.
 # Both adapters are offline-tested MVP support, not live-certified providers.
-# provider-live-certification-run currently supports chat-completions only.
+# provider-live-certification-run supports Chat Completions, Responses and Messages.
+# Offline fixtures are not live certification; a live run needs explicit data/spending
+# authorization. Unknown prices do not permit a software-enforced dollar-cap claim.
 # base_url is an API root; /responses or /messages is appended by the adapter.
 # max_tokens defaults to 2048 and must be positive. timeout_ms defaults to 30000
 # and must be positive. Omit temperature for provider/model defaults.

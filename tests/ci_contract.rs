@@ -32,6 +32,10 @@ fn ci_covers_linux_and_macos_quality_gates() {
         "native_model_protocols",
         "openai_compatible_model",
         "provider_config",
+        "workspace_registry",
+        "mcp_session_policy",
+        "local_core_cli",
+        "local_core",
     ] {
         assert!(
             workflow.contains(&format!("--test {suite}")),
@@ -102,8 +106,40 @@ fn ci_executes_source_bound_packages_and_real_windows_wrapper() {
     ] {
         assert!(windows.contains(&format!("- name: {step}\n        run: {command}")));
     }
-    assert!(
-        !workflow.contains("upload-artifact"),
-        "local candidate checks must not publish artifacts"
+    // CI may retain narrowly selected synthetic verification evidence, never
+    // publish a candidate binary/archive, database, private config or raw log.
+    assert!(workflow.contains("scripts/verify-local-core.py"));
+    assert!(workflow.contains("test_local_core_verifier.py"));
+    assert!(workflow.contains("scripts/dashboard-admin-browser-check.mjs"));
+    assert!(!windows.contains("scripts/verify-local-core.py"));
+    assert_eq!(workflow.matches("actions/upload-artifact@").count(), 1);
+    let upload = workflow
+        .split("uses: actions/upload-artifact@")
+        .nth(1)
+        .expect("synthetic verification evidence upload")
+        .split("  windows-runtime:")
+        .next()
+        .unwrap();
+    let paths = upload
+        .split("          path: |\n")
+        .nth(1)
+        .expect("explicit evidence paths");
+    let paths: Vec<_> = paths
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect();
+    assert_eq!(
+        paths,
+        [
+            "target/core-verification/summary.json",
+            "target/portable-package-verify/summary.json",
+            "target/portable-package-verify/SHA256SUMS",
+            "target/portable-package-verify/local-core/summary.json",
+            "${{ runner.temp }}/admin-browser-verification/report.json",
+            "${{ runner.temp }}/admin-browser-verification/cleanup.json",
+            "${{ runner.temp }}/admin-browser-verification/*.png",
+        ]
     );
+    assert!(!workflow.contains("continue-on-error:"));
 }

@@ -2,6 +2,12 @@
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light"><title>Memory-chan Live Desk</title><link rel="icon" href="data:,"><link rel="stylesheet" href="assets/dashboard.css"></head>
 <body>
+<dialog id="owner-auth" aria-labelledby="owner-heading"><form id="owner-login">
+<h2 id="owner-heading" data-i18n="ownerHeading">Local owner</h2>
+<label><span data-i18n="ownerToken">Owner capability</span><input id="owner-token" type="password" autocomplete="off" required spellcheck="false"></label>
+<p id="owner-error" role="alert" data-i18n="ownerError" hidden>Unable to sign in.</p>
+<button id="owner-submit" class="primary" data-i18n="ownerLogin">Unlock</button>
+</form></dialog>
 <a class="skip" href="#workspace" data-i18n="skip">Skip to operations</a>
 <div class="shell">
 <aside class="sidebar">
@@ -20,7 +26,7 @@
 </aside>
 <main id="workspace" tabindex="-1">
   <section class="connection panel" data-i18n-aria="connection"><span id="connection" role="status" aria-live="polite" class="badge">Connecting…</span><strong id="latest-operation">—</strong><span id="latest-meta">—</span><span id="freshness"></span></section>
-  <header class="topbar"><div class="top-pills"><span id="runtime-transport" class="pill transport">MCP</span><span class="pill" data-i18n="local">Local</span><span class="pill read-only" data-i18n="readOnly">Read only</span></div><label class="language"><span data-i18n="language">Language</span><select id="locale"><option value="en">English</option><option value="zh-CN">简体中文</option><option value="ja">日本語</option></select></label></header>
+  <header class="topbar"><div class="top-pills"><button id="owner-logout" data-i18n="ownerLogout" hidden>Lock</button><span id="runtime-transport" class="pill transport">MCP</span><span class="pill" data-i18n="local">Local</span><span class="pill read-only" data-i18n="readOnly">Read only</span></div><label class="language"><span data-i18n="language">Language</span><select id="locale"><option value="en">English</option><option value="zh-CN">简体中文</option><option value="ja">日本語</option></select></label></header>
   <section class="hero panel"><img src="assets/memory-chan-hero.png" alt="" width="1280" height="400"><div class="hero-title"><h1>Memory-chan</h1><span>Live Desk</span></div><div class="hero-note" data-i18n="heroNote">Observing · Reflecting · Evolving</div><span class="hero-spark" aria-hidden="true">✦</span></section>
   <div class="main-grid"><div class="content-col">
   <section class="metrics" data-i18n-aria="metrics"><div class="metric"><i aria-hidden="true">M</i><span data-i18n="total">Records</span><strong id="metric-total">—</strong></div><div class="metric"><i aria-hidden="true">C</i><span data-i18n="tools">Tool records</span><strong id="metric-tools">—</strong></div><div class="metric"><i aria-hidden="true">✦</i><span data-i18n="reflectionRecords">Reflections</span><strong id="metric-reflections">—</strong></div><div class="metric"><i aria-hidden="true">!</i><span data-i18n="failed">Failed</span><strong id="metric-failed">—</strong></div></section>

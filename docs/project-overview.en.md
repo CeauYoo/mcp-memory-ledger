@@ -8,7 +8,9 @@ Compatibility note: the current Rust crate, binary, scripts, configuration examp
 
 ## Current Scope
 
-Current capabilities and all 32 tools are maintained in [current status](project-status.md) and the [tool index](tool-reference.md). Schema7, feedback correction, literal recall/context and versioned experience candidates are implemented. Actual user-client/fresh-machine evidence, real-model efficacy and human release approval remain open.
+The 32-tool standalone mode and current capabilities are described in [current status](project-status.md) and the [tool index](tool-reference.md). Schema7, feedback correction, literal recall/context and versioned experience candidates are implemented. The installed d9e33d3 Mac deployment has 20 protocol checks, 11 browser checks and one real natural-language recall/provenance/correction sample; this is bounded client evidence, not closure of every acceptance gate.
+
+The [local core and fixed workspace bridge](local-workspace-core.md) are under integration: 25 allowed tools, seven denied global tools, explicit personal grants, no automatic reflection in core ingest, and monitoring HTTP off by default. The new path initially targets macOS/Linux; Windows retains standalone stdio. New-core integration/client acceptance, fresh-machine evidence, model efficacy and release approval remain open. The installed deployment has not been replaced.
 
 ## Best Fit
 
@@ -24,10 +26,12 @@ Current capabilities and all 32 tools are maintained in [current status](project
 
 ## Verification Status
 
-[Current implementation evidence (2026-10-09)](project-status.md). Earlier stages remain in the [dated history](project-status-history-2026-10-09.md).
+[Current implementation evidence](project-status.md). Earlier stages remain in the [dated history](project-status-history-2026-10-09.md).
 
 ## Acknowledgement
 
 This repository was developed, discussed, and documented with active support from OpenAI Codex as a collaborative development tool. Thanks to OpenAI for the tooling and research ecosystem that made this workflow possible.
 
 Schema7 global self-model version/diff and explicit compensation contract: [details](self-model-versions.md). Existing scoped read/export boundaries and experimental single-user limits remain.
+
+See [support guidance](../SUPPORT.md), verified private-channel instructions in [SECURITY](../SECURITY.md), the [proposed collaboration guidelines](../CODE_OF_CONDUCT.md) and [changelog](../CHANGELOG.md). These do not promise a response SLA or release approval.

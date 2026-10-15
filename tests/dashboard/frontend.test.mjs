@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {chooseLocale, messages, translator} from '../../src/interfaces/dashboard/static/i18n.mjs';
 import {connectionState, filterRecords, latestFirst, validRecords} from '../../src/interfaces/dashboard/static/state.mjs';
-import {requestJson, singleFlight} from '../../src/interfaces/dashboard/static/transport.mjs';
+import {requestJson, singleFlight, setCapability, clearCapability, openEventStream} from '../../src/interfaces/dashboard/static/transport.mjs';
 const event = (overrides = {}) => ({id:'a',kind:'tool',operation:'build_self_snapshot',status:'ok',namespace:'项目/a',summary:'<script>文本</script>',timestamp:'2026-10-15T03:00:00Z',...overrides});
 const filters = {view:'all',status:'',namespace:'',search:''};
 test('presentation groups include actual live and durable classifications without mutating records', () => {
@@ -54,4 +54,29 @@ test('refresh queue coalesces bursts and never overlaps work', async () => {
   const refresh = singleFlight(async()=>{active++; peak=Math.max(active,peak); count++; if(count===1)await barrier; active--;});
   const pending=refresh(); refresh(); refresh(); refresh(); release(); await pending;
   assert.equal(count,2); assert.equal(peak,1); await refresh(); assert.equal(count,3);
+});
+
+test('owner capability is sent only in headers and is cleared when locked', async () => {
+  setCapability('synthetic-browser-capability');
+  let observed;
+  const fetcher = async (url, options) => { observed = {url,options}; return {ok:true,json:async()=>({})}; };
+  await requestJson('http://127.0.0.1/api/health',{fetcher});
+  assert.equal(observed.options.headers.Authorization, 'Bearer synthetic-browser-capability');
+  assert.equal(observed.options.redirect,'error'); assert.equal(observed.options.credentials,'omit');
+  assert.ok(!observed.url.includes('capability'));
+  clearCapability(); await requestJson('fixture',{fetcher}); assert.deepEqual(observed.options.headers,{});
+});
+test('SSE fetch carries Bearer, parses split events and closes without reconnecting', async () => {
+  setCapability('synthetic-sse-capability'); let options, count=0, opened=0;
+  const done = new Promise(resolve => {
+    openEventStream('fixture',{fetcher:async (_, opts)=> {
+      options=opts; return new Response(new ReadableStream({start(controller) {
+        controller.enqueue(new TextEncoder().encode('data: {"safe":'));
+        controller.enqueue(new TextEncoder().encode('true}\n\n: keep-alive\n\n')); controller.close();
+      }}),{headers:{'Content-Type':'text/event-stream'}});
+    },onopen:()=>opened++,onmessage:()=>count++,onerror:resolve});
+  });
+  await done; assert.equal(opened,1); assert.equal(count,1);
+  assert.equal(options.headers.Authorization,'Bearer synthetic-sse-capability'); assert.equal(options.signal.aborted,true);
+  clearCapability();
 });

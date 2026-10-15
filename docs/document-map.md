@@ -8,12 +8,13 @@
 2. [可运行工作流](runnable-memory-workflow.md)：可复制 MCP 参数和离线端到端脚本。
 3. [MCP 客户端接入](local-mcp-integration-2026-03-26.md)：绝对 binary/config/database 路径、stdio 和排错。
 4. [数据库操作](database-operations.md)：init/migrate/doctor、备份/恢复与索引维护。
+5. [可选本机核心与固定桥](local-workspace-core.md)：进行中的macOS/Linux新入口、workspace/个人授权与[独立桥配置](../examples/codex-workspace-bridge.toml)/[一次全局配置](../examples/codex-workspace-bridge-global.toml)；Windows仍使用旧stdio。
 
 平台细节：[macOS](development-macos.md) / [Windows](development-windows.md)。语言摘要：[中文兼容入口](README.zh-CN.md) / [English](README.en.md) / [日本語](README.ja.md)。
 
 ## 我想知道每个工具的合同
 
-从[32 工具索引](tool-reference.md)开始，再按需读专页：
+从[原standalone的32工具索引](tool-reference.md)开始；新核心工作空间25允许/7拒绝，权限与未测边界见[验收矩阵](workspace-core-acceptance.md)。再按需读专页：
 
 | 主题 | 权威合同 |
 | --- | --- |
@@ -31,6 +32,7 @@
 ## 我想判断项目是否可发布
 
 - [当前实现状态](project-status.md)：已实现 / 部分 / 未实现及精确提交证据。
+- [本机核心验收矩阵](workspace-core-acceptance.md)：旧部署20项协议、11项网页/真实自然语言样本与新架构的定向/集成证据分层，未部署不算正式生效。
 - [评估方法](evaluation-methodology.md)：固定 fixture、A/B/C/消融、容量观测和不能推出的结论。
 - [本地 portable 包](portable-packages.md)：来源绑定的原生构建、校验和隔离无 Rust 验证；不等于正式发布。
 - [测试指南](testing-guide-2026-03-24.md)：fast/core/full、离线工作流、CI/平台范围。
@@ -43,6 +45,7 @@
 
 - [项目起点与原则](origin-and-principles.md) → [路线图](roadmap.md) → [唯一 active plan](plans/2026-07-10-product-replan.md)。
 - [贡献指南](../CONTRIBUTING.md)、[工具链政策](toolchain-policy.md)、[私有模块边界](implementation-module-boundaries.md)。
+- [支持与合成复现](../SUPPORT.md)、[安全私密报告渠道](../SECURITY.md)、[拟定协作准则](../CODE_OF_CONDUCT.md)、[Unreleased变更记录](../CHANGELOG.md)；表单链接在贡献指南中。
 - [项目定位](positioning.md)、[FAQ](faq.md)、项目说明 [中文](project-overview.zh-CN.md) / [English](project-overview.en.md) / [日本語](project-overview.ja.md)。
 - 数据与权限：[data lifecycle](product/data-lifecycle.md)、[data safety](product/data-safety-local-alpha.md)、[threat model](security/threat-model-local-and-remote.md)。
 - 辅助能力：[support bundle](product/support-bundle-local-alpha.md)、[correlation ID](product/correlation-id-contract.md)、[daemon observe-only](product/daemon-observe-only-gate.md)、[self-revision demo](self-revision-demo-guide-2026-04-24.md)。

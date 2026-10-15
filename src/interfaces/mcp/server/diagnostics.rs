@@ -2,7 +2,10 @@
 
 use anyhow::Result;
 use chrono::Utc;
-use rmcp::ErrorData as McpError;
+use rmcp::{
+    ErrorData as McpError,
+    model::{CallToolResult, ErrorCode, JsonObject},
+};
 use tracing::{info, warn};
 use uuid::Uuid;
 
@@ -18,8 +21,124 @@ use crate::{
 use super::AUTO_REFLECTION_RUNTIME_HOOKS;
 use super::runtime::Runtime;
 
+/// Every advertised legacy tool has an explicit audit owner. Export is an
+/// intentional no-write contract; scoped core sessions have their own outer owner.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum ToolAuditContract {
+    Detailed,
+    Fallback(&'static str),
+    ReadOnlyExport,
+}
+
+pub(super) fn tool_audit_contract(name: &str) -> Option<ToolAuditContract> {
+    use ToolAuditContract::{Detailed, Fallback, ReadOnlyExport};
+    Some(match name {
+        "ingest_interaction"
+        | "search_memory"
+        | "get_memory"
+        | "get_reflection_history"
+        | "get_self_model_history"
+        | "get_self_model_versions"
+        | "get_evidence_relation"
+        | "build_self_snapshot"
+        | "decide_with_snapshot"
+        | "supersede_memory"
+        | "run_reflection" => Detailed,
+        "recall_memory" => Fallback("recall_memory"),
+        "build_task_context" => Fallback("build_task_context"),
+        "record_episode" => Fallback("record_episode"),
+        "get_episode_detail" => Fallback("get_episode_detail"),
+        "list_episode_details" => Fallback("list_episode_details"),
+        "propose_experience_candidate" => Fallback("propose_experience_candidate"),
+        "get_experience_candidate" => Fallback("get_experience_candidate"),
+        "list_experience_candidates" => Fallback("list_experience_candidates"),
+        "set_experience_candidate_status" => Fallback("set_experience_candidate_status"),
+        "revise_experience_candidate" => Fallback("revise_experience_candidate"),
+        "rollback_experience_candidate" => Fallback("rollback_experience_candidate"),
+        "recall_experience_candidates" => Fallback("recall_experience_candidates"),
+        "get_feedback_target_version" => Fallback("get_feedback_target_version"),
+        "propose_feedback_candidate" => Fallback("propose_feedback_candidate"),
+        "get_feedback_candidate" => Fallback("get_feedback_candidate"),
+        "validate_feedback_candidate" => Fallback("validate_feedback_candidate"),
+        "reject_feedback_candidate" => Fallback("reject_feedback_candidate"),
+        "commit_feedback_candidate" => Fallback("commit_feedback_candidate"),
+        "inspect_retrieval_index" => Fallback("inspect_retrieval_index"),
+        "rebuild_retrieval_index" => Fallback("rebuild_retrieval_index"),
+        "export_memory" => ReadOnlyExport,
+        _ => return None,
+    })
+}
+
+/// Metadata only: never copy query text, nested content, request IDs or arbitrary
+/// caller-supplied tool names. Global index calls and unknown tools have no scope.
+pub(super) fn fallback_namespace(
+    entrypoint: &'static str,
+    arguments: Option<&JsonObject>,
+) -> Option<String> {
+    if matches!(
+        entrypoint,
+        "unknown_tool" | "inspect_retrieval_index" | "rebuild_retrieval_index"
+    ) {
+        return None;
+    }
+    let value = arguments?.get("namespace")?.as_str()?;
+    crate::domain::experience::validate_namespace(value)
+        .ok()
+        .map(|namespace| namespace.as_str().to_string())
+}
+
+fn fallback_failure(result: &Result<CallToolResult, McpError>) -> Option<&'static str> {
+    match result {
+        Ok(result) if result.is_error != Some(true) => None,
+        Ok(_) => Some("tool error"),
+        Err(error) => Some(match error.code {
+            ErrorCode::INVALID_PARAMS => "invalid params",
+            ErrorCode::INVALID_REQUEST => "invalid request",
+            ErrorCode::METHOD_NOT_FOUND => "method not found",
+            _ => "internal error",
+        }),
+    }
+}
+
 impl Runtime {
+    pub(super) async fn record_fallback_outcome(
+        &self,
+        entrypoint: &'static str,
+        namespace: Option<String>,
+        correlation_id: String,
+        result: &Result<CallToolResult, McpError>,
+    ) {
+        if self.scoped_session || !self.audit_enabled {
+            return;
+        }
+        let correlation_id = Some(correlation_id);
+        let record = if let Some(detail) = fallback_failure(result) {
+            self.dashboard.record_tool_failed(
+                entrypoint,
+                namespace.clone(),
+                correlation_id.clone(),
+                format!("{entrypoint} failed"),
+                detail.to_string(),
+            );
+            ToolOperationRecord::failed(entrypoint, namespace, correlation_id)
+                .with_diagnostic_summary(serde_json::json!({ "mcp_error_class": detail }))
+        } else {
+            self.dashboard.record_tool_ok(
+                entrypoint,
+                namespace.clone(),
+                correlation_id.clone(),
+                format!("{entrypoint} completed"),
+                &serde_json::json!({}),
+            );
+            ToolOperationRecord::ok(entrypoint, namespace, correlation_id)
+        };
+        self.record_tool_operation(record).await;
+    }
+
     pub(super) async fn record_tool_operation(&self, record: ToolOperationRecord) {
+        if self.scoped_session || !self.audit_enabled {
+            return; // The trusted session wrapper records one complete outcome.
+        }
         let entry = OperationLogEntry {
             operation_id: Uuid::new_v4().to_string(),
             occurred_at: Utc::now(),
@@ -60,6 +179,9 @@ impl Runtime {
         namespace: Option<String>,
         correlation_id: Option<String>,
     ) {
+        if self.scoped_session || !self.audit_enabled {
+            return;
+        }
         let status = auto_reflection_operation_status(result);
         if status == OperationLogStatus::Ok {
             return;
@@ -99,6 +221,9 @@ impl Runtime {
         trigger_key: &str,
         error: &AppError,
     ) {
+        if self.scoped_session || !self.audit_enabled {
+            return;
+        }
         let status = auto_reflection_failure_operation_status(error);
         let entry = OperationLogEntry {
             operation_id: Uuid::new_v4().to_string(),

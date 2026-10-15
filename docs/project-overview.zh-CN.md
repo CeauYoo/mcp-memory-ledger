@@ -8,7 +8,9 @@ MCP Memory Ledger 是一个 Rust 编写的本机 MCP `stdio` memory demo，用�
 
 ## 当前范围
 
-当前能力与 32 工具合同统一见[当前状态](project-status.md)和[工具索引](tool-reference.md)。已包含 schema7、反馈纠错、字面召回/上下文与版本化经验候选；仍是 technical MVP，真实客户端/fresh-machine、真实模型收益与人工发布门未关闭。
+原standalone模式的32工具与当前能力见[状态](project-status.md)和[工具索引](tool-reference.md)。schema7、反馈纠错、字面召回/上下文与版本化经验候选已有实现。旧部署d9e33d3取得20项协议、11项网页及一个真实自然语言召回/来源/更正样本，不能据此关闭所有客户端门。
+
+[本机核心＋固定workspace桥](local-workspace-core.md)正在集成，25允许/7拒绝，个人权限显式授予、core ingest关闭自动反思、监控HTTP默认关闭。macOS/Linux为新路径首期范围，Windows保留旧stdio；新核心完整验收、真实客户端、fresh-machine、模型效果与发布门仍开，正式部署未替换。
 
 ## 适合的使用方式
 
@@ -31,3 +33,5 @@ MCP Memory Ledger 是一个 Rust 编写的本机 MCP `stdio` memory demo，用�
 本仓库在开发、讨论和文档整理过程中明确使用了 OpenAI Codex 作为协作式开发工具。感谢 OpenAI 提供相关工具与研究生态，使这种以讨论驱动、迭代收口的开发方式成为可能。
 
 Schema7 global self-model version/diff and explicit compensation contract: [details](self-model-versions.md). Existing scoped read/export boundaries and experimental single-user limits remain.
+
+问题报告见[支持说明](../SUPPORT.md)，安全问题先核实[私密报告渠道](../SECURITY.md)；[拟定协作准则](../CODE_OF_CONDUCT.md)和[变更记录](../CHANGELOG.md)不构成团队SLA或发布批准。

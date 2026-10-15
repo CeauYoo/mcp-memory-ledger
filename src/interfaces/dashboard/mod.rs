@@ -7,16 +7,21 @@ use serde::Serialize;
 use serde_json::json;
 use uuid::Uuid;
 
+pub mod admin;
+pub use admin::AdminGate;
 pub mod assets;
 pub mod event;
 pub mod http;
+mod lifecycle;
 pub mod projection;
 pub mod recorder;
 
 pub use event::{EventQuery, OperationEvent, OperationKind, OperationStatus};
 pub use http::{
-    DashboardHandle, start_dashboard_service, start_dashboard_service_with_operation_log,
+    DashboardHandle, start_admin_dashboard_service, start_dashboard_service,
+    start_dashboard_service_with_operation_log,
 };
+pub(crate) use lifecycle::{DashboardSessionHandle, start_dashboard_session};
 pub use projection::{
     DashboardRuntimeInfo, DashboardSummary, OperationDetail, build_summary, project_event_detail,
     project_from_log_entry,
@@ -61,6 +66,14 @@ impl DashboardObserver {
     pub fn record_event(&self, event: OperationEvent) {
         if let Self::Enabled { recorder, .. } = self {
             recorder.append(event);
+        }
+    }
+
+    /// Core session callers leave sequence unset; assignment and publication
+    /// happen atomically in the shared recorder.
+    pub fn record_ordered_event(&self, event: OperationEvent) {
+        if let Self::Enabled { recorder, sequence } = self {
+            recorder.append_ordered(event, sequence);
         }
     }
 
