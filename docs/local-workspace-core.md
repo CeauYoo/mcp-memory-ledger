@@ -47,6 +47,8 @@ AGENT_LLM_MM_CONFIG=/absolute/local-state/core.toml /absolute/bin/agent_llm_mm c
 
 socket 路径要短（macOS Unix socket 有路径长度限制），父目录必须属于本用户且为 `0700`、祖先不能是符号链接。数据库必须已经存在且 schema 当前；核心不自动初始化/迁移。数据库与 socket 的持锁防止两个合作核心同时占用；这不是对原有独立 SQLite 程序的强制排他锁。
 
+macOS 的 `/var`、`/tmp` 可能是系统符号链接。registry、socket 和管理员 capability 文件的管理路径须使用实际物理路径（例如先进入自己创建的状态目录，再用 `pwd -P` 获取路径）；不要直接把含这些别名的临时路径传给管理入口。测试 fixture 会先规范化其自己新建的临时目录，产品对符号链接管理路径的拒绝规则保持不变。工作空间 root 则按前述合同支持 canonical alias。
+
 可以在客户端全局配置一次桥，并为每个可信项目显式注册。使用[全局 TOML 示例](../examples/codex-workspace-bridge-global.toml)，桥以启动时的真实 cwd 在 registry 中精确匹配 canonical root；未知目录拒绝，不向上搜索、不自动注册，也不回退个人域：
 
 ```toml

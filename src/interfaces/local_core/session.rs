@@ -484,13 +484,20 @@ mod tests {
 
     impl Fixture {
         async fn new() -> Self {
-            let dir = tempfile::tempdir().unwrap();
-            let root = dir.path().join("workspace");
+            Self::from_directory(tempfile::tempdir().unwrap()).await
+        }
+
+        async fn from_directory(dir: tempfile::TempDir) -> Self {
+            // macOS may return /var/... while /var aliases /private/var.
+            // Only the fixture chooses its physical path: the production
+            // registry still rejects every symlink in an administrator path.
+            let directory = dir.path().canonicalize().unwrap();
+            let root = directory.join("workspace");
             std::fs::create_dir(&root).unwrap();
-            let registry = dir.path().join("registry.json");
+            let registry = directory.join("registry.json");
             let workspace = register_workspace(&registry, &root).unwrap();
             let config = AppConfig {
-                database_url: format!("sqlite://{}", dir.path().join("synthetic.sqlite").display()),
+                database_url: format!("sqlite://{}", directory.join("synthetic.sqlite").display()),
                 ..AppConfig::default()
             };
             let store = SqliteStore::bootstrap(&config.database_url).await.unwrap();
@@ -613,6 +620,34 @@ mod tests {
                 .unwrap()
                 .unwrap();
         }
+    }
+
+    #[tokio::test]
+    async fn temporary_directory_alias_is_normalized_only_by_fixture_not_registry() {
+        use std::os::unix::fs::symlink;
+        let parent = tempfile::tempdir().unwrap();
+        let physical_parent = parent.path().canonicalize().unwrap();
+        let physical = physical_parent.join("physical");
+        std::fs::create_dir(&physical).unwrap();
+        let alias = physical_parent.join("alias");
+        symlink(&physical, &alias).unwrap();
+        let directory = tempfile::tempdir_in(&alias).unwrap();
+        let alias_registry = directory.path().join("registry.json");
+        let fixture = Fixture::from_directory(directory).await;
+        assert_eq!(fixture.registry, alias_registry.canonicalize().unwrap());
+        assert_ne!(fixture.registry, alias_registry);
+        assert!(resolve_workspace(&alias_registry, &fixture.root).is_err());
+        assert!(register_workspace(&alias_registry, &fixture.root).is_err());
+        assert!(resolve_workspace(&fixture.registry, &fixture.root).is_ok());
+        let mut client = Client::connect(fixture.session()).await;
+        assert!(
+            client
+                .request("tools/list", json!({}))
+                .await
+                .get("result")
+                .is_some()
+        );
+        client.finish().await;
     }
 
     #[tokio::test]
