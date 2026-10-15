@@ -5,6 +5,7 @@ import hashlib
 import http.server
 import io
 import json
+import os
 from pathlib import Path
 import tempfile
 import threading
@@ -232,7 +233,9 @@ class IntegrationTests(unittest.TestCase):
                     for forbidden in scenario.get('forbidden_text',[]):self.assertNotIn(forbidden,json.dumps(body))
             for path in (folder/'diagnostics').glob('call-*.json'):
                 content=path.read_text(encoding='utf-8');self.assertNotIn(FAKE_KEY,content);self.assertNotIn('synthetic-private-cookie',content)
-                self.assertEqual(path.stat().st_mode & 0o777,0o600)
+                # Windows chmod only controls the read-only flag, not POSIX ACLs.
+                if os.name=='nt':self.assertTrue(path.stat().st_mode & 0o200)
+                else:self.assertEqual(path.stat().st_mode & 0o777,0o600)
             for name,digest in report['code_sha256'].items():
                 self.assertEqual(hashlib.sha256((folder/'code'/name).read_bytes()).hexdigest(),digest)
             self.assertIn('待人工复核',(folder/'report.html').read_text(encoding='utf-8'))
