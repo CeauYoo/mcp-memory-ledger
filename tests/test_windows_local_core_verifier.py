@@ -70,6 +70,30 @@ class WindowsVerifierTests(unittest.TestCase):
         for key in ("OPENAI_API_KEY", "AGENT_LLM_MM_CONFIG", "PYTHONPATH", "PSMODULEPATH"):
             self.assertNotIn(key, env)
 
+    def test_startup_diagnostics_export_only_fixed_codes(self):
+        logs = self.root / "logs"
+        logs.mkdir()
+        path = logs / "core-initial.stderr.log"
+        path.write_bytes(b"SYNTHETIC_SECRET C:/private/config.toml\n"
+                         b"private state must be owned by the current Windows user\n"
+                         b"Access denied (os error 5)")
+        owned = SimpleNamespace(label="core-initial", process=SimpleNamespace(returncode=1))
+        evidence = {}
+        verifier.record_startup_failure(self.root, owned, evidence)
+        diagnostic = evidence["startup_failures"][0]
+        self.assertEqual(diagnostic["categories"], ["owner_mismatch"])
+        self.assertEqual(diagnostic["os_error_codes"], [5])
+        self.assertEqual(diagnostic["exit_code"], 1)
+        self.assertNotIn("SYNTHETIC_SECRET", json.dumps(evidence))
+        self.assertNotIn("private/config", json.dumps(evidence))
+        path.write_bytes(b"SYNTHETIC_SECRET" * 6000)
+        verifier.record_startup_failure(self.root, owned, evidence)
+        self.assertTrue(evidence["startup_failures"][-1]["stderr_truncated"])
+        self.assertEqual(evidence["startup_failures"][-1]["categories"], ["unclassified_startup_failure"])
+        path.unlink()
+        verifier.record_startup_failure(self.root, owned, evidence)
+        self.assertEqual(evidence["startup_failures"][-1]["categories"], ["stderr_unavailable"])
+
     def test_existing_output_cannot_be_overwritten(self):
         binary = self.root / "inert.exe"
         binary.write_bytes(b"inert fixture")

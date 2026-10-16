@@ -96,6 +96,43 @@ def terminate_owned_core(owned, evidence):
                          "mechanism": "TerminateProcess", "confirmed": True}
 
 
+def record_startup_failure(output, owned, evidence):
+    """Export fixed diagnostic codes only, never stderr, paths or config values."""
+    labels = {
+        "owner_mismatch": b"private state must be owned by the current Windows user",
+        "parent_acl_rejected": b"local state parent must be owned",
+        "acl_outside_trust_boundary": b"private state DACL grants access outside",
+        "invalid_dacl": b"private state must have a valid non-NULL DACL",
+        "unsupported_ace": b"unsupported private-state DACL entry",
+        "acl_inspection_failed": b"inspect private state ACL",
+        "reparse_point": b"private state must not be a reparse point",
+        "hard_link_alias": b"private state must not have hard-link aliases",
+        "nonlocal_drive": b"local-core state requires a fixed or removable local drive",
+        "database_acl_rejected": b"ledger must be a current-user-owned private regular file",
+        "lock_already_owned": b"another core or adoption owns this database or endpoint",
+        "parent_missing": b"local state parent must exist",
+        "missing_database": b"core requires an existing file-backed ledger",
+        "pipe_creation_failed": b"create exclusive local-core named pipe",
+        "endpoint_already_exists": b"Windows core endpoint path must be unused",
+        "dashboard_enabled": b"core requires dashboard.enabled=false",
+        "daemon_enabled": b"core requires daemon.enabled=false",
+    }
+    diagnostic = {"process": owned.label, "exit_code": owned.process.returncode}
+    try:
+        with (output / "logs" / (owned.label + ".stderr.log")).open("rb") as stream:
+            data = stream.read(65537)
+        diagnostic["stderr_truncated"] = len(data) > 65536
+        data = data[:65536]
+        diagnostic["categories"] = [code for code, literal in labels.items() if literal in data]
+        diagnostic["os_error_codes"] = [code for code in (1, 2, 3, 5, 32, 87, 123, 183, 231, 233, 535)
+                                        if ("os error " + str(code) + ")").encode() in data]
+        if not diagnostic["categories"]:
+            diagnostic["categories"] = ["unclassified_startup_failure"]
+    except OSError:
+        diagnostic["categories"] = ["stderr_unavailable"]
+    evidence.setdefault("startup_failures", []).append(diagnostic)
+
+
 class WindowsWorkflow(shared.Workflow):
     def core(self, label, config):
         owned = self.processes.spawn(label, "core", ["core", "--socket", self.address,
@@ -107,7 +144,9 @@ class WindowsWorkflow(shared.Workflow):
         workspace = registrations[0]
         deadline, polls = time.monotonic() + 20, 0
         while time.monotonic() < deadline:
-            require(owned.process.poll() is None, "core_exited_before_ready")
+            if owned.process.poll() is not None:
+                record_startup_failure(self.output, owned, self.evidence)
+                raise VerificationError("core_exited_before_ready")
             polls += 1
             probe_label = label + "-probe-" + str(polls)
             probe = self.processes.spawn(probe_label, "bridge", ["bridge", "--socket", self.address,
