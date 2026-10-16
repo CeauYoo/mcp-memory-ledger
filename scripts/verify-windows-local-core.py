@@ -134,6 +134,12 @@ def record_startup_failure(output, owned, evidence):
 
 
 class WindowsWorkflow(shared.Workflow):
+    def create_working_directory(self, folder):
+        # CPython's Windows mkdir(0700) installs OWNER RIGHTS (OW), rather
+        # than inheriting the parent's explicit current-user SID ACL.
+        # Set the existing synthetic fixture policy on every new empty child.
+        prepare_private_output(folder)
+
     def core(self, label, config):
         owned = self.processes.spawn(label, "core", ["core", "--socket", self.address,
                                       "--registry", self.registry], config)

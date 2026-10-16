@@ -382,10 +382,13 @@ class Workflow:
         self.check(is_authorization_denial(response), "authorization_denied_" + tool + "_" + client.owned.label)
         self.check("SYNTHETIC_CANARY_B" not in json.dumps(response), "denial_did_not_expose_foreign_canary_" + tool)
 
+    def create_working_directory(self, folder):
+        folder.mkdir(mode=0o700)
+
     def run(self):
         for name in ("bin", "home", "tmp", "logs", "s", "restore", "workspace-a", "workspace-b"):
             folder = self.output / name
-            folder.mkdir(mode=0o700)
+            self.create_working_directory(folder)
         env = make_environment(self.output)
         self.check(all(shutil.which(name, path=env["PATH"]) is None for name in ("cargo", "rustc", "rustup")), "runtime_path_contains_no_cargo_or_rust")
         self.check(CONFIG_ENV not in env, "bridge_environment_has_no_config_override")

@@ -70,6 +70,15 @@ class WindowsVerifierTests(unittest.TestCase):
         for key in ("OPENAI_API_KEY", "AGENT_LLM_MM_CONFIG", "PYTHONPATH", "PSMODULEPATH"):
             self.assertNotIn(key, env)
 
+    def test_nested_working_directories_use_explicit_current_user_acl(self):
+        workflow = verifier.WindowsWorkflow(self.root / "inert.exe", self.root, {})
+        with patch.object(verifier, "prepare_private_output") as create:
+            for name in ("bin", "home", "tmp", "logs", "s", "restore", "workspace-a", "workspace-b"):
+                folder = self.root / name
+                workflow.create_working_directory(folder)
+                create.assert_called_with(folder)
+        self.assertEqual(create.call_count, 8)
+
     def test_startup_diagnostics_export_only_fixed_codes(self):
         logs = self.root / "logs"
         logs.mkdir()
