@@ -25,3 +25,7 @@
 ## 后续
 
 模型草稿、中文与可选本地向量检索属于下一切片。真实模型效果、30 个多轮体验场景和用户机器部署另行验收，不由本地机制测试替代。
+
+## Native CI inventory correction
+
+The exact `39c0f05` Ubuntu run found the local-core tool-name expectation missing the three newly registered experience-use tools. The other 14 local-core tests passed; macOS/Windows and later gates were not yet complete at correction time. The follow-up changes only this expected-name fixture and this record, preserving scoped denial assertions and production behavior. The source manifest above remains the historical `39c0f05` source snapshot; it is not a claim that its test hash describes this follow-up. Native verification must be checked against the follow-up commit.
