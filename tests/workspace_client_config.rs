@@ -1,3 +1,7 @@
+#[cfg(windows)]
+#[path = "support/windows_private.rs"]
+mod windows_private;
+
 use agent_llm_mm::support::{
     workspace_client_config::{ClientMode, inspect_registry, render_client_config},
     workspace_registry::{
@@ -8,6 +12,8 @@ use std::{fs, path::PathBuf};
 
 fn fixture() -> (tempfile::TempDir, PathBuf, PathBuf, PathBuf, String) {
     let temp = tempfile::tempdir().unwrap();
+    #[cfg(windows)]
+    windows_private::private_directory(temp.path());
     let dir = temp.path().canonicalize().unwrap();
     #[cfg(not(windows))]
     let root = dir.join("项目 with \"quotes\"");
@@ -33,7 +39,7 @@ fn inspection_is_read_only_and_reports_effective_grants_separately() {
     assert_eq!(report.total, 1);
     assert_eq!(
         report.workspaces[0].effective_personal_grants.len(),
-        usize::from(cfg!(unix))
+        usize::from(cfg!(any(unix, windows)))
     );
     assert!(report.core_runtime.starts_with("not checked"));
     assert_eq!(before, fs::read(&registry).unwrap());
@@ -47,11 +53,14 @@ fn inspection_is_read_only_and_reports_effective_grants_separately() {
     assert!(!report.workspaces[0].bound);
 }
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 #[test]
 fn toml_roundtrip_escapes_paths_and_uses_exact_cwd_without_writes() {
     let (temp, registry, root, binary, id) = fixture();
+    #[cfg(not(windows))]
     let socket = temp.path().join("ipc/quoted \"socket\"");
+    #[cfg(windows)]
+    let socket = temp.path().join("ipc/管道 with spaces");
     let before = fs::read(&registry).unwrap();
     let text = render_client_config(
         &registry,
@@ -167,10 +176,13 @@ fn cli_inspect_status_config_and_help_parse_fail_closed() {
         parse(&["workspace", "--help"]).unwrap(),
         Some(LocalCommand::WorkspaceHelp)
     ));
-    #[cfg(unix)]
+    #[cfg(any(unix, windows))]
     {
+        let registry = if cfg!(windows) { r"C:\r" } else { "/r" };
+        let socket = if cfg!(windows) { r"C:\s" } else { "/s" };
+        let root = if cfg!(windows) { r"C:\p" } else { "/p" };
         assert!(matches!(
-            parse(&["workspace", "--registry", "/r", "status"]).unwrap(),
+            parse(&["workspace", "--registry", registry, "status"]).unwrap(),
             Some(LocalCommand::Workspace {
                 action: WorkspaceAction::Status { .. },
                 ..
@@ -180,14 +192,14 @@ fn cli_inspect_status_config_and_help_parse_fail_closed() {
             parse(&[
                 "workspace",
                 "--registry",
-                "/r",
+                registry,
                 "client-config",
                 "--mode",
                 "global",
                 "--socket",
-                "/s",
+                socket,
                 "--root",
-                "/p"
+                root
             ])
             .is_err()
         );
@@ -195,7 +207,7 @@ fn cli_inspect_status_config_and_help_parse_fail_closed() {
             parse(&[
                 "workspace",
                 "--registry",
-                "/r",
+                registry,
                 "client-config",
                 "--mode",
                 "fixed"
@@ -205,7 +217,7 @@ fn cli_inspect_status_config_and_help_parse_fail_closed() {
     }
 }
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 #[test]
 fn cli_outputs_parseable_toml_without_loading_provider_or_creating_socket() {
     use std::process::Command;

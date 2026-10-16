@@ -1,6 +1,17 @@
 # MCP Memory Ledger
 
-旧项目基础事实可先用 `workspace adopt-preview` 盘点，再显式 `adopt` 新建 UUID → 旧 namespace 映射；不改数据库历史/receipt。首片遇高级历史会明确保守阻断，不能视作任意旧库通用迁移。见[支持边界与示例](docs/workspace-legacy-adoption.md)。
+本轮整合已完成 Linux 云端普通检查与独立有界安全源码复核；Rust 834 项通过、12 项 IPC 环境阻断，Windows 原生与精确提交 CI 仍待完成。详见[当前状态](docs/project-status.md)和[独立审查](docs/independent-security-review-2026-10-16.md)。
+
+数据库生命周期隐私加固：Unix 新建库与迁移备份创建即 owner-only，排练使用私有临时目录；现有库权限不改，备份无覆盖发布。Windows 使用专用 ACL helper，原生执行验收仍待完成。详见[数据库操作](docs/database-operations.md)。
+
+## 2026-10-16 Windows 本机核心 candidate
+
+新增 Windows 本机命名管道 `core` + stdio `bridge` 实现，与 Unix 共用绑定、逐调用撤销、资源限额和关闭排空逻辑。新建 IPC/状态文件使用当前用户私有 DACL；已有文件/目录须当前用户所有，访问授权只接受当前用户、SYSTEM 和 Administrators。它不隔离同用户任意进程或特权管理员，也不是远端多租户服务。`serve` 兼容入口保留。
+
+当前为待精确提交 Windows 原生 CI 验证的 candidate，不能把 Linux 编译或此前 legacy Windows CI 当作本轮通过。验证包括真实桥多会话、范围拒绝、重连/恢复，以及解包二进制烟测；无用户电脑操作、生产 ACL 修改、凭据生成、服务安装或部署。入口与限制见 [Windows 指南](docs/development-windows.md)。
+
+
+旧项目事实及可归属的 reflection/experience/feedback/trigger 历史可先用 `workspace adopt-preview` 盘点，再显式 `adopt` 新建 UUID → 旧 namespace 映射；不改历史/receipt。双向来源闭包覆盖全部经验版本，无关联的其他项目历史不再全库阻断。unknown/mixed/缺失来源及 global self-model 后续版本仍拒绝，见[支持边界](docs/workspace-legacy-adoption.md)。
 
 ## 2026-10-16 实用功能续建（未提交，待验证）
 
@@ -10,7 +21,7 @@
 - [检查与客户端配置](docs/workspace-client-config.md)：`workspace inspect` / `status` 只读检查注册状态；`client-config --mode fixed|global --socket ...` 将桥配置 TOML 输出到 stdout，审阅后手动合并，不改客户端配置，也不代表核心运行健康。
 - [原生备份恢复](docs/database-operations.md)：`backup --db ... --output ...` / `restore --db ... --output ...` 使用 SQLite 一致快照，只接受 current schema、恢复到不存在的新路径；registry 独立保存，不自动切换部署。
 
-此前提交 `f8eb9ed` 的 [CI run 38709687717](https://github.com/yooyui/mcp-memory-ledger/actions/runs/38709687717) 已全绿：Ubuntu/macOS 各 794 项 Rust 测试、Windows 429 项，以及 Ubuntu 真实 Chromium 核心网页检查。Windows 仍不支持新核心；这些结果不覆盖本次未提交改动。独立安全审查、新核心真实客户端自然语言、fresh-machine 与发布门仍未通过；正式 Mac 部署未替换。下方带日期记录保留历史范围。
+此前提交 `f8eb9ed` 的 [CI run 38709687717](https://github.com/yooyui/mcp-memory-ledger/actions/runs/38709687717) 已全绿：Ubuntu/macOS 各 794 项 Rust 测试、Windows 429 项，以及 Ubuntu 真实 Chromium 核心网页检查。该历史提交的 Windows 仅验证 legacy；这些结果不覆盖本次 Windows candidate。有界独立源码审查已完成；新核心真实客户端自然语言、fresh-machine 与发布门仍未通过；正式 Mac 部署未替换。下方带日期记录保留历史范围。
 
 ## 2026-10-15 本机核心与验收进度
 

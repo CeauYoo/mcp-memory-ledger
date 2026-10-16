@@ -7,12 +7,8 @@ use std::{
 
 use anyhow::{Context, Result, ensure};
 use serde_json::{Map, Value};
-use tokio::{
-    io::{
-        AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader,
-        DuplexStream,
-    },
-    net::UnixStream,
+use tokio::io::{
+    AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader, DuplexStream,
 };
 
 const INBOUND_LIMIT: usize = 1024 * 1024;
@@ -23,8 +19,11 @@ type Pending = Arc<Mutex<HashMap<String, bool>>>;
 
 /// Both directions apply bounded buffering. Ending either direction drops the
 /// other future and its halves, closing the session instead of replaying writes.
-pub(super) async fn relay(socket: UnixStream, transport: DuplexStream) -> Result<()> {
-    let (socket_read, socket_write) = socket.into_split();
+pub(super) async fn relay(
+    socket: impl AsyncRead + AsyncWrite + Unpin,
+    transport: DuplexStream,
+) -> Result<()> {
+    let (socket_read, socket_write) = tokio::io::split(socket);
     let (transport_read, transport_write) = tokio::io::split(transport);
     let pending = Arc::new(Mutex::new(HashMap::with_capacity(MAX_OUTSTANDING)));
     tokio::select! {
@@ -232,14 +231,14 @@ mod tests {
     };
 
     struct Fixture {
-        client: UnixStream,
+        client: DuplexStream,
         backend: DuplexStream,
         task: JoinHandle<Result<()>>,
     }
 
     impl Fixture {
         fn new() -> Self {
-            let (client, socket) = UnixStream::pair().unwrap();
+            let (client, socket) = tokio::io::duplex(64 * 1024);
             let (transport, backend) = tokio::io::duplex(64 * 1024);
             let task = tokio::spawn(relay(socket, transport));
             Self {

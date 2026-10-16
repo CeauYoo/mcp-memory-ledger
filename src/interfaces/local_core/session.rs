@@ -529,6 +529,12 @@ mod tests {
             // Only the fixture chooses its physical path: the production
             // registry still rejects every symlink in an administrator path.
             let directory = dir.path().canonicalize().unwrap();
+            #[cfg(windows)]
+            let directory = {
+                let private = directory.join("private");
+                crate::support::windows_security::private_create_directory(&private).unwrap();
+                private
+            };
             let root = directory.join("workspace");
             std::fs::create_dir(&root).unwrap();
             let registry = directory.join("registry.json");
@@ -699,6 +705,7 @@ mod tests {
         assert_eq!(gate.dispatched_count(), 0);
     }
 
+    #[cfg(unix)]
     #[tokio::test]
     async fn temporary_directory_alias_is_normalized_only_by_fixture_not_registry() {
         use std::os::unix::fs::symlink;

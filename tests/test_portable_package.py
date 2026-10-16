@@ -77,7 +77,7 @@ class PackageTests(unittest.TestCase):
         return package.validate_package(self.path, receipt, COMMIT, TREE)
 
     def test_workspace_assets_are_required_and_source_bound(self):
-        for name in ("scripts/verify-local-core.py", "docs/local-workspace-core.md",
+        for name in ("scripts/verify-local-core.py", "scripts/verify-windows-local-core.py", "docs/local-workspace-core.md",
                      "examples/codex-workspace-bridge-global.toml"):
             self.assertIn(name, package.ASSETS)
             payload = dict(self.payload)
@@ -85,12 +85,49 @@ class PackageTests(unittest.TestCase):
             with self.assertRaisesRegex(package.PackageError, "required files"):
                 self.validate(self.archive(payload))
 
-    def test_windows_skips_unix_core_without_executing_verifier(self):
+    def test_windows_executes_native_core_verifier_and_requires_named_pipe_evidence(self):
+        binary = self.root / "candidate.exe"
+        binary.write_bytes(b"synthetic windows executable fixture")
+        core = self.root / "core"
+        core.mkdir()
+        output = self.root / "output"
+        output.mkdir()
+        evidence = {"status": "passed", "model_requests": 0, "cleanup": {"passed": True},
+                    "binary_sha256": package.sha(binary.read_bytes()), "native_windows_runtime": True,
+                    "transport": "windows_local_named_pipe",
+                    "crash": {"mechanism": "TerminateProcess", "confirmed": True}}
+        (core / "summary.json").write_text(json.dumps(evidence))
         with patch.object(package.subprocess, "run") as run:
-            result = package.verify_local_core(self.root, "bin/agent_llm_mm.exe", self.root,
-                                               self.root / "output", "windows-x86_64")
-        self.assertEqual(result["status"], "unsupported")
-        run.assert_not_called()
+            run.return_value.returncode = 0
+            result = package.verify_local_core(self.root, "candidate.exe", self.root,
+                                               output, "windows-x86_64")
+        self.assertEqual(result["status"], "passed")
+        self.assertEqual(result["transport"], "windows_local_named_pipe")
+        self.assertTrue(run.call_args.args[0][3].endswith("verify-windows-local-core.py"))
+        self.assertIn("-B", run.call_args.args[0])
+        self.assertEqual(run.call_args.kwargs["env"]["PATH"], "")
+        self.assertTrue((output / "local-core" / "summary.json").is_file())
+
+    def test_windows_cannot_reuse_unix_or_unverified_core_summary(self):
+        binary = self.root / "candidate.exe"
+        binary.write_bytes(b"synthetic executable fixture")
+        core = self.root / "core"
+        core.mkdir()
+        (core / "summary.json").write_text(json.dumps({"status": "passed", "model_requests": 0,
+            "cleanup": {"passed": True}, "binary_sha256": package.sha(binary.read_bytes())}))
+        output = self.root / "output"
+        output.mkdir()
+        with patch.object(package.subprocess, "run") as run:
+            run.return_value.returncode = 0
+            with self.assertRaisesRegex(package.PackageError, "Windows named-pipe runtime evidence missing"):
+                package.verify_local_core(self.root, "candidate.exe", self.root, output, "windows-x86_64")
+
+    def test_windows_native_core_failure_blocks_candidate(self):
+        with patch.object(package.subprocess, "run") as run:
+            run.return_value.returncode = 1
+            with self.assertRaisesRegex(package.PackageError, "local-core verification failed"):
+                package.verify_local_core(self.root, "candidate.exe", self.root,
+                                          self.root / "output", "windows-x86_64")
 
     def test_unix_verifier_failure_blocks_candidate_and_keeps_evidence(self):
         (self.root / "core").mkdir()

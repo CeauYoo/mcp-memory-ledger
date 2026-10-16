@@ -1,5 +1,10 @@
 # 本机核心与工作空间验收矩阵
 
+## 2026-10-16 Windows candidate 增量
+
+Windows transport 新增本机命名管道，原生配置输出、核心数据库锁与显式 adopt 共用；协议/会话/退出排空与 Unix 共用。检查 DACL/owner、拒远端和未知权限、bridge 双向同用户身份验证，不防同用户任意进程或特权管理员。新建文件私有创建，不修已有 ACL。原生共享测试与包内二进制烟测已接线；本轮精确提交 Windows CI 结果仍待补充，此处不是通过声明。后文 Windows unsupported 描述均为旧阶段快照，不能作为本轮 candidate 结论。
+
+
 ## 2026-10-16 新功能与证据分层
 
 当前增量已接入，**未提交，待最终同源验证**：workspace unbind/disable/enable；只读 inspect/status 与 client-config TOML；原生 backup/restore 到新路径。接口分别见[生命周期](local-workspace-core.md)、[配置输出](workspace-client-config.md)、[数据库恢复](database-operations.md)。这些操作默认保留账本与回执；registry 独立备份，恢复不自动授予权限或切换部署。

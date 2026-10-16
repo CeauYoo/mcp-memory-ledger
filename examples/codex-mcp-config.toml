@@ -3,7 +3,7 @@
 # Optional macOS/Linux core+bridge has separate codex-workspace-bridge.toml and
 # codex-workspace-bridge-global.toml examples (exact registered startup cwd).
 # (25 allowed / 7 denied global tools, fixed workspace binding, acceptance pending).
-# Windows retains this serve path; new core/bridge is currently unsupported.
+# Windows retains this serve path; named-pipe core/bridge candidate is opt-in.
 # Do not run both modes against the same active core database.
 # First build agent_llm_mm, prepare an explicit mock/local configuration,
 # then run init (new DB only) and doctor --read-only with that same config.

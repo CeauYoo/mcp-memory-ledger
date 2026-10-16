@@ -88,14 +88,28 @@ pub async fn transfer_database(
     let parent = parent.canonicalize()?;
     let output = parent.join(output.file_name().context("output requires a filename")?);
     ensure_absent(&output)?;
-    let staging = tempfile::Builder::new()
-        .prefix(".agent-sqlite-backup-")
-        .tempdir_in(&parent)?;
+    #[cfg(not(windows))]
+    let staging = {
+        let mut builder = tempfile::Builder::new();
+        builder.prefix(".agent-sqlite-backup-");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            builder.permissions(fs::Permissions::from_mode(0o700));
+        }
+        builder.tempdir_in(&parent)?
+    };
+    #[cfg(windows)]
+    let staging =
+        crate::support::windows_security::private_tempdir_in(&parent, ".agent-sqlite-backup-")?;
     let snapshot = staging.path().join("snapshot.sqlite");
+    #[cfg(not(windows))]
     let file = fs::OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(&snapshot)?;
+    #[cfg(windows)]
+    let file = crate::support::windows_security::private_create(&snapshot)?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;

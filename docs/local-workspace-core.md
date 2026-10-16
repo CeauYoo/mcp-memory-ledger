@@ -9,9 +9,9 @@
 | 入口 | 生命周期与权限 |
 |---|---|
 | `serve` | 原兼容模式，每个客户端启动自己的运行时；32 个旧工具。namespace 是数据过滤参数，不是会话授权。 |
-| `core` + `bridge` | macOS/Linux Unix socket；一个核心持有数据库和共享操作缓冲，多个桥只转发 stdio。连接绑定注册的 workspace；开放 25 个经过范围检查的工具。 |
+| `core` + `bridge` | macOS/Linux Unix socket，Windows 本机命名管道 candidate；一个核心持有数据库和共享操作缓冲，多个桥只转发 stdio。连接绑定注册的 workspace；开放 25 个经过范围检查的工具。 |
 
-Windows 继续支持原 `serve`。新 `core`/`bridge` 在 Windows 明确报不支持，不能把三平台旧模式 CI 当成新核心三平台验收。工作空间注册表和纯授权逻辑可以跨平台测试。
+Windows 新增本机命名管道 candidate，继续支持原 `serve`。`--socket` 仍接收私有目录中的绝对文件路径，内部按当前用户 SID 与路径散列为本机管道名，不创建 socket 文件，不接受 TCP/远端 pipe。平台实现共用 session/framing/退出排空，须以本轮 Windows CI 与包烟测作为运行证据，不能继承旧模式通过。详见 [Windows 指南](development-windows.md)。
 
 这是同一操作系统用户下的可信启动合同，防止模型用工具参数访问其他工作空间。它不隔离能自行读数据库、改注册表或启动任意程序的恶意同 UID 进程。`workspace_id`、路径和客户端标签不是密码。不要把 Unix socket 或无认证的旧 dashboard 转发到网络。
 

@@ -1,5 +1,5 @@
 use std::{
-    fs::{self, File, Metadata, OpenOptions},
+    fs::{self, File, Metadata},
     io::{Read, Write},
     path::{Path, PathBuf},
     thread,
@@ -7,6 +7,8 @@ use std::{
 };
 
 use anyhow::{Context, Result, bail, ensure};
+#[cfg(not(windows))]
+use std::fs::OpenOptions;
 use uuid::Uuid;
 
 use super::{
@@ -109,14 +111,28 @@ pub fn resolve_workspace_id(path: impl AsRef<Path>, id: impl AsRef<str>) -> Resu
 
 pub(crate) fn load(path: &Path) -> Result<WorkspaceRegistry> {
     validate_registry_path(path)?;
+    #[cfg(windows)]
+    let before_identity = crate::support::windows_security::path_identity(path)?;
     let before = registry_metadata(path)?;
     ensure!(
         before.len() <= MAX_REGISTRY_BYTES,
         "workspace registry exceeds size limit"
     );
+    #[cfg(not(windows))]
     let file = File::open(path).context("open workspace registry")?;
-    ensure_same_file(&before, &file.metadata()?)?;
-    ensure_same_file(&before, &registry_metadata(path)?)?;
+    #[cfg(windows)]
+    let file = crate::support::windows_security::open_private_file(path)?;
+    #[cfg(not(windows))]
+    {
+        ensure_same_file(&before, &file.metadata()?)?;
+        ensure_same_file(&before, &registry_metadata(path)?)?;
+    }
+    #[cfg(windows)]
+    ensure!(
+        before_identity == crate::support::windows_security::file_identity(&file)?
+            && before_identity == crate::support::windows_security::path_identity(path)?,
+        "registry changed while opening; retry explicitly"
+    );
     let mut data = Vec::new();
     file.take(MAX_REGISTRY_BYTES + 1).read_to_end(&mut data)?;
     ensure!(
@@ -167,6 +183,8 @@ pub(super) fn canonical_root(root: &Path) -> Result<PathBuf> {
 
 pub(super) fn validate_registry_path(path: &Path) -> Result<()> {
     validate_absolute_path(path)?;
+    #[cfg(windows)]
+    crate::support::windows_security::validate_private_parent(path)?;
     ensure!(
         path.file_name().is_some(),
         "registry path requires a file name"
@@ -200,6 +218,8 @@ pub(super) fn validate_registry_path(path: &Path) -> Result<()> {
 }
 
 fn registry_metadata(path: &Path) -> Result<Metadata> {
+    #[cfg(windows)]
+    crate::support::windows_security::validate_private_file(path)?;
     let metadata = fs::symlink_metadata(path).context("workspace registry is unavailable")?;
     ensure!(
         metadata.is_file() && !metadata.file_type().is_symlink(),
@@ -220,6 +240,7 @@ fn registry_metadata(path: &Path) -> Result<Metadata> {
     Ok(metadata)
 }
 
+#[cfg(not(windows))]
 fn ensure_same_file(before: &Metadata, after: &Metadata) -> Result<()> {
     #[cfg(unix)]
     {
@@ -239,6 +260,12 @@ fn ensure_same_file(before: &Metadata, after: &Metadata) -> Result<()> {
     Ok(())
 }
 
+#[cfg(windows)]
+fn private_create(path: &Path) -> Result<File> {
+    crate::support::windows_security::private_create(path)
+}
+
+#[cfg(not(windows))]
 fn private_create(path: &Path) -> Result<File> {
     let mut options = OpenOptions::new();
     options.write(true).create_new(true);
@@ -253,11 +280,18 @@ fn private_create(path: &Path) -> Result<File> {
 struct RegistryLock {
     path: PathBuf,
     file: Option<File>,
+    #[cfg(not(windows))]
     metadata: Metadata,
+    #[cfg(windows)]
+    identity: crate::support::windows_security::FileIdentity,
+    #[cfg(windows)]
+    _parent: crate::support::windows_security::DirectoryGuard,
 }
 
 impl RegistryLock {
     fn acquire(registry_path: &Path) -> Result<Self> {
+        #[cfg(windows)]
+        let parent = crate::support::windows_security::lock_private_parent(registry_path)?;
         let path = sibling(registry_path, ".lock");
         let started = Instant::now();
         #[cfg(windows)]
@@ -265,11 +299,19 @@ impl RegistryLock {
         loop {
             match private_create(&path) {
                 Ok(file) => {
+                    #[cfg(not(windows))]
                     let metadata = file.metadata()?;
+                    #[cfg(windows)]
+                    let identity = crate::support::windows_security::file_identity(&file)?;
                     return Ok(Self {
                         path,
                         file: Some(file),
+                        #[cfg(not(windows))]
                         metadata,
+                        #[cfg(windows)]
+                        identity,
+                        #[cfg(windows)]
+                        _parent: parent,
                     });
                 }
                 Err(error)
@@ -340,11 +382,18 @@ impl Drop for RegistryLock {
     fn drop(&mut self) {
         // Close first for Windows, and only clean the lock this guard created.
         self.file.take();
+        #[cfg(not(windows))]
         if fs::symlink_metadata(&self.path).is_ok_and(|metadata| {
             metadata.is_file()
                 && !metadata.file_type().is_symlink()
                 && ensure_same_file(&self.metadata, &metadata).is_ok()
         }) {
+            let _ = fs::remove_file(&self.path);
+        }
+        #[cfg(windows)]
+        if crate::support::windows_security::path_identity(&self.path)
+            .is_ok_and(|identity| identity == self.identity)
+        {
             let _ = fs::remove_file(&self.path);
         }
     }
@@ -456,7 +505,14 @@ mod tests {
         let parent =
             Path::new(env!("CARGO_MANIFEST_DIR")).join("target/workspace-core/registry-tests");
         fs::create_dir_all(&parent).unwrap();
+        #[cfg(not(windows))]
         let temp = tempfile::tempdir_in(parent).unwrap();
+        #[cfg(windows)]
+        let temp = crate::support::windows_security::private_tempdir_in(
+            &parent.canonicalize().unwrap(),
+            "registry-tests-",
+        )
+        .unwrap();
         let path = temp.path().join("registry.json");
         let original = WorkspaceRegistry::default();
         atomic_replace(&path, &original, || Ok(())).unwrap();
@@ -478,7 +534,14 @@ mod tests {
     }
     #[test]
     fn failed_directory_sync_reports_publication_instead_of_claiming_no_change() {
+        #[cfg(not(windows))]
         let dir = tempfile::tempdir().unwrap();
+        #[cfg(windows)]
+        let dir = crate::support::windows_security::private_tempdir_in(
+            &std::env::temp_dir().canonicalize().unwrap(),
+            "registry-sync-",
+        )
+        .unwrap();
         let path = dir.path().canonicalize().unwrap().join("registry.json");
         let mut registry = WorkspaceRegistry::default();
         registry

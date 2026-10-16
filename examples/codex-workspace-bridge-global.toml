@@ -8,4 +8,4 @@
 command = "/absolute/bin/agent_llm_mm"
 args = ["bridge", "--socket", "/absolute/local-state/ipc/core.sock", "--registry", "/absolute/local-state/workspaces.json", "--client-label", "codex"]
 # Start core separately; this entry never opens a ledger or loads provider secrets.
-# Windows keeps legacy serve; Unix core/bridge is unsupported there.
+# Windows uses the named-pipe candidate; generate native paths with workspace client-config.

@@ -1,6 +1,21 @@
 # 当前实现状态
 
-新增旧项目基础事实 `adopt-preview` / `adopt` 首片：registry v2 显式映射、可信握手 namespace 固定、执行期 core 锁与 SQLite writer reservation；不改账本/receipt、不自动切换客户端。完整高级历史仍不支持并显式保守阻断，见[接入合同](workspace-legacy-adoption.md)。本片验证结果单独记录，不继承上一提交 CI 或正式部署结论。
+## 2026-10-16 跨平台与历史整合检查
+
+本轮候选源码已合并复杂历史接入、Windows 本机核心和生命周期隐私修复。Linux 云端全套 Rust 846 项去重结果为 **834 通过、12 项 AF_UNIX `EPERM` 环境阻断**；不是全套通过。严格 all-feature Clippy、格式、diff、status-sync 33 项、Python 125 项和 Node 9 项通过。初轮构建目录符号链接造成的 fixture 拒绝已通过调整忽略的构建布局解决，产品源码未因此修改；具体复现与原始失败见[测试指南](testing-guide-2026-03-24.md#integrated-candidate-2026-10-16)。
+
+已完成独立、有界源码安全复核并修复发现的生命周期隐私/路径问题及选定 TLS 依赖风险，见[报告](independent-security-review-2026-10-16.md)及[审查源码清单](integrated-source-manifest.sha256)。这不是安全认证或“无漏洞”结论。精确提交三平台 CI、Windows 原生 ACL/命名管道与候选包、真实 Chromium、新核心自然语言客户端、fresh-machine 和发布批准仍待各自证据；未部署。
+
+数据库生命周期隐私加固：Unix 新建库与迁移备份创建即 owner-only，排练使用私有临时目录；现有库权限不改，备份无覆盖发布。Windows 使用专用 ACL helper，原生执行验收仍待完成。详见[数据库操作](database-operations.md)。
+
+## 2026-10-16 Windows 本机核心 candidate
+
+新增 Windows 本机命名管道 `core` + stdio `bridge` 实现，与 Unix 共用绑定、逐调用撤销、资源限额和关闭排空逻辑。新建 IPC/状态文件使用当前用户私有 DACL；已有文件/目录须当前用户所有，访问授权只接受当前用户、SYSTEM 和 Administrators。它不隔离同用户任意进程或特权管理员，也不是远端多租户服务。`serve` 兼容入口保留。
+
+当前为待精确提交 Windows 原生 CI 验证的 candidate，不能把 Linux 编译或此前 legacy Windows CI 当作本轮通过。验证包括真实桥多会话、范围拒绝、重连/恢复，以及解包二进制烟测；无用户电脑操作、生产 ACL 修改、凭据生成、服务安装或部署。入口与限制见 [Windows 指南](development-windows.md)。
+
+
+旧域 `adopt-preview` / `adopt` 已扩展为 scoped-history-v2：可归属 reflection、experience 全版本、feedback/trigger 历史按双向来源闭包检查，不重写数据；其他项目无关联历史可保留。unknown/mixed/缺失来源及 baseline 后 global self-model 仍明确不支持。见[接入合同](workspace-legacy-adoption.md)。当前源码验证与精确提交 CI 分开记录，不继承上一次 CI 或正式部署结论。
 
 ## 2026-10-16 当前切片：生命周期、配置输出与原生恢复
 
@@ -12,7 +27,7 @@
 | `workspace inspect / status / client-config` | 只读 registry JSON / stdout TOML，不读账本或连接核心，不修改配置/权限；配置可用性不等于运行健康。见[配置生成](workspace-client-config.md) |
 | `backup / restore --db ... --output ...` | SQLite online backup、一致 WAL 快照、current schema7 校验、新目标 no-clobber；registry 独立、不自动迁移/切换/激活。见[运维](database-operations.md) |
 
-此前提交 `f8eb9ed` 的 [CI run 38709687717](https://github.com/yooyui/mcp-memory-ledger/actions/runs/38709687717) 已全绿：Ubuntu/macOS 各 794 项 Rust 测试、Windows 429 项，以及 Ubuntu 真实 Chromium 核心网页检查。Windows 仍不支持新核心；这些结果不覆盖本次未提交改动。新增功能的独立安全审查、完整同源回归、跨平台精确 CI 仍待记录；新核心真实客户端自然语言、fresh-machine、真实模型/费用与人工发布仍开放。无 Mac 操作、真实模型调用、推送或正式部署替换。
+此前提交 `f8eb9ed` 的 [CI run 38709687717](https://github.com/yooyui/mcp-memory-ledger/actions/runs/38709687717) 已全绿：Ubuntu/macOS 各 794 项 Rust 测试、Windows 429 项，以及 Ubuntu 真实 Chromium 核心网页检查。该历史提交的 Windows 仅验证 legacy；这些结果不覆盖本次 Windows candidate。新增功能的独立源码审查与云端同源回归结果见本页顶部，跨平台精确 CI 仍待完成；新核心真实客户端自然语言、fresh-machine、真实模型/费用与人工发布仍开放。无 Mac 操作、真实模型调用、推送或正式部署替换。
 
 以下 2026-10-15 段落是此前集成阶段的证据快照；其中“最终 CI 待完成”已由上述旧提交 CI 更新，但不代表当前新增改动已通过。
 

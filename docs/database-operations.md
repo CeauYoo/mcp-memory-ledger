@@ -69,3 +69,12 @@ agent_llm_mm restore --db /absolute/path/backups/snapshot.sqlite --output /absol
 默认保留全部历史、来源与成功 request_id 回执。删除回执可能破坏重试正确性；本轮没有自动 retention、compaction 或 destructive repair。
 
 Schema7 的 self-model 补偿回滚不是 schema downgrade。schema6 binary 不能打开 schema7 库；若需回退旧 binary，恢复迁移前 backup 到新路径，用匹配旧 binary 只读核验后手动切换。旧 backup 不包含迁移后的新写入，不承诺无损逆转或原地降级。
+
+## Database lifecycle file privacy
+
+On Unix, `init` reserves a new database atomically with owner-only mode 0600 (further restricted by the caller's umask). Migration anchors are built in a private 0700 staging directory, synchronized, then published with an atomic no-clobber hard link. Filesystems without hard-link support fail safely before migration. Existing database permissions are not changed. Rehearsal copies and SQLite sidecars stay inside a private temporary directory, removed on both success and ordinary failure; process termination can leave a private directory for manual cleanup.
+
+Windows lifecycle creation uses the current-user-only ACL helpers shared with the local core; Unix mode bits are not a Windows security guarantee. Native Windows execution remains a separate validation requirement. Existing parent-directory ACLs and existing databases are never silently rewritten.
+
+Lifecycle path guards use SQLx's decoded filename, so percent-encoded URLs cannot reserve one path and migrate another. Internal rehearsal URLs escape spaces, `%`, `?` and `#`; in-memory URLs (including `mode=memory`) are rejected. Unix backup publication also synchronizes the parent directory before any original-database migration; a sync failure leaves the backup available and aborts migration.
+Nested `file:` SQLite URI filenames are also refused: allowing SQLite to reinterpret another URI after SQLx decoding would make filesystem guards ambiguous. Pass an ordinary file-backed `sqlite://` URL instead.

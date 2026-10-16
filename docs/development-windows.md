@@ -2,9 +2,37 @@
 
 ## 2026-10-15 平台边界
 
-Windows继续使用下方现有standalone `serve`路径和[兼容配置](../examples/codex-mcp-config.toml)。新[本机核心＋固定工作空间桥](local-workspace-core.md)首期只使用macOS/Linux Unix sockets，Windows的`core`/`bridge`暂不支持；跨平台纯registry/授权测试通过也不能称Windows核心运行成功。不要复制Unix socket桥样例作为Windows接入方案。
+Windows 新增本机命名管道 `core`/`bridge` candidate；原 standalone `serve` 与[兼容配置](../examples/codex-mcp-config.toml)继续保留。此前 Windows native/PowerShell CI 只覆盖 legacy，不证明本轮新核心。当前源码须经精确提交 Windows CI 与解包烟测，不能把 Linux 云端编译称为 Windows 运行通过。
 
-新核心25允许/7拒绝、逐调用授权、关闭自动反思和默认关闭监控HTTP属于独立进行中切片。当前定向证据与首轮集成3项失败的修复状态见[矩阵](workspace-core-acceptance.md)，不报告三平台核心全通过。旧部署Mac的20项协议、11项网页和一个自然语言样本也不替代Windows客户端或fresh-machine验证。现有Windows native、PowerShell wrapper和精确提交CI范围保持不变。
+### 新核心 candidate 接入合同
+
+- `--socket` 使用本机私有目录下的绝对文件路径（例如 `C:/Users/you/AppData/Local/McpLedger/core.sock`），该位置必须不存在。它映射到当前用户 SID + 规范路径的命名管道；磁盘不会出现 socket 文件，不能用 `Test-Path` 当作就绪检查。
+- 管道拒绝远程客户端、用当前用户 protected DACL 创建、首实例失败即拒绝；桥在发送 workspace 绑定前核验服务端进程 SID。没有无鉴权 TCP 替代、自动启动核心或失败请求重放。
+- registry、数据库、锁、管理员能力文件和私有父目录必须由当前用户所有。既有 DACL 仅接受当前用户、SYSTEM、Administrators；NULL/无法解析/宽泛用户授权拒绝。新状态文件使用私有 DACL；程序不会自动修改已有文件 ACL。UNC、设备路径、ADS、reparse point 和硬链接别名不作为私有状态入口。
+- 同一个 OS 用户能够读数据库或改 registry 的其他程序、SYSTEM 和特权管理员不在隔离边界内。workspace 参数不是密钥，模型不能借参数改变绑定；每次调用重新核验授权。
+- 与 Unix 共用 25 允许/7 拒绝工具、64 会话、全局32派发预算和有界 framing；停止核心先结束连接并等待已派发事务/审计，再释放排他数据库锁。进程被终止后 OS 释放锁，新核心可显式重启；桥不会自动重放。
+
+以下只针对自行选择的新测试目录及 mock 配置；已有正式库先 backup 到新路径并规划停写，不能同时运行 legacy writer 与 core：
+
+```powershell
+$bin = 'C:/absolute/bin/agent_llm_mm.exe'
+$state = 'C:/Users/you/AppData/Local/McpLedger'
+$registry = "$state/workspaces.json"
+$socket = "$state/core.sock"
+# 目录应已存在且满足上述 owner/DACL 条件；不在这里修改现有 ACL。
+& $bin workspace --registry $registry register --root 'C:/absolute/project-a'
+# 现有 current-schema 数据库；配置的 dashboard.enabled/daemon.enabled 都为 false。
+$env:AGENT_LLM_MM_CONFIG = "$state/core.toml"
+& $bin core --socket $socket --registry $registry
+# 在另一个终端输出配置，审阅后再手动导入客户端：
+& $bin workspace --registry $registry client-config --socket $socket --mode fixed --root 'C:/absolute/project-a'
+```
+
+配置中使用 `database_url = "sqlite://C:/Users/you/AppData/Local/McpLedger/memory.sqlite"`。数据库首次创建须显式 `init`，不在 bridge/core 隐式初始化或迁移。已有旧 namespace 可按 `adopt-preview`/`adopt` 支持合同接入，执行与核心使用同一数据库锁。`backup`/`restore` 为原生 CLI 且输出到新路径；registry 仍须独立保存，不自动切换授权。
+
+管理员网页仍仅在明确提供 `--admin-bind 127.0.0.1:<port>` 与 `--admin-token-file <已有私有能力文件>` 时开启；不生成或记录生产 token、不与 bridge 分享能力，不自动安装服务。仅 loopback 不等于已认证。
+
+Windows 原生验证：`cargo test --lib --test local_core --test local_core_cli --test workspace_client_config --test workspace_registry --test workspace_adoption`。包内无 Rust PATH 烟测由 `scripts/verify-windows-local-core.py` 执行，失败阻断候选包通过。新旧状态、范围和证据区别见 [验收矩阵](workspace-core-acceptance.md)。
 
 2026-10-09 文档导航：首次使用见[快速开始](quickstart.md)，当前操作见[数据库手册](database-operations.md)，可执行协议示例见[完整工作流](runnable-memory-workflow.md)。实现基线三平台验证与 Windows native / wrapper 区别见[当前状态](project-status.md)；下方分阶段追加记录不代表新的发布批准。
 

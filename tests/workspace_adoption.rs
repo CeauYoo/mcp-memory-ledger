@@ -1,4 +1,7 @@
-#[cfg(unix)]
+#[cfg(windows)]
+#[path = "support/windows_private.rs"]
+mod windows_private;
+#[cfg(any(unix, windows))]
 use agent_llm_mm::support::workspace_registry::{adopt_workspace, resolve_workspace};
 // Synthetic databases only; adoption must never rewrite historical ledger data.
 use agent_llm_mm::{
@@ -16,6 +19,8 @@ struct Fixture {
 impl Fixture {
     async fn new() -> Self {
         let dir = tempfile::tempdir().unwrap();
+        #[cfg(windows)]
+        windows_private::private_directory(dir.path());
         let base = dir.path().canonicalize().unwrap();
         let root = base.join("project");
         fs::create_dir(&root).unwrap();
@@ -72,7 +77,7 @@ async fn preview_is_read_only_and_reports_supported_counts() {
         before
     );
 }
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 #[tokio::test]
 async fn adoption_adds_v2_mapping_without_rewriting_facts_or_receipts() {
     let f = Fixture::new().await;
@@ -204,20 +209,19 @@ async fn namespace_validation_and_registry_v2_uniqueness_fail_closed() {
     registry.version = 2;
     assert!(registry.validate().is_ok());
 }
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 #[tokio::test]
 async fn execution_rechecks_preview_and_refuses_core_or_sqlite_writer_lock() {
+    #[cfg(unix)]
     use std::os::unix::fs::OpenOptionsExt;
     let f = Fixture::new().await;
     assert!(f.preview().await.inventory.supported);
     let path = PathBuf::from(format!("{}.local-core.lock", f.db.display()));
-    let lock = fs::OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create_new(true)
-        .mode(0o600)
-        .open(&path)
-        .unwrap();
+    let mut options = fs::OpenOptions::new();
+    options.read(true).write(true).create_new(true);
+    #[cfg(unix)]
+    options.mode(0o600);
+    let lock = options.open(&path).unwrap();
     lock.try_lock().unwrap();
     assert!(
         adopt_workspace(&f.registry, &f.root, "project/legacy", &f.db)
@@ -305,7 +309,7 @@ fn adoption_cli_has_an_explicit_read_only_preview_and_rejects_extra_flags() {
     assert!(parse_args(bad).is_err());
 }
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 #[tokio::test]
 async fn failed_registry_publication_keeps_the_database_and_existing_registry_unchanged() {
     let f = Fixture::new().await;
@@ -368,3 +372,6 @@ async fn wal_preview_reads_uncheckpointed_facts_without_mutating_ledger_or_regis
     assert_eq!(fs::read(&f.db).unwrap(), bytes);
     assert!(!f.registry.exists());
 }
+
+#[path = "workspace_adoption/history.rs"]
+mod history;

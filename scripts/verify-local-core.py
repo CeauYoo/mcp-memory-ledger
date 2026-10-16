@@ -21,6 +21,7 @@ import sys
 import threading
 import time
 import uuid
+from urllib.parse import quote
 
 CONFIG_ENV = "AGENT_LLM_MM_CONFIG"
 MAX_MESSAGE_BYTES = 2 * 1024 * 1024
@@ -71,6 +72,11 @@ def make_environment(output, config=None):
         "XDG_CONFIG_HOME": str(output / "home" / "config"),
         "XDG_CACHE_HOME": str(output / "home" / "cache"),
     }
+    if os.name == "nt":
+        # Only native loader essentials; never inherit provider/auth settings.
+        env.update({key: value for key, value in os.environ.items()
+                    if key.upper() in ("SYSTEMROOT", "WINDIR", "SYSTEMDRIVE")})
+        env["USERPROFILE"] = str(output / "home")
     if config is not None:
         env[CONFIG_ENV] = str(config)
     return env
@@ -78,7 +84,7 @@ def make_environment(output, config=None):
 
 def write_mock_config(path, database):
     # SQLite URLs use URI escaping, so spaces and Unicode remain unambiguous.
-    database_url = "sqlite://" + database.as_uri().removeprefix("file://")
+    database_url = "sqlite://" + quote(database.as_posix(), safe="/:")
     path.write_text(
         "transport=\"stdio\"\ndatabase_url=" + json.dumps(database_url) +
         "\n[model]\nprovider=\"mock\"\n[dashboard]\nenabled=false\n[daemon]\nenabled=false\n",
@@ -352,6 +358,9 @@ class Workflow:
         wait_ready(owned, self.address, self.evidence)
         return owned
 
+    def crash(self, owned):
+        crash_core(owned, self.evidence)
+
     def bridge(self, workspace, root):
         self.serial += 1
         label = "bridge-" + str(self.serial)
@@ -440,12 +449,12 @@ class Workflow:
         self.check(before_crash["logical_counts"]["events"] == 16 and before_crash["logical_counts"]["claims"] == 16,
                    "only_expected_synthetic_records_before_crash")
         self.evidence["before_crash"] = before_crash
-        crash_core(core, self.evidence)
+        self.crash(core)
         ca.close(); cb.close()
         core = self.core("core-after-crash", self.config)
         ca, cb = self.bridge(a, a_root), self.bridge(b, b_root)
         replay = ca.tool("ingest_interaction", first_payload, "intentional_replay_after_crash")
-        self.check(replay["event_id"] == saved["a"][0] and replay.get("replayed") is True, "completed_write_replayed_after_sigkill_without_new_event")
+        self.check(replay["event_id"] == saved["a"][0] and replay.get("replayed") is True, "completed_write_replayed_after_core_termination_without_new_event")
         self.check(self.get(ca, a_ns, "Claim", old_ref)["status"] == "Superseded", "replay_did_not_resurrect_superseded_claim")
         self.check(self.get(ca, a_ns, "Claim", new_ref)["status"] == "Active", "correction_survived_core_crash")
         recalled_after_crash_b = self.recall(cb, b_ns)
@@ -482,10 +491,14 @@ class Workflow:
         return self.processes.cleanup()
 
 
-def verify(binary, output):
-    binary, output = validate_paths(binary, output)
+def prepare_output(output):
     output.mkdir(parents=True, mode=0o700)
     output.chmod(0o700)
+
+
+def verify(binary, output, *, workflow_class=None, path_validator=None, output_initializer=None):
+    binary, output = (path_validator or validate_paths)(binary, output)
+    (output_initializer or prepare_output)(output)
     evidence = {"kind": "isolated_runtime_verification", "status": "running",
         "new_machine_verified": False, "natural_language_client_verified": False,
         "protocol_client": "stdlib_direct_mcp_stdio", "model_provider": "mock", "model_requests": 0,
@@ -493,7 +506,7 @@ def verify(binary, output):
         "planned_explicit_replays": 1, "crash_scenario": "after_acknowledged_writes",
         "in_flight_write_crash_verified": False, "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
         "processes": [], "readiness": [], "checks": [], "rpc_calls": []}
-    workflow = Workflow(binary, output, evidence)
+    workflow = (workflow_class or Workflow)(binary, output, evidence)
     try:
         workflow.run()
         evidence["binary_sha256_after"] = hashlib.sha256(binary.read_bytes()).hexdigest()

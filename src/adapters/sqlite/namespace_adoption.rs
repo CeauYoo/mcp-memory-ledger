@@ -1,6 +1,7 @@
 //! Conservative, non-rewriting inventory for explicit legacy namespace adoption.
 //! All queries use the caller's single transaction. Unsupported histories are
 //! reported, never filtered away to turn an incomplete graph into an approval.
+mod history;
 use super::DatabaseTableCount;
 use crate::{domain::feedback::FeedbackMetadata, error::AppError};
 use serde::Serialize;
@@ -17,7 +18,7 @@ pub struct AdoptionInventory {
     pub namespace_counts: BTreeMap<String, i64>,
     pub support_contract: &'static str,
 }
-const CONTRACT: &str = "basic-facts-v1: events, claims, evidence links, legacy episode memberships and unchanged operation logs/receipts. Reflection, experience, feedback-candidate and trigger histories are not supported; their presence anywhere blocks this conservative first slice because absence of cross-namespace incoming references is not proven. Global self-model baseline is retained; later versions are unsupported. No data is copied, rewritten or imported.";
+const CONTRACT: &str = "scoped-history-v2: unchanged events, claims, reflection scopes/evidence, trigger and feedback candidate provenance, experience episodes and every candidate version. Bidirectional source closure and payload/relational agreement are checked without rewriting data. Unattributed history, unsupported payloads and global self-model versions after baseline remain unsupported. No data is copied or imported.";
 fn db(e: sqlx::Error) -> AppError {
     AppError::Message(format!("adoption inventory read failed: {e}"))
 }
@@ -80,6 +81,7 @@ pub(crate) async fn inventory(
             break;
         }
     }
+    validate_schema_objects(conn, &mut report).await?;
     for table in [
         "events",
         "claims",
@@ -116,6 +118,32 @@ pub(crate) async fn inventory(
             .namespace_counts
             .insert(label.into(), count(conn, sql, namespace).await?);
     }
+    for (label, sql) in [
+        (
+            "reflections",
+            "SELECT count(DISTINCT reflection_id) FROM reflection_scopes WHERE namespace=?",
+        ),
+        (
+            "reflection_evidence",
+            "SELECT count(*) FROM reflection_evidence e WHERE EXISTS (SELECT 1 FROM reflection_scopes s WHERE s.reflection_id=e.reflection_id AND s.namespace=?)",
+        ),
+        (
+            "experience_episode_sources",
+            "SELECT count(*) FROM experience_episode_sources s JOIN experience_episodes e ON e.episode_id=s.episode_id WHERE e.namespace=?",
+        ),
+        (
+            "experience_candidate_versions",
+            "SELECT count(*) FROM experience_candidate_versions v JOIN experience_candidates c ON c.candidate_id=v.candidate_id WHERE c.namespace=?",
+        ),
+        (
+            "experience_candidate_sources",
+            "SELECT count(*) FROM experience_candidate_sources s JOIN experience_candidates c ON c.candidate_id=s.candidate_id WHERE c.namespace=?",
+        ),
+    ] {
+        report
+            .namespace_counts
+            .insert(label.into(), count(conn, sql, namespace).await?);
+    }
     if report.namespace_counts["events"] + report.namespace_counts["claims"] == 0 {
         report.block("namespace has no basic fact records");
     }
@@ -133,27 +161,7 @@ pub(crate) async fn inventory(
             ));
         }
     }
-    for table in [
-        "reflections",
-        "reflection_scopes",
-        "reflection_evidence",
-        "reflection_trigger_ledger",
-        "feedback_candidates",
-        "experience_episodes",
-        "experience_episode_sources",
-        "experience_candidates",
-        "experience_candidate_versions",
-        "experience_candidate_sources",
-    ] {
-        let n = report
-            .database_counts
-            .iter()
-            .find(|c| c.table == table)
-            .map_or(0, |c| c.rows);
-        if n > 0 {
-            report.block(format!("unsupported history {table} ({n} database rows): this first slice cannot prove absence of cross-namespace incoming references"));
-        }
-    }
+    history::validate(conn, namespace, &mut report).await?;
     let later: i64 = sqlx::query_scalar("SELECT count(*) FROM self_model_versions WHERE version>0")
         .fetch_one(&mut *conn)
         .await
@@ -192,6 +200,11 @@ async fn validate_feedback(
     let size = sqlx::query("SELECT count(*) AS n, total(length(CAST(feedback_json AS BLOB))) AS bytes FROM events WHERE feedback_json IS NOT NULL").fetch_one(&mut *conn).await.map_err(db)?;
     if size.get::<i64, _>("n") > 10_000 || size.get::<f64, _>("bytes") > 16_777_216.0 {
         report.block("feedback provenance exceeds bounded inventory limits (10000 rows/16 MiB)");
+        return Ok(());
+    }
+    let invalid_types: i64 = sqlx::query_scalar("SELECT count(*) FROM events WHERE feedback_json IS NOT NULL AND typeof(feedback_json)<>'text'").fetch_one(&mut *conn).await.map_err(db)?;
+    if invalid_types > 0 {
+        report.block("invalid feedback provenance storage type: absence of incoming references cannot be proven");
         return Ok(());
     }
     let rows = sqlx::query(
@@ -249,6 +262,49 @@ async fn validate_feedback(
                     .block("feedback provenance crosses namespace or has missing/non-World source");
                 return Ok(());
             }
+        }
+    }
+    Ok(())
+}
+
+// Adoption is not approval for custom database programs. Known ledger triggers
+// were checked by lifecycle inspection; optional search triggers must also match
+// their canonical definition. Unknown views/triggers cannot be proven safe.
+async fn validate_schema_objects(
+    conn: &mut SqliteConnection,
+    report: &mut AdoptionInventory,
+) -> Result<(), AppError> {
+    let mut expected: BTreeMap<String, String> = super::temporal_schema::ddl()
+        .into_iter()
+        .filter(|(_, ddl)| ddl.starts_with("CREATE TRIGGER"))
+        .collect();
+    expected.extend(
+        super::self_model_versions::trigger_ddl()
+            .into_iter()
+            .map(|(name, ddl)| (name.into(), ddl.into())),
+    );
+    expected.extend(
+        super::retrieval_index::RETRIEVAL_INDEX_DDL
+            .iter()
+            .filter(|(_, ddl)| ddl.starts_with("CREATE TRIGGER"))
+            .map(|(name, ddl)| ((*name).into(), (*ddl).into())),
+    );
+    let objects =
+        sqlx::query("SELECT type,name,sql FROM sqlite_schema WHERE type IN ('trigger','view')")
+            .fetch_all(&mut *conn)
+            .await
+            .map_err(db)?;
+    for row in objects {
+        let name: String = row.get("name");
+        let ddl: Option<String> = row.get("sql");
+        if row.get::<String, _>("type") != "trigger"
+            || !expected.get(&name).is_some_and(|expected| {
+                ddl.as_ref().is_some_and(|actual| {
+                    actual.trim().trim_end_matches(';') == expected.trim().trim_end_matches(';')
+                })
+            })
+        {
+            report.block("unsupported view or noncanonical trigger: database program closure cannot be established");
         }
     }
     Ok(())

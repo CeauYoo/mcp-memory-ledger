@@ -63,7 +63,7 @@ pub fn inspect_workspace(workspace: &WorkspaceRegistration) -> WorkspaceStatus {
         })
         .collect();
     let mut refusal_reasons = Vec::new();
-    if !cfg!(unix) {
+    if !cfg!(any(unix, windows)) {
         refusal_reasons
             .push("local core/bridge unsupported on this platform; legacy serve remains available");
     }
@@ -112,7 +112,7 @@ pub fn inspect_registry(
     let workspaces: Vec<_> = selected.iter().map(inspect_workspace).collect();
     Ok(StatusReport {
         registry: registry_path.to_owned(),
-        platform_supported: cfg!(unix),
+        platform_supported: cfg!(any(unix, windows)),
         core_runtime: "not checked (local configuration only; no connection or database access)",
         total: workspaces.len(),
         available: workspaces
@@ -175,8 +175,8 @@ pub fn render_client_config(
     cwd: &Path,
 ) -> Result<String> {
     ensure!(
-        cfg!(unix),
-        "local core/bridge unsupported on Windows; use legacy serve"
+        cfg!(any(unix, windows)),
+        "local core/bridge requires Unix or Windows"
     );
     let registry = WorkspaceRegistry::load(registry_path)?;
     let selected_root = match mode {
@@ -274,4 +274,4 @@ client-config prints TOML only; it does not change client files or grants.
 fixed defaults to exact current directory; --id selects its first valid bound root.
 global validates current directory, and every client launch must use an exact available registered root.
 No ancestor fallback, automatic registration, service start or runtime health check.
-New core/bridge require macOS/Linux Unix sockets; Windows uses legacy serve.";
+New core/bridge use Unix sockets on macOS/Linux and local-only named pipes on Windows (candidate).";

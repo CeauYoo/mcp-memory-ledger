@@ -5,7 +5,7 @@
 ## 2026-10-15 先选连接模式
 
 - 原 `serve`：客户端每次启动独立运行时，32个工具；下面的JSON/TOML例子均属此模式。全局注册一次不意味着后台只有一个进程，namespace只是数据范围。
-- 新 `core`＋`bridge`：macOS/Linux Unix socket，固定workspace连接，25允许/7拒绝、个人范围显式授权；实现与集成验收进行中。按[核心接入指南](local-workspace-core.md)及[桥配置样例](../examples/codex-workspace-bridge.toml)在隔离环境验证，Windows暂不支持新核心。桥不读取provider配置或密钥，不自行启动核心。
+- 新 `core`＋`bridge`：macOS/Linux Unix socket、Windows 本机命名管道 candidate，固定workspace连接，25允许/7拒绝、个人范围显式授权；实现与集成验收进行中。按[核心接入指南](local-workspace-core.md)及[桥配置样例](../examples/codex-workspace-bridge.toml)在隔离环境验证，Windows 接入与 ACL 前提见 [平台指南](development-windows.md)，本轮原生 CI 验证前不称验收通过。桥不读取provider配置或密钥，不自行启动核心。
 
 实际Codex roots探针67条断言证明本版本没有可用自动root通知依据；会话目录更新不改变已启动MCP的cwd。桥可以明确指定注册ID/root，或使用[一次全局配置样例](../examples/codex-workspace-bridge-global.toml)在启动时按真实cwd精确解析已注册目录。后者不向上搜索、不自动注册；固定cwd客户端须保留显式绑定。移动会话后重建连接，不能由模型参数重绑或自动猜项目。个人共享读写逐调用重新核验，撤销约束旧连接。
 

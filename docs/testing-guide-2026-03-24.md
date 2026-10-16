@@ -1,6 +1,6 @@
 # Self-Agent MCP 测试指南（2026-03-24，按 2026-07-15 fresh 验证更新）
 
-旧域接入定向回归：`cargo test --test workspace_adoption` 与 `cargo test --lib interfaces::local_core::session::tests`。只使用隔离合成库，核对只读 preview、scope 来源闭包、锁冲突、旧数据/receipt 不变与固定握手 namespace；详见[合同](workspace-legacy-adoption.md)。
+旧域接入定向回归：`cargo test --test workspace_adoption` 与 `cargo test --lib interfaces::local_core::session::tests`。只使用隔离合成库，核对只读 preview、复杂 reflection/experience 全版本/feedback/trigger 的双向来源闭包、无关多项目正例、缺失/混域/未知载荷和资源上限拒绝、预览后历史变化、锁冲突、旧数据/receipt 不变与固定握手 namespace；详见[合同](workspace-legacy-adoption.md)。
 
 ## 2026-10-16 新功能的必要验证入口
 
@@ -1690,3 +1690,27 @@ Schema7 的完整本地结果与最终 source/binary digest 见[阶段报告](pl
 
 本轮修复后的 Python 基线为 13 项 evaluation fixture 和 40 项 portable-package 回归；
 历史提交的 9/33 项结果保留为历史证据，不用于替代当前 head 的 CI。
+
+### Private lifecycle regression
+
+`cargo test --test sqlite_lifecycle private_lifecycle_modes_under_multiple_umasks` runs synthetic init and successful/failed migration in subprocesses with Unix umasks 000, 022 and 077. It checks owner-only new databases/backups, preserved source permissions and failed-migration bytes, and temporary-directory cleanup. `cargo test --lib private_file_tests` checks no-clobber publication (including dangling symlinks on Unix) and private staging/sidecar cleanup. No real user database or model provider is used.
+
+The lifecycle suite also covers encoded filenames and refusal to initialize an existing decoded path without changing its bytes. `cargo test --test openai_compatible_model --test provider_config` uses synthetic/loopback provider fixtures, with no real model calls. Cargo.lock pins rustls 0.23.46 (and its compatible rustls-webpki 0.103.15) to address [RUSTSEC-2026-0285](https://rustsec.org/advisories/RUSTSEC-2026-0285.html) and [RUSTSEC-2026-0346](https://rustsec.org/advisories/RUSTSEC-2026-0346.html); dependency selection alone is not a claim that all security advisories or release gates are closed.
+
+## Windows local-core candidate 验证入口（2026-10-16）
+
+`cargo test --test local_core` 在 Windows 运行同一套真实 stdio bridge 多会话、跨 workspace 拒绝、授权撤销、锁冲突、重连、核心重启与关闭排空断言；纯 framing/session 测试也在 Windows 编译运行。额外运行 `workspace_client_config`、`workspace_registry`、`workspace_adoption` 与 native backup/lifecycle 测试。合成 fixture 私有 ACL 只用于新建临时目录，不修用户目录权限。
+
+Windows 解包验收调用包内 `verify-windows-local-core.py`，使用包内二进制、隔离 mock 数据、移除 Rust/Cargo 的子进程 PATH，验证两工作空间、重连、停止/重启与精确二进制哈希；候选包 commit/tree/哈希匹配仍由 portable-package 入口核验。无 Windows runner 的环境应明确返回不支持该验证环境，不能静默跳过并报成功。当前源码改动仍待精确提交原生 CI，Linux 检查不等于 Windows 实测，CI 成功也不等于自然语言客户端/fresh-machine/发布门通过。
+
+
+## Integrated candidate 2026-10-16
+
+Baseline `ef27d4358d721a1186592bdcd0ca8b2b3346c73e`, with the three frozen history, Windows and privacy deltas. The independent [source manifest](integrated-source-manifest.sha256) identifies reviewed code; the [review](independent-security-review-2026-10-16.md) separates original findings, repairs, source assessment and runtime limitations.
+
+- `cargo test --offline --all-features --no-fail-fast`: 846 tests attempted, initially 820 passed and 26 failed. A whole-directory `target` symlink used for an existing demo wrapper conflicted with the registry's real-ancestor safety check. The ignored build layout was corrected to a real `target` directory, retaining only `target/debug` as the build-cache link; no product source changed.
+- `cargo test --offline --all-features --no-fail-fast --lib --test workspace_registry --test local_core`: 45 library and 14 registry tests passed. Local-core fail-closed/no-server test passed; the other 12 failed at actual core startup with sandbox AF_UNIX `EPERM`. Deduplicated result: **834 passed, 12 environment-blocked**. Tests were not skipped or weakened.
+- `cargo clippy --offline --all-targets --all-features -- -D warnings`, `cargo fmt --all -- --check`, `git diff --check`, and status-sync (33 items) passed.
+- Python unit suites: portable packages 47, Unix verifier 17, Windows verifier 12, experience 36 and evaluation fixtures 13; all 125 passed. `node --test tests/dashboard/frontend.test.mjs`: 9 passed.
+
+These used Rust 1.95.0, incremental disabled and debug information disabled, synthetic data, no real models or credentials. Windows Python contracts and Linux compilation do not prove native Windows behavior. Full native Windows core/package and Ubuntu/macOS IPC/Chromium execution must run in exact-commit CI; natural-language client, fresh-machine and release authorization remain separate.

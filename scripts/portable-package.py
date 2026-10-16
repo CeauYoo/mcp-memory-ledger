@@ -41,7 +41,8 @@ MANIFEST = "BUILD-MANIFEST.json"
 ASSETS = ("LICENSE", "NOTICE", "docs/portable-packages.md", "docs/database-operations.md",
           "docs/tool-reference.md", "examples/agent-llm-mm.example.toml",
           "docs/local-workspace-core.md", "examples/codex-workspace-bridge.toml",
-          "examples/codex-workspace-bridge-global.toml", "scripts/verify-local-core.py")
+          "examples/codex-workspace-bridge-global.toml", "scripts/verify-local-core.py",
+          "scripts/verify-windows-local-core.py")
 NON_CLAIMS = ["real fresh-machine or user-client evidence", "other platform validation",
               "installer, service manager or auto-updater", "signed or published release",
               "Local Alpha, Beta, GA or production readiness"]
@@ -627,16 +628,20 @@ def smoke(binary, root, output):
 
 
 def verify_local_core(unpacked, binary, root, output, target):
-    """Run the source-bound bundled verifier only on supported Unix targets."""
-    if target.startswith("windows"):
-        return {"status": "unsupported", "reason": "Unix core; Windows legacy stdio verified separately"}
+    """Run the source-bound native verifier; only measured runtime evidence passes."""
+    windows = target.startswith("windows")
+    script = "verify-windows-local-core.py" if windows else "verify-local-core.py"
+    env = {key: value for key, value in os.environ.items()
+           if windows and key.upper() in ("SYSTEMROOT", "WINDIR", "SYSTEMDRIVE")}
+    env.update({"PATH": "", "HOME": str(root), "USERPROFILE": str(root),
+                "TMPDIR": str(root), "TMP": str(root), "TEMP": str(root)})
     # A short private temporary path avoids platform Unix socket path limits.
     run_output = root / "core"
-    command = [sys.executable, "-I", str(unpacked / "scripts/verify-local-core.py"),
+    command = [sys.executable, "-I", "-B", str(unpacked / "scripts" / script),
                "--binary", str(unpacked / binary), "--output", str(run_output)]
     try:
         result = subprocess.run(command, capture_output=True, text=True, check=False,
-                                env={"PATH": "", "HOME": str(root), "TMPDIR": str(root)})
+                                env=env)
         require(result.returncode == 0, "unpacked local-core verification failed")
         summary = json.loads((run_output / "summary.json").read_text(encoding="utf-8"))
         require(summary.get("status") == "passed" and summary.get("model_requests") == 0
@@ -644,8 +649,15 @@ def verify_local_core(unpacked, binary, root, output, target):
                 "unpacked local-core verification evidence failed")
         require(summary.get("binary_sha256") == sha((unpacked / binary).read_bytes()),
                 "local-core verifier binary identity mismatch")
+        if windows:
+            require(summary.get("native_windows_runtime") is True
+                    and summary.get("transport") == "windows_local_named_pipe"
+                    and summary.get("crash", {}).get("mechanism") == "TerminateProcess"
+                    and summary.get("crash", {}).get("confirmed") is True,
+                    "Windows named-pipe runtime evidence missing")
         return {"status": "passed", "evidence": "local-core/summary.json",
-                "binary_sha256": summary["binary_sha256"], "model_requests": 0}
+                "binary_sha256": summary["binary_sha256"], "model_requests": 0,
+                "transport": "windows_local_named_pipe" if windows else "unix_domain_socket"}
     finally:
         if run_output.is_dir():
             shutil.copytree(run_output, output / "local-core", ignore=lambda directory, names: [

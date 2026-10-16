@@ -2,11 +2,13 @@ use std::{
     collections::BTreeSet,
     fs,
     io::{BufRead, BufReader, Write},
-    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     process::{Child, ChildStdin, Command, Stdio},
     time::Duration,
 };
+
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 
 use agent_llm_mm::{
     adapters::sqlite::initialize_database,
@@ -19,7 +21,10 @@ use agent_llm_mm::{
         config::{
             AppConfig, DaemonConfig, DashboardConfig, ModelConfig, ModelProviderKind, TransportKind,
         },
-        workspace_registry::{WorkspaceRegistration, register_workspace, set_personal_grant},
+        workspace_registry::{
+            WorkspaceRegistration, bind_workspace_root, register_workspace, set_personal_grant,
+            set_workspace_active, unbind_workspace_root,
+        },
     },
 };
 use serde_json::{Value, json};
@@ -43,7 +48,10 @@ impl Fixture {
             .prefix("lc-")
             .tempdir_in(parent)
             .unwrap();
+        #[cfg(unix)]
         fs::set_permissions(directory.path(), fs::Permissions::from_mode(0o700)).unwrap();
+        #[cfg(windows)]
+        super::windows_private::private_directory(directory.path());
         let root_a = directory.path().join("a");
         let root_b = directory.path().join("b");
         fs::create_dir(&root_a).unwrap();
@@ -125,9 +133,21 @@ impl Bridge {
 
     fn spawn_command(mut command: Command, working_directory: &Path) -> Self {
         // No provider settings or credentials are inherited.
+        command.env_clear();
+        #[cfg(windows)]
+        if let Some(system_root) = std::env::var_os("SystemRoot") {
+            command.env("SystemRoot", system_root);
+        }
         let mut child = command
-            .env_clear()
+            // A bridge must not parse even an explicitly selected nonexistent
+            // provider config. Every successful protocol test checks this.
+            .env(
+                "AGENT_LLM_MM_CONFIG",
+                working_directory.join("synthetic-missing-provider-config.toml"),
+            )
             .env("TMPDIR", working_directory)
+            .env("TMP", working_directory)
+            .env("TEMP", working_directory)
             .env("TOKIO_WORKER_THREADS", "2")
             .current_dir(working_directory)
             .stdin(Stdio::piped())
@@ -515,6 +535,24 @@ async fn only_one_core_can_own_a_socket_or_database() {
         )
         .await
         .is_err()
+    );
+    let mut other_database = fixture.config.clone();
+    other_database.database_url = format!(
+        "sqlite://{}",
+        fixture.directory.path().join("other.sqlite").display()
+    );
+    initialize_database(&other_database.database_url)
+        .await
+        .unwrap();
+    assert!(
+        start_core(
+            other_database,
+            fixture.socket.clone(),
+            fixture.registry.clone()
+        )
+        .await
+        .is_err(),
+        "another database must not bypass ownership of the endpoint"
     );
     let mut bridge = fixture.bridge(&fixture.a, "original-core");
     assert_eq!(bridge.tools().await.len(), 25);
@@ -943,6 +981,64 @@ async fn cancellation_is_connection_local_and_admitted_writes_are_not_rolled_bac
             .get("result")
             .is_some()
     );
+    assert!(a.close().await.success());
+    assert!(b.close().await.success());
+    core.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn bridge_without_a_core_fails_closed_without_changing_files() {
+    let fixture = Fixture::new().await;
+    let registry_before = fs::read(&fixture.registry).unwrap();
+    let database = fixture.directory.path().join("memory.sqlite");
+    let database_before = fs::read(&database).unwrap();
+    let mut command = Command::new(env!("CARGO_BIN_EXE_agent_llm_mm"));
+    command
+        .args(["bridge", "--socket"])
+        .arg(&fixture.socket)
+        .args(["--workspace-id", &fixture.a.id, "--workspace-root"])
+        .arg(&fixture.a.roots[0]);
+    let mut bridge = Bridge::spawn_command(command, fixture.directory.path());
+    assert!(bridge.initialize().await.is_err());
+    assert!(!bridge.close().await.success());
+    assert_eq!(fs::read(&fixture.registry).unwrap(), registry_before);
+    assert_eq!(fs::read(&database).unwrap(), database_before);
+    assert!(!fixture.socket.exists());
+    assert!(!fixture.registry.with_extension("json.lock").exists());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn disable_and_unbind_revoke_live_sessions_before_receipt_replay() {
+    let fixture = Fixture::new().await;
+    let core = fixture.start().await;
+    let mut a = fixture.bridge(&fixture.a, "lifecycle-a");
+    let mut b = fixture.bridge(&fixture.b, "lifecycle-b");
+    let mut write = ingest("synthetic lifecycle receipt");
+    write["request_id"] = json!("synthetic-lifecycle-replay");
+    let original = a.call("ingest_interaction", write.clone()).await;
+    content(&original);
+    set_workspace_active(&fixture.registry, &fixture.a.id, false).unwrap();
+    denied(&a.request("tools/list", json!({})).await.unwrap());
+    denied(&a.call("ingest_interaction", write.clone()).await);
+    assert_eq!(b.tools().await.len(), 25);
+    set_workspace_active(&fixture.registry, &fixture.a.id, true).unwrap();
+    let replay = a.call("ingest_interaction", write.clone()).await;
+    assert_eq!(content(&replay)["event_id"], content(&original)["event_id"]);
+    assert_eq!(content(&replay)["replayed"], true);
+    unbind_workspace_root(&fixture.registry, &fixture.a.id, &fixture.a.roots[0]).unwrap();
+    denied(&a.request("tools/list", json!({})).await.unwrap());
+    denied(&a.call("ingest_interaction", write.clone()).await);
+    bind_workspace_root(&fixture.registry, &fixture.a.id, &fixture.a.roots[0]).unwrap();
+    let replay = a.call("ingest_interaction", write).await;
+    assert_eq!(content(&replay)["event_id"], content(&original)["event_id"]);
+    assert_eq!(content(&replay)["replayed"], true);
+    let recalled = a
+        .call(
+            "recall_memory",
+            json!({"query":"synthetic lifecycle receipt"}),
+        )
+        .await;
+    assert_eq!(content(&recalled)["records"].as_array().unwrap().len(), 1);
     assert!(a.close().await.success());
     assert!(b.close().await.success());
     core.stop().await;

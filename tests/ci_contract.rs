@@ -33,6 +33,8 @@ fn ci_covers_linux_and_macos_quality_gates() {
         "openai_compatible_model",
         "provider_config",
         "workspace_registry",
+        "workspace_client_config",
+        "workspace_adoption",
         "mcp_session_policy",
         "local_core_cli",
         "local_core",
@@ -110,9 +112,12 @@ fn ci_executes_source_bound_packages_and_real_windows_wrapper() {
     // publish a candidate binary/archive, database, private config or raw log.
     assert!(workflow.contains("scripts/verify-local-core.py"));
     assert!(workflow.contains("test_local_core_verifier.py"));
+    assert!(workflow.contains("test_windows_local_core_verifier.py"));
     assert!(workflow.contains("scripts/dashboard-admin-browser-check.mjs"));
     assert!(!windows.contains("scripts/verify-local-core.py"));
-    assert_eq!(workflow.matches("actions/upload-artifact@").count(), 1);
+    assert_eq!(workflow.matches("actions/upload-artifact@").count(), 2);
+    assert!(windows.contains("test_windows_local_core_verifier.py"));
+    assert!(windows.contains("target/portable-package-verify/local-core/summary.json"));
     let upload = workflow
         .split("uses: actions/upload-artifact@")
         .nth(1)

@@ -11,11 +11,11 @@
 # It does not create secrets, overwrite local config, run doctor, or start serve.
 #
 # Do not reuse one database_url for formal data, manual tests, and demos.
-# Optional Unix core uses this TOML only in the core process; bridge does not load it.
+# Optional local core uses this TOML only in the core process; bridge does not load it.
 # Keep dashboard and daemon disabled for workspace core. Legacy dashboard settings
 # are not the separate administrator Bearer API, which is fixture-only this phase.
 # See docs/local-workspace-core.md and examples/codex-workspace-bridge.toml.
-# New core/bridge is under acceptance on macOS/Linux and unsupported on Windows.
+# Windows named-pipe core/bridge is a candidate pending exact-source native CI.
 
 transport = "stdio"
 database_url = "sqlite:///absolute/path/to/agent-llm-mm.local.sqlite"

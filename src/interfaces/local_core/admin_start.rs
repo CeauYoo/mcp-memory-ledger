@@ -6,21 +6,24 @@ use crate::{
     },
     support::{config::DashboardConfig, workspace_registry::WorkspaceRegistry},
 };
-use anyhow::{Result, ensure};
-use std::{
-    fs::{self, File},
-    io::Read,
-    os::unix::fs::MetadataExt,
-    path::Path,
-};
+use anyhow::Result;
+#[cfg(unix)]
+use anyhow::ensure;
+use std::path::Path;
 
 pub(super) fn prepare(
     options: AdminOptions,
     registry: &Path,
 ) -> Result<(DashboardConfig, AdminGate)> {
     WorkspaceRegistry::load(registry)?;
-    let uid = fs::metadata(registry)?.uid();
-    let capability = read_capability(&options.token_file, uid)?;
+    #[cfg(unix)]
+    let capability = {
+        use std::os::unix::fs::MetadataExt;
+        read_capability(&options.token_file, std::fs::metadata(registry)?.uid())?
+    };
+    #[cfg(windows)]
+    let capability =
+        crate::support::windows_security::read_private_file(&options.token_file, 4096)?;
     let gate = AdminGate::new(capability.trim_end_matches(['\r', '\n']))?;
     Ok((
         DashboardConfig {
@@ -34,7 +37,13 @@ pub(super) fn prepare(
     ))
 }
 
+#[cfg(unix)]
 fn read_capability(path: &Path, uid: u32) -> Result<String> {
+    use std::{
+        fs::{self, File},
+        io::Read,
+        os::unix::fs::MetadataExt,
+    };
     for ancestor in path.ancestors() {
         ensure!(
             !fs::symlink_metadata(ancestor)?.file_type().is_symlink(),
@@ -82,10 +91,11 @@ pub(super) async fn start(
     .await
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
-    use std::os::unix::fs::{PermissionsExt, symlink};
+    use std::fs;
+    use std::os::unix::fs::{MetadataExt, PermissionsExt, symlink};
     #[test]
     fn capability_file_is_private_bounded_and_never_follows_aliases() {
         let dir = tempfile::tempdir().unwrap();

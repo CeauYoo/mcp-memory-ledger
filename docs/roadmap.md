@@ -1,12 +1,19 @@
 # MCP Memory Ledger 路线图
 
-旧项目接入新增基础事实首片（read-only preview + explicit adopt）；完整 reflection/experience/candidate 历史接入继续开放。首片保守阻断不能证明来源闭包的账本，不自动迁移或清洗。见[范围](workspace-legacy-adoption.md)。
+## 2026-10-16 Windows 本机核心 candidate
+
+新增 Windows 本机命名管道 `core` + stdio `bridge` 实现，与 Unix 共用绑定、逐调用撤销、资源限额和关闭排空逻辑。新建 IPC/状态文件使用当前用户私有 DACL；已有文件/目录须当前用户所有，访问授权只接受当前用户、SYSTEM 和 Administrators。它不隔离同用户任意进程或特权管理员，也不是远端多租户服务。`serve` 兼容入口保留。
+
+当前为待精确提交 Windows 原生 CI 验证的 candidate，不能把 Linux 编译或此前 legacy Windows CI 当作本轮通过。验证包括真实桥多会话、范围拒绝、重连/恢复，以及解包二进制烟测；无用户电脑操作、生产 ACL 修改、凭据生成、服务安装或部署。入口与限制见 [Windows 指南](development-windows.md)。
+
+
+旧项目接入扩展为可归属 reflection/experience 全版本/feedback/trigger 历史的双向来源闭包；不再仅支持基础事实。unknown/mixed/缺失来源、未知 provenance schema 与全局 self-model 后续版本继续开放，不自动迁移、清洗或部署。见[范围](workspace-legacy-adoption.md)。
 
 ## 2026-10-16 Now：先补齐可用功能
 
 当前执行切片为 workspace 解绑/停用/启用、只读检查与客户端 TOML 生成、原生 backup/restore 到新路径，代码已接入但未提交、待最终验证。见[状态](project-status.md)、[生命周期](local-workspace-core.md)、[配置输出](workspace-client-config.md)和[恢复手册](database-operations.md)。
 
-允许将 M2 中这些有界实用功能前移，不以 M1 真实客户端验收尚缺为实现阻塞；保留数据、不自动部署、不扩入远程/自治。此前 `f8eb9ed` 精确 CI 已绿，但独立安全审查、新核心真实客户端自然语言、fresh-machine 与发布门仍开放。后文 W1–W4 是依赖和验收范围，不是要求先重复文档/测试阶段才能继续功能的队列。
+允许将 M2 中这些有界实用功能前移，不以 M1 真实客户端验收尚缺为实现阻塞；保留数据、不自动部署、不扩入远程/自治。此前 `f8eb9ed` 精确 CI 已绿，本轮有界独立源码审查已完成（见[报告](independent-security-review-2026-10-16.md)）；新核心真实客户端自然语言、fresh-machine 与发布门仍开放。后文 W1–W4 是依赖和验收范围，不是要求先重复文档/测试阶段才能继续功能的队列。
 
 ## 2026-10-15 本机核心与工作空间方向
 

@@ -1,7 +1,6 @@
 //! Administrative legacy binding. SQLite is never initialized or rewritten.
 use super::{WorkspaceRegistration, WorkspaceRegistry, model::validate_legacy_namespace, storage};
 use crate::adapters::sqlite::{AdoptionInventory, namespace_adoption::inventory};
-#[cfg(unix)]
 use anyhow::Context;
 use anyhow::{Result, ensure};
 use serde::Serialize;
@@ -56,27 +55,32 @@ pub async fn preview_adoption(
 /// Execution repeats inventory under an SQLite writer reservation and the same
 /// advisory database lock used by the core. Standalone writers can resume after
 /// this call: the owner must explicitly retire/reconfigure those clients.
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 pub async fn adopt_workspace(
     registry: &Path,
     root: &Path,
     namespace: &str,
     database: &Path,
 ) -> Result<AdoptionReport> {
-    use std::os::unix::fs::MetadataExt;
     validate_legacy_namespace(namespace)?;
     let root = storage::canonical_root(root)?;
     let database = database_path(database)?;
     // Validate registry eligibility before creating the cooperating-core lock.
     check_registration(registry, root.clone(), namespace)?;
-    let uid = fs::metadata(registry.parent().context("registry parent required")?)?.uid();
-    ensure!(
-        fs::metadata(&database)?.uid() == uid,
-        "database and registry directory must have the same owner"
-    );
-    let mut lock = database.as_os_str().to_owned();
-    lock.push(".local-core.lock");
-    let _core_lock = crate::support::local_file_lock::PrivateLock::acquire(Path::new(&lock), uid)?;
+    #[cfg(unix)]
+    let _core_lock = {
+        use std::os::unix::fs::MetadataExt;
+        let uid = fs::metadata(registry.parent().context("registry parent required")?)?.uid();
+        ensure!(
+            fs::metadata(&database)?.uid() == uid,
+            "database and registry directory must have the same owner"
+        );
+        let mut lock = database.as_os_str().to_owned();
+        lock.push(".local-core.lock");
+        crate::support::local_file_lock::PrivateLock::acquire(Path::new(&lock), uid)?
+    };
+    #[cfg(windows)]
+    let _core_lock = crate::support::windows_security::acquire_database_lock(&database, registry)?;
     let mut conn = connect(&database, false).await?;
     sqlx::query("BEGIN IMMEDIATE")
         .execute(&mut conn)
@@ -107,7 +111,7 @@ pub async fn adopt_workspace(
         client_configuration_changed: false,
     })
 }
-#[cfg(not(unix))]
+#[cfg(not(any(unix, windows)))]
 pub async fn adopt_workspace(_: &Path, _: &Path, _: &str, _: &Path) -> Result<AdoptionReport> {
     anyhow::bail!(
         "workspace adoption execution requires the Unix local-core lock; read-only adopt-preview is available"

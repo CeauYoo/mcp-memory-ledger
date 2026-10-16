@@ -1,3 +1,7 @@
+#[cfg(windows)]
+#[path = "support/windows_private.rs"]
+mod windows_private;
+
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -15,6 +19,8 @@ fn fixture() -> (TempDir, PathBuf, PathBuf) {
     let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/workspace-core/registry-tests");
     fs::create_dir_all(&parent).unwrap();
     let temp = tempfile::tempdir_in(parent).unwrap();
+    #[cfg(windows)]
+    windows_private::private_directory(temp.path());
     let root = temp.path().join("project");
     fs::create_dir(&root).unwrap();
     let registry = temp.path().join("registry.json");

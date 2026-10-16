@@ -31,3 +31,5 @@ pub mod workspace_registry;
 
 #[cfg(unix)]
 pub(crate) mod local_file_lock;
+#[cfg(windows)]
+pub(crate) mod windows_security;
