@@ -26,7 +26,7 @@ use super::{
 
 pub const CURRENT_DATABASE_SCHEMA_VERSION: i64 = CURRENT_SCHEMA_VERSION;
 
-const REQUIRED_TABLES: [&str; 24] = [
+const REQUIRED_TABLES: [&str; 26] = [
     "events",
     "claims",
     "evidence_links",
@@ -36,6 +36,8 @@ const REQUIRED_TABLES: [&str; 24] = [
     "reflection_scopes",
     "reflection_evidence",
     "self_model_versions",
+    "experience_uses",
+    "experience_use_events",
     "task_heads",
     "task_revisions",
     "task_requirements",
@@ -53,7 +55,7 @@ const REQUIRED_TABLES: [&str; 24] = [
     "schema_migrations",
 ];
 
-const PRESERVED_DATA_TABLES: [&str; 21] = [
+const PRESERVED_DATA_TABLES: [&str; 23] = [
     "events",
     "claims",
     "evidence_links",
@@ -63,6 +65,8 @@ const PRESERVED_DATA_TABLES: [&str; 21] = [
     "reflection_scopes",
     "reflection_evidence",
     "self_model_versions",
+    "experience_uses",
+    "experience_use_events",
     "task_heads",
     "task_revisions",
     "task_requirements",
@@ -507,6 +511,7 @@ async fn run_migration_steps(
             6 => install_v6(connection).await?,
             7 => super::self_model_versions::install(connection).await?,
             8 => super::task::install(connection).await?,
+            9 => super::experience_use::install(connection).await?,
             _ => {
                 return Err(AppError::Message(format!(
                     "missing migration implementation for version {version}"
@@ -1244,6 +1249,7 @@ async fn schema_structure_issues(
     install_v6_extensions(&mut reference).await?;
     super::self_model_versions::install(&mut reference).await?;
     super::task::install(&mut reference).await?;
+    super::experience_use::install(&mut reference).await?;
     let mut issues = Vec::new();
     for table in REQUIRED_TABLES {
         let expected = table_structure(&mut reference, table).await?;

@@ -104,3 +104,28 @@ test('task summary preserves reported requirements, separates candidates and mar
   assert.equal(taskPresentation({task:task(),checkpoint:checkpoint({task_version:2})}).checkpointStale,false);
   for(const locale of ['en','zh-CN','ja']) for(const key of ['taskStatus_active','taskStatus_paused','taskStatus_completed','taskStatus_cancelled','taskCallerReported','taskCheckpointStale']) assert.ok(messages[locale][key]);
 });
+
+import {validExperienceUses} from '../../src/interfaces/dashboard/static/tasks.mjs';
+const useReport = (overrides={}) => ({record:{recorded_at:'2026-10-16T00:00:00Z',verification_basis:'caller_reported_not_independently_verified_no_causal_attribution',observation:{namespace:'project/test',task_id:'task-1',task_version:1,use_id:'use-1',candidate_id:'candidate-1',candidate_version:2,decision:'adopted',reason:'Reported adoption',conditions:[{condition:'Local only',assessment:'caller_reported_satisfied'}],action_event_refs:['event:action'],outcome_event_refs:['event:outcome'],verification:'passed',evaluation_method:'Caller observation',limitations:['Not independent'],related_use_id:null}},currently_reusable:false,invalidation_reasons:['candidate_version_no_longer_current'],...overrides});
+test('experience report validation preserves history separately from current eligibility', () => {
+  const report=useReport(),before=structuredClone(report);
+  assert.ok(validExperienceUses({read_only:true,limit:20,uses:[report]}));
+  assert.equal(report.record.observation.decision,'adopted');assert.equal(report.currently_reusable,false);
+  assert.deepEqual(report,before);
+  assert.ok(validExperienceUses({read_only:true,limit:20,uses:[]}));
+  for(const invalid of [useReport({currently_reusable:'true'}),useReport({invalidation_reasons:null}),useReport({record:{...report.record,verification_basis:'automatically_verified'}})]) assert.equal(validExperienceUses({read_only:true,limit:20,uses:[invalid]}),false);
+  assert.equal(validExperienceUses({read_only:true,limit:20,uses:Array(21).fill(report)}),false);
+  for(const locale of ['en','zh-CN','ja']) for(const key of ['useDecision_adopted','useUnavailable','useBasis','useOutcomeSources']) assert.ok(messages[locale][key]);
+});
+
+import {validTaskWorkspaces} from '../../src/interfaces/dashboard/static/tasks.mjs';
+test('owner workspace suggestions are bounded identifiers, never a host selection', async () => {
+  const list={read_only:true,limit:100,has_more:false,namespaces:['project/a','project/b']};
+  assert.ok(validTaskWorkspaces(list));assert.ok(validTaskWorkspaces({...list,namespaces:[]}));
+  for(const namespaces of [['self'],['project/'],['project/a','project/a'],Array(101).fill('project/a')]) assert.equal(validTaskWorkspaces({...list,namespaces}),false);
+  assert.equal(validTaskWorkspaces({...list,read_only:false}),false);
+  const html=await readFile(new URL('../../src/interfaces/dashboard/static/index.html',import.meta.url),'utf8');
+  assert.ok(html.includes('list="task-workspaces"'));assert.ok(html.includes('id="task-namespace"'));
+  assert.ok(html.includes('codex-context inspect'));assert.ok(html.includes('codex-actions help'));
+  for(const locale of ['en','zh-CN','ja']) for(const key of ['taskHostUnverified','taskBrowseOnly','taskWorkspaceBrowse']) assert.ok(messages[locale][key]);
+});

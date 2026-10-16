@@ -1462,6 +1462,99 @@ impl Server {
         structured(result)
     }
 
+    #[tool(description = "Record caller-reported experience adoption or rejection and outcome against a scoped candidate version. Requires request_id for safe retry; does not change candidate status, trust or permissions.",
+        input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<crate::domain::experience_use::RecordExperienceUseRequest>>()
+    )]
+    async fn record_experience_use(
+        &self,
+        raw_params: JsonObject,
+    ) -> Result<CallToolResult, McpError> {
+        let params = map_tool_error(
+            &self.runtime,
+            "record_experience_use",
+            None,
+            None,
+            decode_tool_params::<crate::domain::experience_use::RecordExperienceUseRequest>(
+                raw_params,
+            ),
+        )
+        .await?;
+        let namespace = Some(params.namespace.clone());
+        let result = map_tool_error(
+            &self.runtime,
+            "record_experience_use",
+            namespace,
+            None,
+            crate::application::experience_use::record_experience_use(&self.runtime.store, params)
+                .await,
+        )
+        .await?;
+        structured(result)
+    }
+
+    #[tool(description = "Explicitly derive a scoped Episode and pending experience candidate from caller-supplied use feedback. Restartable stages preserve partial progress and deterministic retries; never activates a candidate or authenticates the report.",
+        input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<crate::domain::experience_use::DeriveExperienceRequest>>()
+    )]
+    async fn derive_experience_from_use(
+        &self,
+        raw_params: JsonObject,
+    ) -> Result<CallToolResult, McpError> {
+        let params = map_tool_error(
+            &self.runtime,
+            "derive_experience_from_use",
+            None,
+            None,
+            decode_tool_params::<crate::domain::experience_use::DeriveExperienceRequest>(
+                raw_params,
+            ),
+        )
+        .await?;
+        let namespace = Some(params.namespace.clone());
+        let result = map_tool_error(
+            &self.runtime,
+            "derive_experience_from_use",
+            namespace,
+            None,
+            crate::application::experience_use::derive_experience_from_use(
+                &self.runtime.store,
+                params,
+            )
+            .await,
+        )
+        .await?;
+        structured(result)
+    }
+
+    #[tool(description = "List scoped experience-use reports with bounded pagination. Reported adoption and outcomes are not authenticated host or model evidence.",
+        input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<crate::domain::experience_use::ListExperienceUsesRequest>>()
+    )]
+    async fn list_experience_uses(
+        &self,
+        raw_params: JsonObject,
+    ) -> Result<CallToolResult, McpError> {
+        let params = map_tool_error(
+            &self.runtime,
+            "list_experience_uses",
+            None,
+            None,
+            decode_tool_params::<crate::domain::experience_use::ListExperienceUsesRequest>(
+                raw_params,
+            ),
+        )
+        .await?;
+        let namespace = Some(params.namespace.clone());
+        let result = map_tool_error(
+            &self.runtime,
+            "list_experience_uses",
+            namespace,
+            None,
+            crate::application::experience_use::list_experience_uses(&self.runtime.store, params)
+                .await,
+        )
+        .await?;
+        structured(result)
+    }
+
     #[tool(description = "Read current scoped Claim fingerprint, status and object for an evidence-bound feedback correction.",
         input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<crate::application::feedback_candidate::FeedbackTargetInput>>()
     )]
@@ -1753,7 +1846,7 @@ mod audit_contract_tests {
     #[test]
     fn every_advertised_tool_has_an_explicit_audit_owner() {
         let tools = Server::tool_router().list_all();
-        assert_eq!(tools.len(), 38);
+        assert_eq!(tools.len(), 41);
         let mut counts = [0; 3];
         for tool in tools {
             match tool_audit_contract(&tool.name).expect("advertised tool needs an audit contract")
@@ -1769,7 +1862,7 @@ mod audit_contract_tests {
                 }
             }
         }
-        assert_eq!(counts, [11, 26, 1]);
+        assert_eq!(counts, [11, 29, 1]);
         assert_eq!(tool_audit_contract("untrusted caller tool name"), None);
     }
 

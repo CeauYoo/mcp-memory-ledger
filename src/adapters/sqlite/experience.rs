@@ -94,7 +94,7 @@ fn owner_name(namespace: &Namespace) -> &'static str {
     }
 }
 
-async fn replay<T: DeserializeOwned>(
+pub(super) async fn replay<T: DeserializeOwned>(
     conn: &mut SqliteConnection,
     request: &WriteReceiptRequest,
 ) -> Result<Option<ExperienceWriteResult<T>>, AppError> {
@@ -116,7 +116,7 @@ async fn replay<T: DeserializeOwned>(
     })
     .transpose()
 }
-async fn audit<T: Serialize>(
+pub(super) async fn audit<T: Serialize>(
     conn: &mut SqliteConnection,
     request: &WriteReceiptRequest,
     result: &ExperienceWriteResult<T>,
@@ -148,7 +148,7 @@ async fn validate_episode_sources(
     }
     Ok(())
 }
-async fn validate_candidate_sources(
+pub(super) async fn validate_candidate_sources(
     conn: &mut SqliteConnection,
     namespace: &Namespace,
     content: &ExperienceContent,
@@ -438,7 +438,7 @@ impl ExperienceStore for SqliteStore {
     ) -> Result<ExperienceRecall, AppError> {
         let terms = recall_terms(&request)?;
         let mut query = QueryBuilder::<Sqlite>::new(
-            "SELECT v.payload_json FROM experience_candidates c JOIN experience_candidate_versions v ON v.candidate_id=c.candidate_id AND v.version=c.current_version WHERE c.namespace=",
+            "SELECT c.candidate_id,c.current_version,v.payload_json FROM experience_candidates c JOIN experience_candidate_versions v ON v.candidate_id=c.candidate_id AND v.version=c.current_version WHERE c.namespace=",
         );
         query
             .push_bind(&request.namespace)
@@ -452,7 +452,8 @@ impl ExperienceStore for SqliteStore {
         query
             .push(" ORDER BY c.candidate_id LIMIT ")
             .push_bind(request.limit as i64 + 1);
-        let rows = db(query.build().fetch_all(&self.pool).await)?;
+        let mut tx = db(self.pool.begin().await)?;
+        let rows = db(query.build().fetch_all(&mut *tx).await)?;
         let mut result = ExperienceRecall {
             candidates: Vec::new(), used_bytes: 0, truncated: rows.len() > request.limit,
             selection_reason: "Current active versions; all literal terms in caller-authored text; exact namespace; identifier order. Complete JSON byte budget. Knowledge does not authorize execution.".into(),
@@ -460,6 +461,15 @@ impl ExperienceStore for SqliteStore {
         update_recall_size(&mut result)?;
         for row in rows.into_iter().take(request.limit) {
             let candidate: ExperienceCandidate = decode(&row.get::<String, _>("payload_json"))?;
+            if candidate.candidate_id != row.get::<String, _>("candidate_id")
+                || candidate.version != row.get::<i64, _>("current_version")
+                || candidate.namespace.as_str() != request.namespace
+                || candidate.status != ExperienceStatus::Active
+            {
+                return Err(missing_source());
+            }
+            candidate.content.validate()?;
+            validate_candidate_sources(&mut tx, &candidate.namespace, &candidate.content).await?;
             result.candidates.push(candidate);
             update_recall_size(&mut result)?;
             if result.used_bytes > request.max_bytes {
@@ -468,6 +478,7 @@ impl ExperienceStore for SqliteStore {
                 update_recall_size(&mut result)?;
             }
         }
+        db(tx.commit().await)?;
         Ok(result)
     }
 }

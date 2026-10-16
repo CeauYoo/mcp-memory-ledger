@@ -1,13 +1,18 @@
 # MCP Memory Ledger 前沿调研与后续任务规划
 
-## 首批实现进度
+## 当前实现进度（2026-10-16）
 
-P0 文档发布完成。T01–T08 的任务核心、原生适配及只读界面已形成首批源码；真实性、宿主注入、Windows hook 预览等仍有限制，见[验证记录](../task-continuity-validation-2026-10-16.md)。后续动作检查与经验反馈继续推进，本文的计划条目不能当作已实现清单。
+- P0 文档已发布；T01–T08 首批任务核心、原生适配和只读界面已实现。`20d4037` 的 Ubuntu CI 已通过；macOS / Windows 同源 artifact fixture 路径规范化失败的测试路径修补已合入并通过本地对应测试，原生复验仍待完成，不能记为三平台全绿。
+- T09–T11 deny-only patch 检查、policy epoch、最新任务重读、配置预览/撤回候选已合入源码；默认不检查通用 shell，也不提供安装/apply。云端定向回归已通过，最终全量与真实宿主覆盖证据待完成。
+- P3 Schema 9 已合入经验采用/结果来源记录、当前资格与失效重查，以及显式可恢复 use → Episode → pending 候选组合。T13 记录核心已实现，T12/T14/T15 为上述部分支持；调用方报告不等于独立核验、因果或执行授权。
+- P5 原 owner-only 界面已加入三语言任务/经验摘要；任务与经验分别读取，历史采用不等于当前可复用或自动生效。已新增含任务项目发现与紧凑选择，浏览不改变宿主绑定；定向 API 及 Node 合同通过，最终整合/浏览器验收待完成。
+- T16 模型草稿、P4 检索和真实宿主探针仍在推进，不预记完成。宿主接受/注入、Windows hook 预览、实际安装与部署仍须独立证据和相应批准。
 
+后续整合版本不继承首批 CI 结果。合同与证据见[当前状态](../project-status.md)、[动作检查](../codex-action-checks.md)、[经验反馈](../experience-use-feedback.md)和[首批验证](../task-continuity-validation-2026-10-16.md)。下文保留完整计划，不是已完成清单。
 
 日期：2026-10-16  
-状态：**active / 用户已批准实施 / implementation approved**。本提交先发布规划，新增功能尚未据此宣称完成。  
-实现基线：干净远程提交 `7448b02a7de8d5dd32c32a149fdd024f798bbf0f`，tree `28144a749bca0d853bb63af7dd872ecb74e709b1`；[PR #4](https://github.com/yooyui/mcp-memory-ledger/pull/4) 保持草稿。[精确基线 CI](https://github.com/yooyui/mcp-memory-ledger/actions/runs/38860968271) 三平台成功：Ubuntu/macOS 各 848 项 Rust、Windows 514 项 configured Rust，三平台候选包和 Windows named-pipe core 验证通过。本计划取代 2026-07-10 计划的执行入口；旧计划与历史证据保留，不构成第二份 active 队列。
+状态：**active / 用户已批准实施 / implementation approved**。规划已发布并进入分阶段实现，当前进度以上文为准。
+规划起始基线：干净远程提交 `7448b02a7de8d5dd32c32a149fdd024f798bbf0f`，tree `28144a749bca0d853bb63af7dd872ecb74e709b1`；[PR #4](https://github.com/yooyui/mcp-memory-ledger/pull/4) 保持草稿。[精确基线 CI](https://github.com/yooyui/mcp-memory-ledger/actions/runs/38860968271) 三平台成功：Ubuntu/macOS 各 848 项 Rust、Windows 514 项 configured Rust，三平台候选包和 Windows named-pipe core 验证通过。本计划取代 2026-07-10 计划的执行入口；旧计划与历史证据保留，不构成第二份 active 队列。
 
 ## 一 结论与产品目标
 
@@ -19,6 +24,8 @@ P0 文档发布完成。T01–T08 的任务核心、原生适配及只读界面�
 
 
 ## 二 现有基础与真正缺口
+
+下表记录规划时的 `7448b02` 基线及原始缺口；后续已实现部分以上方进度与对应合同为准。
 
 | 能力 | 当前状态 | 下一步处理 |
 |---|---|---|

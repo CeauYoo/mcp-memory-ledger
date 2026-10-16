@@ -3,7 +3,7 @@
 pub mod artifacts;
 mod cli;
 pub mod protocol;
-mod state;
-mod transport;
+pub(crate) mod state;
+pub(crate) mod transport;
 
 pub use cli::try_run_cli;

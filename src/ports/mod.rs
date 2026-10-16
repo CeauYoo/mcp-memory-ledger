@@ -249,3 +249,5 @@ pub mod ledger_export_store;
 pub mod self_model_version_store;
 
 pub mod task_store;
+
+pub mod experience_use_store;

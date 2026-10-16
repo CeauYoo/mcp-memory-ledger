@@ -1,5 +1,27 @@
 # 当前实现状态
 
+本切片云端全量 929 项通过、14 项 AF_UNIX 环境阻断，无其他失败；精确提交 CI 待运行。详细范围见[第二切片验证记录](task-experience-validation-2026-10-16.md)。
+
+## 当前整合与验证状态（2026-10-16）
+
+当前源码已合入动作检查、Schema 9 经验采用反馈、只读界面与项目发现。云端定向回归、严格 Clippy、Node 13 项和宿主探针离线 9 项通过，最终全量结果如下，下一精确提交 CI 待核验。首批 `20d4037` 的 Ubuntu CI 全部通过；macOS / Windows 在同源 artifact fixture 的路径规范化检查失败，最小测试路径修补已合入、本地对应测试通过，原生平台仍待复验，不能报告首批三平台全绿。后续切片不继承首批通过结果。
+
+T16 模型草稿、P4 检索与真实宿主探针仍在实现/验证中，尚未标为完成；未操作用户机器或部署。
+
+## T09–T11 源码已整合，真实宿主待验收
+
+已新增 deny-only patch 参数检查、独立 policy epoch、默认 latest_active 任务刷新、私有检查回执、配置差异/备份快照及 CAS 撤回候选。无授权 token，无普通记忆写入权限晋升。T11 不包含实际安装/apply；配置必须另行确认后部署。详细范围见 [动作检查合同](codex-action-checks.md)。
+
+领域/适配定向测试与严格 Clippy 已通过；真实 host 仍 blocked/unverified，Windows shell preview 与 checked writes 均 unsupported。默认 patch-only 不拦 shell；显式 strict-local 会拒绝未分类本地工具，也不能覆盖 stdin/hosted/故障旁路。不能继承首批/历史 CI 绿灯。
+
+## P3 经验采用反馈与界面已合入源码
+
+Schema 9 的 `record_experience_use` / `list_experience_uses` 及本地 CLI 记录任务与经验精确版本、采用决定、适用条件、行动/结果 Event 来源、评估和局限。关联后续观察保留原历史；当前资格与失效原因单独重算。MCP 沿用逐调用项目授权和撤销检查，CLI 不自动初始化或迁移。
+
+`derive_experience_from_use` 显式接收调用方 Episode/候选内容，校验原 use 的来源关系，复用既有写入和确定性回执逐步生成 pending 候选；可恢复但不是跨步骤原子事务，也不自动激活。T13 的有界记录核心已实现；T12/T15 当前版本重查与失效支持、T14 调用方归纳组合为部分实现，T16 模型草稿仍在推进。详见[经验反馈合同](experience-use-feedback.md)。
+
+原 owner-only 任务界面已加入三语言经验报告、精确版本和结果来源，历史采用与当前重新评估资格分列；无新增写权限按钮或“自动生效”声明。Node 13 项及脚本语法通过，owner-only Rust/API 定向测试通过；最终整合、真实浏览器和三平台结果待对应验证。以上均不证明独立效果、因果收益、可信授权或真实宿主采用。
+
 ## 任务续接首批源码实现
 
 Schema 8 增加任务要求修订、候选隔离、checkpoint 和有界续接上下文；6 个新任务 MCP 工具复用范围与撤销策略。原界面提供 owner-only 只读任务摘要，旧无凭据 observer 不暴露任务内容。原生 Codex 适配器提供显式项目默认任务、生命周期上下文输出和配置预览。
@@ -8,16 +30,16 @@ Schema 8 增加任务要求修订、候选隔离、checkpoint 和有界续接上
 - [Codex 适配与真实证据边界](codex-task-context-adapter.md)
 - [网页任务摘要](dashboard-live-desk.md)
 
-本轮云端 Rust 878 项通过，14 项 IPC 环境阻断；严格 Clippy、Node 11 项及 Python 127 项通过。详细范围见[首批验证记录](task-continuity-validation-2026-10-16.md)，精确提交三平台 CI 仍须另行核验。
+本轮云端 Rust 878 项通过，14 项 IPC 环境阻断；严格 Clippy、Node 11 项及 Python 127 项通过。详细范围见[首批验证记录](task-continuity-validation-2026-10-16.md)；后续精确提交 CI 状态见本页顶部。
 
-当前为首批实现及集成检查阶段。调用方报告不等于认证用户输入或独立结果验证；hook 输出不等于宿主接受。真实 Codex 会话启动受云端沙箱限制，自动注入尚未验收；Windows 核心仍已支持，但新 hook 的 Windows shell 配置预览未验证。旧 schema 须显式迁移；scoped export 不包含任务数据，完整数据库备份包含。
+首批代码与当前整合版本分别记账。调用方报告不等于认证用户输入或独立结果验证；hook 输出不等于宿主接受。真实 Codex 会话启动受云端沙箱限制，自动注入尚未验收；Windows 核心仍已支持，但新 hook 的 Windows shell 配置预览未验证。旧 schema 须显式迁移；scoped export 不包含任务数据，完整数据库备份包含。
 
-动作检查、经验采用反馈和语义检索继续按唯一计划推进，未因首批代码落盘宣称完成。实际用户机器配置和部署仍另行确认。
+动作检查与经验反馈已形成上述有界实现，P4 检索增强仍在推进；不因代码落盘关闭整阶段验收。实际用户机器配置和部署仍另行确认。
 
 
 ## 当前执行入口与已完成基线（2026-10-16）
 
-已批准按[完整唯一实施计划](plans/2026-10-16-task-continuity-and-host-integration.md)分阶段推进，当前首批为 P0 与 T01–T08。首批源码已实现，当前处于集成审查与回归；真实宿主注入等未闭合项仍单列，批准不等于全部完成。
+已批准按[完整唯一实施计划](plans/2026-10-16-task-continuity-and-host-integration.md)分阶段推进。P0 与 T01–T08 首批后已继续整合动作检查及 P3/P5 切片，当前处于集成审查与回归；真实宿主注入等未闭合项仍单列，批准不等于全部完成。
 
 基线 `7448b02a7de8d5dd32c32a149fdd024f798bbf0f` 的 [CI 38860968271](https://github.com/yooyui/mcp-memory-ledger/actions/runs/38860968271) 三平台全部成功：Ubuntu/macOS 各 848 项 Rust，Windows 514 项 configured Rust；三平台精确来源候选包通过，Windows named-pipe core 的 42 次 MCP 工具调用、隔离、确认写后重启/重放、备份恢复与清理通过。Ubuntu 真实 Chrome 检查通过。
 

@@ -47,6 +47,7 @@ async fn server_exposes_expected_tools_over_stdio() {
             "commit_feedback_candidate".to_string(),
             "create_task".to_string(),
             "decide_with_snapshot".to_string(),
+            "derive_experience_from_use".to_string(),
             "export_memory".to_string(),
             "get_episode_detail".to_string(),
             "get_evidence_relation".to_string(),
@@ -62,6 +63,7 @@ async fn server_exposes_expected_tools_over_stdio() {
             "inspect_retrieval_index".to_string(),
             "list_episode_details".to_string(),
             "list_experience_candidates".to_string(),
+            "list_experience_uses".to_string(),
             "list_tasks".to_string(),
             "propose_experience_candidate".to_string(),
             "propose_feedback_candidate".to_string(),
@@ -69,6 +71,7 @@ async fn server_exposes_expected_tools_over_stdio() {
             "recall_experience_candidates".to_string(),
             "recall_memory".to_string(),
             "record_episode".to_string(),
+            "record_experience_use".to_string(),
             "record_task_checkpoint".to_string(),
             "reject_feedback_candidate".to_string(),
             "revise_experience_candidate".to_string(),
@@ -81,6 +84,80 @@ async fn server_exposes_expected_tools_over_stdio() {
             "validate_feedback_candidate".to_string(),
         ]
     );
+}
+
+#[tokio::test]
+async fn experience_use_tools_expose_precise_report_contracts() {
+    let mut client = test_support::spawn_stdio_client().await.unwrap();
+    let tools = client.list_all_tools().await.unwrap();
+    let record = &tools
+        .iter()
+        .find(|tool| tool.name == "record_experience_use")
+        .expect("record tool")
+        .input_schema;
+    for field in [
+        "namespace",
+        "request_id",
+        "use_id",
+        "task_id",
+        "task_version",
+        "expected_task_version",
+        "candidate_id",
+        "candidate_version",
+        "expected_candidate_version",
+        "decision",
+        "reason",
+        "conditions",
+        "action_event_refs",
+        "outcome_event_refs",
+        "verification",
+        "evaluation_method",
+        "limitations",
+    ] {
+        assert!(
+            record["required"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|value| value == field),
+            "{field}"
+        );
+    }
+    assert!(record["properties"].get("related_use_id").is_some());
+    assert_eq!(record["additionalProperties"], false);
+    let list = &tools
+        .iter()
+        .find(|tool| tool.name == "list_experience_uses")
+        .expect("list tool")
+        .input_schema;
+    for field in ["namespace", "task_id", "limit", "after_id"] {
+        assert!(list["properties"].get(field).is_some(), "{field}");
+    }
+    assert_eq!(list["additionalProperties"], false);
+    let derive = &tools
+        .iter()
+        .find(|tool| tool.name == "derive_experience_from_use")
+        .expect("derive tool")
+        .input_schema;
+    for field in [
+        "namespace",
+        "request_id",
+        "use_id",
+        "episode_id",
+        "candidate_id",
+        "episode_content",
+        "candidate_content",
+    ] {
+        assert!(
+            derive["required"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|value| value == field),
+            "{field}"
+        );
+    }
+    assert_eq!(derive["additionalProperties"], false);
 }
 
 #[tokio::test]
@@ -5150,7 +5227,7 @@ required = true
         .expect("client");
 
     let tools = client.list_all_tools().await.expect("list tools");
-    assert_eq!(tools.len(), 38);
+    assert_eq!(tools.len(), 41);
     for name in [
         "create_task",
         "revise_task",
@@ -5242,7 +5319,7 @@ max_concurrent_tasks = 1
             .await
             .unwrap();
     let tools = client.list_all_tools().await.unwrap();
-    assert_eq!(tools.len(), 38);
+    assert_eq!(tools.len(), 41);
     for name in [
         "create_task",
         "revise_task",

@@ -111,8 +111,10 @@ async fn only_data_free_shell_is_public_and_every_api_requires_authorization() {
             "/api/operation-log",
             "/api/operation-log/missing",
             "/api/health",
+            "/api/task-workspaces",
             "/api/tasks?namespace=project/test",
             "/api/tasks/missing?namespace=project/test",
+            "/api/tasks/missing/experience-uses?namespace=project/test",
             "/not-a-route",
         ] {
             for credential in [None, Some("Bearer synthetic-wrong-capability")] {
@@ -515,6 +517,17 @@ async fn owner_task_reads_are_scoped_read_only_and_preserve_checkpoint_version()
         .await
         .unwrap();
     assert_eq!(empty, json!({"tasks":[],"limit":100,"read_only":true}));
+    let workspaces: Value = get("task-workspaces")
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(
+        workspaces,
+        json!({"namespaces":[],"limit":100,"has_more":false,"read_only":true})
+    );
     let source = json!({"kind":"caller_reported","reference":null});
     store.create_task(serde_json::from_value(json!({
         "namespace":"project/test","task_id":"task-1","request_id":"create-1","title":"Synthetic task",
@@ -523,6 +536,63 @@ async fn owner_task_reads_are_scoped_read_only_and_preserve_checkpoint_version()
             {"requirement_id":"candidate","kind":"requirement","text":"Unconfirmed addition","state":"candidate","source":{"kind":"model_asserted"},"replaces":null}
         ],"source":source,"reason":"Synthetic owner API test"
     })).unwrap()).await.unwrap();
+    use agent_llm_mm::{
+        application::{experience, experience_use},
+        domain::{
+            event::Event,
+            types::{EventKind, Namespace, Owner},
+        },
+        ports::{EventStore, StoredEvent},
+    };
+    store
+        .append_event(StoredEvent::new(
+            "use-evidence".into(),
+            chrono::Utc::now(),
+            Event::new_with_namespace(
+                Owner::World,
+                Namespace::parse("project/test").unwrap(),
+                EventKind::Observation,
+                "Synthetic result",
+            )
+            .unwrap(),
+        ))
+        .await
+        .unwrap();
+    experience::create_episode(&store,serde_json::from_value(json!({
+        "namespace":"project/test","request_id":"use-ep","episode_id":"use-ep",
+        "content":{"title":"Synthetic episode","objective":"Check","actions":["Run"],"observations":["Result"],"outcome":"Reported pass","lesson":"Check","limitations":["Synthetic only"],"source_event_refs":["event:use-evidence"]}
+    })).unwrap()).await.unwrap();
+    experience::create_candidate(&store,serde_json::from_value(json!({
+        "namespace":"project/test","request_id":"use-candidate","candidate_id":"use-candidate",
+        "content":{"kind":"semantic","title":"Synthetic experience","statement":"Check","steps":[],"limitations":["Synthetic only"],"source_episode_ids":["use-ep"]}
+    })).unwrap()).await.unwrap();
+    experience::update_candidate_status(&store,serde_json::from_value(json!({
+        "namespace":"project/test","request_id":"activate-use","candidate_id":"use-candidate","expected_version":1,"status":"active"
+    })).unwrap()).await.unwrap();
+    experience_use::record_experience_use(&store,serde_json::from_value(json!({
+        "namespace":"project/test","request_id":"report-use","use_id":"use-1","task_id":"task-1","task_version":1,"expected_task_version":1,
+        "candidate_id":"use-candidate","candidate_version":2,"expected_candidate_version":2,"decision":"adopted","reason":"Synthetic use",
+        "conditions":[{"condition":"Fixture","assessment":"caller_reported_satisfied"}],"action_event_refs":["event:use-evidence"],"outcome_event_refs":["event:use-evidence"],
+        "verification":"passed","evaluation_method":"Synthetic observation","limitations":["No independent verification"]
+    })).unwrap()).await.unwrap();
+    let uses: Value = get("tasks/task-1/experience-uses?namespace=project/test")
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(uses["read_only"], true);
+    assert_eq!(uses["uses"][0]["currently_reusable"], true);
+    assert_eq!(
+        uses["uses"][0]["record"]["observation"]["outcome_event_refs"],
+        json!(["event:use-evidence"])
+    );
+    assert!(
+        uses["uses"][0]["record"]["observation"]
+            .get("request_id")
+            .is_none()
+    );
     store.record_task_checkpoint(serde_json::from_value(json!({
         "namespace":"project/test","task_id":"task-1","request_id":"checkpoint-1","checkpoint_id":"cp-1",
         "expected_version":1,"expected_checkpoint_sequence":0,
@@ -533,6 +603,63 @@ async fn owner_task_reads_are_scoped_read_only_and_preserve_checkpoint_version()
         "namespace":"project/test","task_id":"task-1","request_id":"pause-1","expected_version":1,
         "changes":[],"status":"paused","source":source,"reason":"Explicit pause"
     })).unwrap()).await.unwrap();
+    let uses: Value = get("tasks/task-1/experience-uses?namespace=project/test")
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(uses["uses"][0]["currently_reusable"], false);
+    assert_eq!(
+        uses["uses"][0]["record"]["observation"]["decision"],
+        "adopted"
+    );
+    assert!(
+        uses["uses"][0]["invalidation_reasons"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("task_revision_no_longer_current_active"))
+    );
+    let isolated: Value = get("tasks/task-1/experience-uses?namespace=project/other")
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(isolated["uses"], json!([]));
+    assert_eq!(
+        get("tasks/task-1/experience-uses?namespace=self")
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::BAD_REQUEST
+    );
+    let workspaces: Value = get("task-workspaces")
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(
+        workspaces,
+        json!({"namespaces":["project/test"],"limit":100,"has_more":false,"read_only":true})
+    );
+    for method in [Method::POST, Method::PUT, Method::PATCH, Method::DELETE] {
+        assert_eq!(
+            client
+                .request(method, format!("{base}/api/task-workspaces"))
+                .bearer_auth(CAPABILITY)
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::METHOD_NOT_ALLOWED
+        );
+    }
     let list: Value = get("tasks?namespace=project/test")
         .send()
         .await
@@ -581,7 +708,7 @@ async fn owner_task_reads_are_scoped_read_only_and_preserve_checkpoint_version()
         );
     }
     for method in [Method::POST, Method::PUT, Method::PATCH, Method::DELETE] {
-        for route in ["tasks", "tasks/task-1"] {
+        for route in ["tasks", "tasks/task-1", "tasks/task-1/experience-uses"] {
             assert_eq!(
                 client
                     .request(
@@ -616,5 +743,78 @@ async fn owner_task_reads_are_scoped_read_only_and_preserve_checkpoint_version()
             json!({"error":"task records unavailable"})
         );
     }
+    sqlx::query("ALTER TABLE experience_uses RENAME TO unavailable_experience_uses")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let unavailable = get("tasks/task-1/experience-uses?namespace=project/test")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(unavailable.status(), StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(
+        unavailable.json::<Value>().await.unwrap(),
+        json!({"error":"experience use records unavailable"})
+    );
+    pool.close().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn owner_task_workspace_discovery_is_bounded_and_reports_missing_schema() {
+    use agent_llm_mm::{adapters::sqlite::SqliteStore, ports::task_store::TaskStore};
+    let directory = tempfile::tempdir().unwrap();
+    let url = format!(
+        "sqlite://{}",
+        directory.path().join("workspace-list.sqlite").display()
+    );
+    let store = SqliteStore::bootstrap(&url).await.unwrap();
+    for index in 0..102 {
+        store.create_task(serde_json::from_value(json!({
+            "namespace":format!("project/{index:03}"),"task_id":"task","request_id":format!("create-{index}"),"title":"Synthetic task",
+            "requirements":[{"requirement_id":"goal","kind":"goal","text":"Synthetic goal","state":"reported","source":{"kind":"caller_reported"}}],
+            "source":{"kind":"caller_reported"},"reason":"Bounded discovery fixture"
+        })).unwrap()).await.unwrap();
+    }
+    let handle = start_admin_dashboard_service(
+        config("/"),
+        runtime(),
+        observer(),
+        Some(store),
+        AdminGate::new(CAPABILITY).unwrap(),
+    )
+    .await
+    .unwrap();
+    let client = client();
+    let endpoint = format!("{}/api/task-workspaces", handle.base_url());
+    let list: Value = client
+        .get(&endpoint)
+        .bearer_auth(CAPABILITY)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(list["namespaces"].as_array().unwrap().len(), 100);
+    assert_eq!(list["namespaces"][0], "project/000");
+    assert_eq!(list["namespaces"][99], "project/099");
+    assert_eq!(list["has_more"], true);
+    assert_eq!(list.as_object().unwrap().len(), 4);
+    let pool = sqlx::SqlitePool::connect(&url).await.unwrap();
+    sqlx::query("ALTER TABLE task_heads RENAME TO unavailable_task_heads")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let error = client
+        .get(&endpoint)
+        .bearer_auth(CAPABILITY)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(error.status(), StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(
+        error.json::<Value>().await.unwrap(),
+        json!({"error":"task workspaces unavailable"})
+    );
     pool.close().await;
 }

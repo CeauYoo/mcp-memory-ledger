@@ -24,6 +24,8 @@ fn ci_covers_linux_and_macos_quality_gates() {
         "feedback_provenance",
         "feedback_candidates",
         "experience_workflow",
+        "experience_use_feedback",
+        "dashboard_admin",
         "indexed_text_recall",
         "mcp_stdio",
         "schema7_migration",
@@ -139,6 +141,7 @@ fn ci_executes_source_bound_packages_and_real_windows_wrapper() {
         paths,
         [
             "target/core-verification/summary.json",
+            "target/reports/codex-native-host.json",
             "target/portable-package-verify/summary.json",
             "target/portable-package-verify/SHA256SUMS",
             "target/portable-package-verify/local-core/summary.json",
@@ -148,4 +151,22 @@ fn ci_executes_source_bound_packages_and_real_windows_wrapper() {
         ]
     );
     assert!(!workflow.contains("continue-on-error:"));
+}
+
+#[test]
+fn native_host_probe_is_pinned_local_and_keeps_only_safe_summary() {
+    let workflow = fs::read_to_string(".github/workflows/ci.yml").unwrap();
+    let step = workflow
+        .split("- name: Verify native Codex task context")
+        .nth(1)
+        .unwrap()
+        .split("      - name:")
+        .next()
+        .unwrap();
+    assert!(step.contains("if: matrix.os == 'ubuntu-latest'"));
+    assert!(step.contains("rust-v0.159.2"));
+    assert!(step.contains("9e2d29a713b94478b240dec2f10e11324cd05fad76dc43e7c639bdf8a1337a6b"));
+    assert!(step.contains("sha256sum --check --strict"));
+    assert!(step.contains("--allow-synthetic-local-turn"));
+    assert!(!step.contains("continue-on-error"));
 }

@@ -2,10 +2,10 @@
 
 ## Task continuity tools
 
-Schema 8 adds `create_task`, `revise_task`, `get_task`, `list_tasks`, `record_task_checkpoint`, and `build_task_resume_context`. Standalone has 38 tools; a bound core session permits 31 and denies the same 7 global tools. The six task tools require the current project scope and do not provide personal/global task access. See [task contract](task-ledger.md) for DTOs, reported-source limits, immutable history, CAS, receipts and full-context rules.
+Schema 8 adds `create_task`, `revise_task`, `get_task`, `list_tasks`, `record_task_checkpoint`, and `build_task_resume_context`. Standalone has 41 tools; a bound core session permits 34 and denies the same 7 global tools. The six task tools require the current project scope and do not provide personal/global task access. See [task contract](task-ledger.md) for DTOs, reported-source limits, immutable history, CAS, receipts and full-context rules.
 
 
-当前注册 **32 个工具**。本页按用途导航；精确 required/optional 字段与枚举以正在运行的 `tools/list` schema 和 [DTO](../src/interfaces/mcp/dto.rs) / [server 注册](../src/interfaces/mcp/server.rs)为准。CLI 命令和 MCP 工具是不同入口。
+当前注册 **41 个工具**。本页按用途导航；精确 required/optional 字段与枚举以正在运行的 `tools/list` schema 和 [DTO](../src/interfaces/mcp/dto.rs) / [server 注册](../src/interfaces/mcp/server.rs)为准。CLI 命令和 MCP 工具是不同入口。
 
 ## 1. 日常记忆与任务上下文（6）
 
@@ -81,3 +81,14 @@ observations 与同 scope 的 source_event_refs 不可空。内容是来源关�
 - `caller_budget` 仅适用于 recall_memory / build_task_context / run_reflection；携带 next_used，按 receipt 停止，不能当作持久服务端 quota。见[预算合同](caller-operation-budget.md)。
 - `recorded_at` 与 caller `observed_at` 分开；未知历史为 null，不据年龄判断失效。见[时间合同](temporal-metadata.md)。
 - 所有示例优先 mock/合成数据；工具 schema 只表示输入合同，不批准访问外部服务或执行经验步骤。
+
+## Experience-use feedback tools
+
+- `record_experience_use`: immutable, request-idempotent caller report tied to exact task and candidate versions. Required: namespace, request_id, use_id, task_id, task_version, expected_task_version, candidate_id, candidate_version, expected_candidate_version, decision, reason, conditions, action_event_refs, outcome_event_refs, verification, evaluation_method, limitations. Optional related_use_id links a subsequent observation to the same binding and decision without rewriting history.
+- `list_experience_uses`: namespace + task_id required; limit defaults to 20, optional after_id. Returns records with currently_reusable and invalidation_reasons, retaining invalidated history.
+
+Decision is proposed/adopted/rejected. Conditions contain condition and assessment (caller_reported_satisfied/caller_reported_not_satisfied/unknown); adoption requires explicit satisfied reports. Verification is passed/failed/inconclusive/not_performed and remains a report, never authenticated evidence. Task/candidate references and action/outcome Event references must be scoped. Unknown properties are rejected. The server exposes the authoritative schemas.
+
+CLI equivalents: `experience-use record --json '<request JSON>'` and `experience-use list --json '<request JSON>'`. They open the configured current database without bootstrap/migration. Full database backups retain these observations; scoped export is not a backup and does not export them. New interface tests are present but not executed in this implementation environment. No tool changes trust, candidate activation, identity, permissions, or executes reported actions.
+
+- `derive_experience_from_use`: explicit caller-content composition, requiring namespace, request_id, use_id, episode_id, candidate_id, episode_content, and candidate_content (maximum serialized request 65536 bytes). CLI: `experience-use derive --json '<request JSON>'`. Episode Event sources must be a subset of the selected use's action/outcome references; the candidate references exactly that Episode. A full-request hash reservation and deterministic sub-request keys support retries after partial progress. The response's reservation_id, stage, episode, candidate, and retryable_error describe actual completion; this is not a cross-step atomic transaction. It creates only a pending candidate through existing workflows and never activates it.

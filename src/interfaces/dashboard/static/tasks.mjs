@@ -7,6 +7,12 @@ const modes = ['Observed','Said','Acted','Inferred','Draft'];
 const verifications = ['passed','failed','inconclusive','not_performed'];
 const validSource = value => ['caller_reported','tool_reported','model_asserted'].includes(value?.kind);
 const strings = value => Array.isArray(value) && value.every(item => typeof item === 'string');
+export function validTaskWorkspaces(value) {
+  return value?.read_only === true && value.limit === 100 && typeof value.has_more === 'boolean'
+    && strings(value.namespaces) && value.namespaces.length <= 100
+    && new Set(value.namespaces).size === value.namespaces.length
+    && value.namespaces.every(namespace=>namespace.startsWith('project/') && namespace.length > 8);
+}
 export function validTask(task) {
   return !!task && typeof task.namespace === 'string' && typeof task.task_id === 'string'
     && Number.isSafeInteger(task.version) && task.version > 0 && typeof task.title === 'string'
@@ -30,6 +36,23 @@ export function validTaskSnapshot(value) {
     && checkpoint.steps.every(step => step && typeof step.text === 'string' && modes.includes(step.mode)
       && verifications.includes(step.verification) && strings(step.evidence_refs));
 }
+export function validExperienceUses(value) {
+  return value?.read_only === true && value.limit === 20 && Array.isArray(value.uses) && value.uses.length <= 20
+    && value.uses.every(view => {
+      const record=view?.record, item=record?.observation;
+      return !!item && typeof view.currently_reusable === 'boolean' && strings(view.invalidation_reasons)
+        && record.verification_basis === 'caller_reported_not_independently_verified_no_causal_attribution'
+        && typeof record.recorded_at === 'string' && Number.isFinite(Date.parse(record.recorded_at))
+        && ['namespace','task_id','use_id','candidate_id','reason','evaluation_method'].every(key=>typeof item[key]==='string')
+        && Number.isSafeInteger(item.task_version) && item.task_version > 0
+        && Number.isSafeInteger(item.candidate_version) && item.candidate_version > 0
+        && ['proposed','adopted','rejected'].includes(item.decision) && verifications.includes(item.verification)
+        && (item.related_use_id==null || typeof item.related_use_id==='string')
+        && strings(item.action_event_refs) && strings(item.outcome_event_refs) && strings(item.limitations)
+        && Array.isArray(item.conditions) && item.conditions.every(condition=>condition && typeof condition.condition==='string'
+          && ['caller_reported_satisfied','caller_reported_not_satisfied','unknown'].includes(condition.assessment));
+    });
+}
 export function taskPresentation(snapshot) {
   const task = snapshot.task, checkpoint = snapshot.checkpoint;
   const reported = task.requirements.filter(item => item.state === 'reported');
@@ -45,13 +68,23 @@ function fields(target, rows) {
     dt.textContent=label; dd.textContent=value; div.append(dt,dd); return div;
   }));
 }
-let signature = '', optionsSignature = '';
+let signature = '', optionsSignature = '', workspaceSignature = '';
 export function renderTasks(state) {
   const t=translator(state.locale), available=state.metadata?.tasks_available === true;
   $('task-panel').hidden=!available;
   // Lock/instance changes clear hidden content as well as the visible surface.
-  const next=JSON.stringify([state.locale,available,state.taskNamespace,state.tasks,state.taskId,state.taskSnapshot,state.taskError,state.taskBusy]);
+  const next=JSON.stringify([state.locale,available,state.taskNamespace,state.taskWorkspaces,state.taskWorkspaceError,state.tasks,state.taskId,state.taskSnapshot,state.taskUses,state.taskUseError,state.taskError,state.taskBusy]);
   if(next===signature)return; signature=next;
+  const workspaces=available ? state.taskWorkspaces : null;
+  const workspaceKey=JSON.stringify(workspaces?.namespaces ?? []);
+  if(workspaceKey!==workspaceSignature){
+    workspaceSignature=workspaceKey;
+    $('task-workspaces').replaceChildren(...(workspaces?.namespaces ?? []).map(namespace=>{
+      const option=document.createElement('option');option.value=namespace;return option;
+    }));
+  }
+  $('task-workspace-note').textContent=state.taskWorkspaceError ? t('taskWorkspaceUnavailable')
+    : workspaces ? t(workspaces.has_more ? 'taskWorkspaceWindow' : 'taskWorkspaceBrowse') : '';
   $('task-load').disabled=!available || state.taskBusy;
   $('task-select').disabled=!available || !state.tasks?.length;
   const optionKey=JSON.stringify([state.locale,state.tasks,state.taskId]);
@@ -74,9 +107,11 @@ export function renderTasks(state) {
   const snapshot=state.taskSnapshot;
   $('task-content').hidden=!snapshot;
   if(!snapshot) {
-    for(const id of ['task-fields','task-requirements','task-checkpoint-fields','task-steps'])$(id).replaceChildren();
+    $('task-use-note').textContent='';
+    for(const id of ['task-fields','task-requirements','task-checkpoint-fields','task-steps','task-uses'])$(id).replaceChildren();
     return;
   }
+  renderExperienceUses(state,t);
   const task=snapshot.task, checkpoint=snapshot.checkpoint, view=taskPresentation(snapshot);
   fields($('task-fields'),[
     [t('taskGoal'),view.goals.join('\n') || t('none')],
@@ -115,4 +150,37 @@ export function renderTasks(state) {
       [t('taskBasis'),`${t(`taskSource_${task.source.kind}`)} · ${t('taskNotAuthorization')}`],[t('taskCheckpoint'),t('taskNoCheckpoint')]
     ]);
   }
+}
+
+
+function renderExperienceUses(state,t) {
+  const uses=state.taskUses;
+  const expanded=new Set([...$('task-uses').querySelectorAll('details[open]')].map(node=>node.dataset.useId));
+  const focused=document.activeElement?.closest?.('#task-uses details')?.dataset.useId;
+  $('task-use-note').textContent=state.taskUseError ? t('requestError',{resource:t('useHeading'),reason:errorText(state.taskUseError,t)})
+    : uses===null || uses===undefined ? t('loading') : !uses.length ? t('useEmpty') : t('useScope');
+  $('task-uses').replaceChildren(...(uses ?? []).map(view=>{
+    const record=view.record, item=record.observation;
+    const li=document.createElement('li'), details=document.createElement('details'), summary=document.createElement('summary');
+    details.dataset.useId=item.use_id;details.open=expanded.has(item.use_id);
+    summary.textContent=`${item.candidate_id} @ ${item.candidate_version} · ${t(`useDecision_${item.decision}`)} · ${t(view.currently_reusable ? 'useReusable' : 'useUnavailable')}`;
+    const dl=document.createElement('dl');dl.className='fields';
+    fields(dl,[
+      [t('taskBasis'),t('useBasis')],
+      [t('useRecord'),item.use_id],
+      [t('useRelated'),item.related_use_id || t('none')],
+      [t('taskVersion'),`${item.task_version}`],
+      [t('time'),new Date(record.recorded_at).toLocaleString(state.locale,{hour12:false})],
+      [t('useResult'),t(`taskVerification_${item.verification}`)],
+      [t('useOutcomeSources'),item.outcome_event_refs.join('\n') || t('none')],
+      [t('useActionSources'),item.action_event_refs.join('\n') || t('none')],
+      [t('useConditions'),item.conditions.map(condition=>`${t(`useAssessment_${condition.assessment}`)} · ${condition.condition}`).join('\n')],
+      [t('useReason'),item.reason],
+      [t('useMethod'),item.evaluation_method],
+      [t('useLimitations'),item.limitations.join('\n')],
+      [t('useCurrentCheck'),view.invalidation_reasons.map(reason=>t(`useInvalid_${reason}`)).join('\n') || t('useReusable')]
+    ]);
+    details.append(summary,dl);li.append(details);return li;
+  }));
+  if(focused)[...$('task-uses').querySelectorAll('details')].find(node=>node.dataset.useId===focused)?.querySelector('summary')?.focus({preventScroll:true});
 }

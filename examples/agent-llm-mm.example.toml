@@ -80,3 +80,7 @@ max_concurrent_tasks = 1
 # max_tokens = 2048
 # timeout_ms = 30000
 # temperature = 0.5 # optional, 0..=1
+
+# Optional codex-actions policy is a separate operator-managed JSON candidate.
+# No action permissions are loaded from this model/application configuration.
+# See docs/codex-action-checks.md; no host hooks are installed by this example.

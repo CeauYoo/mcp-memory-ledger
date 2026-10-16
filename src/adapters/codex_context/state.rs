@@ -248,13 +248,13 @@ fn validate_file(path: &Path) -> Result<()> {
 }
 
 #[cfg(unix)]
-pub(super) type SessionLock = crate::support::local_file_lock::PrivateLock;
+pub(crate) type SessionLock = crate::support::local_file_lock::PrivateLock;
 #[cfg(windows)]
-pub(super) type SessionLock = crate::support::windows_security::PrivateLock;
+pub(crate) type SessionLock = crate::support::windows_security::PrivateLock;
 #[cfg(not(any(unix, windows)))]
-pub(super) type SessionLock = std::fs::File;
+pub(crate) type SessionLock = std::fs::File;
 
-pub(super) fn lock_session(state_path: &Path, session: &str) -> Result<SessionLock> {
+pub(crate) fn lock_session(state_path: &Path, session: &str) -> Result<SessionLock> {
     identifier(session)?;
     validate_file(state_path)?;
     let path = state_path.with_extension(format!(

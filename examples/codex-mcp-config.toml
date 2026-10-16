@@ -33,3 +33,6 @@ env = { AGENT_LLM_MM_CONFIG = "/absolute/path/ledger-demo.toml" }
 # Set OPENAI_API_KEY or ANTHROPIC_API_KEY in the server's inherited environment
 # when using those example api_key_env names. Do not put real keys in this file.
 # Native protocol support is offline-tested MVP capability, not live certification.
+
+# Optional deny-only action checks are previewed separately; no hook is enabled here.
+# See docs/codex-action-checks.md. Native sandbox/approval settings remain unchanged.

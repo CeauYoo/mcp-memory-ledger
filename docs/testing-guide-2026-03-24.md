@@ -1,4 +1,35 @@
+# 任务与经验切片验证更新（2026-10-16）
+
+当前新增 native Codex host 探针见 [验证说明](codex-native-host-verification.md)。Ubuntu CI 固定官方 0.159.2 与 SHA256，使用独立 HOME、合成任务和本机 Responses fixture；不使用真实密钥或付费模型，只上传显式安全摘要。启动与恢复均须同时看到 hook 上下文和请求中的当前要求，否则失败。动作检查的真实宿主覆盖另行验证，不借上下文注入通过推定。
+
+Windows 原生 tier 新增 experience_use_feedback 与 dashboard_admin；本地环境限制、完整回归和精确提交结果见 [当前状态](project-status.md)。
+
 # Self-Agent MCP 测试指南（2026-03-24，按 2026-07-15 fresh 验证更新）
+
+## 经验采用反馈接口定向检查（新增）
+
+在具备 Rust 工具链的隔离环境运行：
+
+```sh
+cargo test --test mcp_session_policy
+cargo test --test mcp_stdio experience_use_tools_expose_precise_report_contracts
+cargo test --test mcp_stdio server_exposes_expected_tools_over_stdio
+cargo test --lib experience_use_cli
+cargo test --lib audit_contract_tests
+cargo test --test local_core
+cargo fmt --check
+cargo clippy --all-targets --all-features -- -D warnings
+```
+
+新增断言覆盖 record/list/derive 字段合同、未知权限字段拒绝、跨范围拒绝、读写授权及下一调用撤销；standalone 清单 41、绑定会话 34，审计所有权保持显式。CLI 在配置加载/数据库打开前拒绝错误命令、损坏 JSON 和超限请求。MCP subprocess 测试需可启动本地子进程；这些测试只验证本地机制，不证明真实宿主注入、模型采用或独立结果验证。整合定向测试与严格 Clippy 已通过；全量回归及真实平台结果见当前状态。接口改动已使用 Rust 1.95 rustfmt 格式化。
+
+CLI 只使用已配置、显式迁移到当前 schema 的数据库。只读示例：
+
+```sh
+agent_llm_mm experience-use list --json '{"namespace":"project/example","task_id":"example","limit":20}'
+```
+
+record 的完整 required/optional 合同见运行时 tools/list 的 `record_experience_use` schema 与 [接口索引](tool-reference.md#experience-use-feedback-tools)。引用的任务、经验和 Event 必须先存在且同域；示例标识符不是自动创建指令。
 
 ## 任务账本与上下文适配验证
 
@@ -1733,3 +1764,9 @@ Baseline `ef27d4358d721a1186592bdcd0ca8b2b3346c73e`, with the three frozen histo
 - Python unit suites: portable packages 47, Unix verifier 17, Windows verifier 12, experience 36 and evaluation fixtures 13; all 125 passed. `node --test tests/dashboard/frontend.test.mjs`: 9 passed.
 
 These used Rust 1.95.0, incremental disabled and debug information disabled, synthetic data, no real models or credentials. Windows Python contracts and Linux compilation do not prove native Windows behavior. Full native Windows core/package and Ubuntu/macOS IPC/Chromium execution must run in exact-commit CI; natural-language client, fresh-machine and release authorization remain separate.
+
+## T09–T11 动作检查候选测试
+
+此切片已通过整合定向测试、Rustfmt 与严格 Clippy；全量及平台结果见当前状态。可单独执行 `cargo test --lib action_check`、`cargo test --lib codex_actions`，再走既有回归。新增覆盖：独立 epoch/任务版本、latest_active 与 pinned、伪 approval、状态暂停撤销、patch 多路径/移动/链接、重复事件改参、时间/版本回退、坏配置、preview 幂等及撤回 CAS 冲突。
+
+真实宿主仍需分别测正常/越界 patch、core 断线、hook 缺失/超时、stdin 和 hosted 绕行；故障放行必须记为覆盖缺口。单测不能替代固定版本实际宿主验收。详见 [合同](codex-action-checks.md)。

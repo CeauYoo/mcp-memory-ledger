@@ -19,6 +19,7 @@ use tokio_stream::{Stream, StreamExt, wrappers::BroadcastStream};
 
 use crate::{
     adapters::sqlite::SqliteStore,
+    application::experience_use::{ListExperienceUsesRequest, list_experience_uses},
     application::task::{get_task_snapshot, list_tasks},
     domain::task::ListTasksRequest,
     error::AppError,
@@ -187,8 +188,10 @@ fn router(state: DashboardState, base_path: &str, sse_enabled: bool) -> Router {
         .route("/api/operation-log", get(operation_log_history))
         .route("/api/operation-log/{id}", get(operation_log_detail))
         .route("/api/health", get(health))
+        .route("/api/task-workspaces", get(task_workspaces))
         .route("/api/tasks", get(task_list))
-        .route("/api/tasks/{id}", get(task_snapshot));
+        .route("/api/tasks/{id}", get(task_snapshot))
+        .route("/api/tasks/{id}/experience-uses", get(task_experience_uses));
 
     if sse_enabled {
         routes = routes.route("/api/events/stream", get(event_stream));
@@ -467,5 +470,74 @@ async fn task_snapshot(
         )
             .into_response(),
         Err(error) => task_read_error(error),
+    }
+}
+
+async fn task_experience_uses(
+    State(state): State<Arc<DashboardState>>,
+    Path(id): Path<String>,
+    Query(query): Query<TasksQuery>,
+) -> axum::response::Response {
+    let Some(store) = state
+        .operation_log
+        .as_ref()
+        .filter(|_| state.task_read_enabled)
+    else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({ "error": "experience use records unavailable" })),
+        )
+            .into_response();
+    };
+    match list_experience_uses(
+        store,
+        ListExperienceUsesRequest {
+            namespace: query.namespace,
+            task_id: id,
+            limit: 20,
+            after_id: None,
+        },
+    )
+    .await
+    {
+        Ok(uses) => Json(json!({ "uses": uses, "limit": 20, "read_only": true })).into_response(),
+        Err(error) => {
+            let (status, message) = match error {
+                AppError::InvalidParams(_) => {
+                    (StatusCode::BAD_REQUEST, "invalid experience use query")
+                }
+                _ => (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "experience use records unavailable",
+                ),
+            };
+            (status, Json(json!({ "error": message }))).into_response()
+        }
+    }
+}
+
+async fn task_workspaces(State(state): State<Arc<DashboardState>>) -> axum::response::Response {
+    let Some(store) = state
+        .operation_log
+        .as_ref()
+        .filter(|_| state.task_read_enabled)
+    else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({ "error": "task workspaces unavailable" })),
+        )
+            .into_response();
+    };
+    match store.owner_task_namespaces().await {
+        Ok(mut namespaces) => {
+            let has_more = namespaces.len() > 100;
+            namespaces.truncate(100);
+            Json(json!({ "namespaces": namespaces, "limit": 100, "has_more": has_more, "read_only": true })).into_response()
+        }
+        Err(_) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({ "error": "task workspaces unavailable" })),
+        )
+            .into_response(),
     }
 }

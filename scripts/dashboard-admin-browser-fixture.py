@@ -66,6 +66,17 @@ def main():
                 {'requirement_id': 'candidate', 'kind': 'requirement', 'text': 'Unconfirmed replacement', 'state': 'candidate', 'source': {'kind': 'model_asserted'}},
             ],
         })
+        event = client.tool('ingest_interaction', verify.ingest_payload(namespace, 'browser-use-event', 'Synthetic experience outcome'))
+        evidence_ref = 'event:' + event['event_id']
+        client.tool('record_episode', {'namespace': namespace, 'request_id': 'browser-ep', 'episode_id': 'browser-ep',
+            'content': {'title': 'Synthetic episode', 'objective': 'Check', 'actions': ['Run'], 'observations': ['Result'], 'outcome': 'Reported pass', 'lesson': 'Check', 'limitations': ['Synthetic only'], 'source_event_refs': [evidence_ref]}})
+        client.tool('propose_experience_candidate', {'namespace': namespace, 'request_id': 'browser-candidate', 'candidate_id': 'browser-experience',
+            'content': {'kind': 'semantic', 'title': 'Synthetic experience', 'statement': 'Check', 'steps': [], 'limitations': ['Synthetic only'], 'source_episode_ids': ['browser-ep']}})
+        client.tool('set_experience_candidate_status', {'namespace': namespace, 'request_id': 'browser-activate', 'candidate_id': 'browser-experience', 'expected_version': 1, 'status': 'active'})
+        client.tool('record_experience_use', {'namespace': namespace, 'request_id': 'browser-use', 'use_id': 'browser-use', 'task_id': 'browser-task', 'task_version': 1, 'expected_task_version': 1,
+            'candidate_id': 'browser-experience', 'candidate_version': 2, 'expected_candidate_version': 2, 'decision': 'adopted', 'reason': 'Synthetic report',
+            'conditions': [{'condition': 'Fixture only', 'assessment': 'caller_reported_satisfied'}], 'action_event_refs': [evidence_ref], 'outcome_event_refs': [evidence_ref],
+            'verification': 'passed', 'evaluation_method': 'Synthetic observation', 'limitations': ['Not independently verified']})
         client.tool('record_task_checkpoint', {
             'namespace': namespace, 'task_id': 'browser-task', 'request_id': 'browser-checkpoint',
             'checkpoint_id': 'browser-cp', 'expected_version': 1, 'expected_checkpoint_sequence': 0,

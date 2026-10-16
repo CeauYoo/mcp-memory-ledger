@@ -1,5 +1,21 @@
 # MCP Memory Ledger 路线图
 
+本切片云端全量 929 项通过、14 项 AF_UNIX 环境阻断，无其他失败；精确提交 CI 待运行。详细范围见[第二切片验证记录](task-experience-validation-2026-10-16.md)。
+
+## 当前推进范围（2026-10-16）
+
+首批任务续接后，动作检查及 Schema 9 经验反馈/P5 只读展示已合入源码，已通过云端定向回归，最终全量已记录，下一精确提交 CI 待核验。`20d4037` 的 Ubuntu 已通过；macOS / Windows artifact fixture 路径规范化测试修补已合入，原生复验尚未闭合，详见[当前状态](project-status.md)。T16 模型草稿、P4 检索与真实宿主探针正在推进，不提前记为完成。
+
+## T09–T11 已整合范围
+
+受限 patch 检查、故障降级、配置预览与撤回候选已合入源码；见 [动作检查合同](codex-action-checks.md)。默认最新任务版本重读，不因普通修订或 checkpoint 要求重批 policy；仅显式 pinned 模式固定任务版本。定向回归已通过，真实宿主证据待完成。实际配置安装、通用 shell 强制和完整安全边界不在已完成范围。
+
+## P3 / P5 当前有界实现
+
+已合入任务版本绑定的经验采用/结果记录、当前资格重查、失效原因及调用方显式 use → Episode → pending 候选组合；复用既有经验版本/激活体系，不建立第二套经验库。原 owner-only 界面增量展示三语言历史报告与结果来源，明确区别当前资格。见[经验反馈合同](experience-use-feedback.md)和[网页范围](dashboard-live-desk.md)。
+
+T13 记录核心已实现；T12/T15 为当前版本和来源重查支持，T14 为显式可恢复组合，均未宣称完整自然语言适用性或自动反馈闭环。T16 现有调用方候选与在研模型草稿分开记账；P4 及真实宿主注入继续按唯一计划推进。整合测试、真实浏览器和用户部署各自验收，不继承首批结果。
+
 ## 任务续接首批源码实现
 
 Schema 8 增加任务要求修订、候选隔离、checkpoint 和有界续接上下文；6 个新任务 MCP 工具复用范围与撤销策略。原界面提供 owner-only 只读任务摘要，旧无凭据 observer 不暴露任务内容。原生 Codex 适配器提供显式项目默认任务、生命周期上下文输出和配置预览。
@@ -8,16 +24,16 @@ Schema 8 增加任务要求修订、候选隔离、checkpoint 和有界续接上
 - [Codex 适配与真实证据边界](codex-task-context-adapter.md)
 - [网页任务摘要](dashboard-live-desk.md)
 
-本轮云端 Rust 878 项通过，14 项 IPC 环境阻断；严格 Clippy、Node 11 项及 Python 127 项通过。详细范围见[首批验证记录](task-continuity-validation-2026-10-16.md)，精确提交三平台 CI 仍须另行核验。
+本轮云端 Rust 878 项通过，14 项 IPC 环境阻断；严格 Clippy、Node 11 项及 Python 127 项通过。详细范围见[首批验证记录](task-continuity-validation-2026-10-16.md)；后续 CI 状态见本页顶部。
 
-当前为首批实现及集成检查阶段。调用方报告不等于认证用户输入或独立结果验证；hook 输出不等于宿主接受。真实 Codex 会话启动受云端沙箱限制，自动注入尚未验收；Windows 核心仍已支持，但新 hook 的 Windows shell 配置预览未验证。旧 schema 须显式迁移；scoped export 不包含任务数据，完整数据库备份包含。
+首批与后续整合版本分别记账。调用方报告不等于认证用户输入或独立结果验证；hook 输出不等于宿主接受。真实 Codex 会话启动受云端沙箱限制，自动注入尚未验收；Windows 核心仍已支持，但新 hook 的 Windows shell 配置预览未验证。旧 schema 须显式迁移；scoped export 不包含任务数据，完整数据库备份包含。
 
-动作检查、经验采用反馈和语义检索继续按唯一计划推进，未因首批代码落盘宣称完成。实际用户机器配置和部署仍另行确认。
+动作检查与经验反馈的已实现范围见上文，P4 检索增强及未闭合验收继续按唯一计划推进。实际用户机器配置和部署仍另行确认。
 
 
 ## 当前执行入口与已完成基线（2026-10-16）
 
-已批准按[完整唯一实施计划](plans/2026-10-16-task-continuity-and-host-integration.md)分阶段推进，当前首批为 P0 与 T01–T08。首批源码已实现，当前处于集成审查与回归；真实宿主注入等未闭合项仍单列，批准不等于全部完成。
+已批准按[完整唯一实施计划](plans/2026-10-16-task-continuity-and-host-integration.md)分阶段推进。P0 与 T01–T08 首批后已继续整合动作检查及 P3/P5 切片，当前处于集成审查与回归；真实宿主注入等未闭合项仍单列，批准不等于全部完成。
 
 基线 `7448b02a7de8d5dd32c32a149fdd024f798bbf0f` 的 [CI 38860968271](https://github.com/yooyui/mcp-memory-ledger/actions/runs/38860968271) 三平台全部成功：Ubuntu/macOS 各 848 项 Rust，Windows 514 项 configured Rust；三平台精确来源候选包通过，Windows named-pipe core 的 42 次 MCP 工具调用、隔离、确认写后重启/重放、备份恢复与清理通过。Ubuntu 真实 Chrome 检查通过。
 

@@ -362,7 +362,7 @@ async fn context_snapshot_truth_and_size_are_explicit() {
 async fn schema7_requires_explicit_migration_and_schema8_preserves_records() {
     let f = Fixture::new().await;
     let pool = SqlitePool::connect(&f.url).await.unwrap();
-    sqlx::raw_sql("DROP TABLE task_checkpoint_sources;DROP TABLE task_checkpoints;DROP TABLE task_requirements;DROP TABLE task_revisions;DROP TABLE task_heads;DELETE FROM schema_migrations WHERE version=8;PRAGMA user_version=7;").execute(&pool).await.unwrap();
+    sqlx::raw_sql("DROP TABLE experience_use_events;DROP TABLE experience_uses;DROP TABLE task_checkpoint_sources;DROP TABLE task_checkpoints;DROP TABLE task_requirements;DROP TABLE task_revisions;DROP TABLE task_heads;DELETE FROM schema_migrations WHERE version>=8;PRAGMA user_version=7;").execute(&pool).await.unwrap();
     assert!(open_current_database(&f.url).await.is_err());
     let report = migrate_database(&f.url).await.unwrap();
     assert_eq!(report.schema_version, Some(CURRENT_DATABASE_SCHEMA_VERSION));

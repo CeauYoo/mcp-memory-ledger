@@ -8,7 +8,13 @@ use anyhow::Result;
 async fn main() -> Result<()> {
     agent_llm_mm::support::tracing::init_tracing();
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if agent_llm_mm::adapters::codex_actions::try_run_cli(&args).await? {
+        return Ok(());
+    }
     if agent_llm_mm::support::database_backup::try_run_cli(&args).await? {
+        return Ok(());
+    }
+    if agent_llm_mm::support::experience_use_cli::try_run_cli(&args).await? {
         return Ok(());
     }
     if agent_llm_mm::support::task_cli::try_run_cli(&args).await? {

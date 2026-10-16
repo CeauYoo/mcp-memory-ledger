@@ -87,3 +87,7 @@ Schema7 global self-model version/diff and explicit compensation contract: [deta
 ## 2026-10-13 接入验收边界
 
 本轮不读取或修改用户现有 Codex 配置。上面的条目是用户自行接入的最小步骤；Python stdio harness 成功只标为隔离运行验证，不标为真实 Codex 客户端或新机器验收。分层结果、费用限制与复现命令见[本轮验收记录](acceptance-2026-10-13.md)。
+
+## 可选动作检查预览
+
+`codex-actions` 是独立、可选的额外参数检查入口，配置只生成候选，不自动改 Codex/MCP 注册或信任设置。沿用 `codex-context` 的已选 session binding；不会用 cwd 猜任务或把 task.source 当权限。默认只匹配 apply_patch。详见 [完整命令和边界](codex-action-checks.md)。现有 MCP 使用不依赖此入口。

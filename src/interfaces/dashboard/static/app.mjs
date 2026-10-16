@@ -1,7 +1,7 @@
 import {applyLocale, chooseLocale} from './i18n.mjs';
 import {initialState, latestFirst, validRecords, WINDOW_LIMIT} from './state.mjs';
 import {requestJson, singleFlight, setCapability, clearCapability, openEventStream} from './transport.mjs';
-import {validTaskList, validTaskSnapshot} from './tasks.mjs';
+import {validTaskList, validTaskSnapshot, validExperienceUses, validTaskWorkspaces} from './tasks.mjs';
 import {render} from './render.mjs';
 const $ = id => document.getElementById(id), base = new URL('../', import.meta.url);
 let saved; try { saved = localStorage.getItem('memory-ledger-locale'); } catch { /* Private mode still works. */ }
@@ -91,15 +91,25 @@ async function selectRecord(id) {
 }
 function clearTasks() {
   taskEpoch++; taskController?.abort();
-  Object.assign(state,{tasks:null,taskId:'',taskSnapshot:null,taskError:null,taskBusy:false});
+  Object.assign(state,{taskWorkspaces:null,taskWorkspaceError:null,tasks:null,taskId:'',taskSnapshot:null,taskUses:null,taskUseError:null,taskError:null,taskBusy:false});
 }
 async function refreshTasks() {
   const generation=++taskEpoch; taskController?.abort();
-  if (!state.metadata?.tasks_available || !state.taskNamespace) { clearTasks(); return; }
+  if (!state.metadata?.tasks_available) { clearTasks(); return; }
   taskController=new AbortController(); const signal=taskController.signal;
   const namespace=state.taskNamespace, selected=state.taskId;
   state.taskBusy=true; state.taskError=null; draw();
   try {
+    try {
+      const workspaces=await requestJson(api('api/task-workspaces'),{signal,validate:validTaskWorkspaces});
+      if(generation!==taskEpoch)return;
+      state.taskWorkspaces=workspaces;state.taskWorkspaceError=null;
+    } catch(error) {
+      if(generation!==taskEpoch)return;
+      if(error.status===401){lock();return;}
+      state.taskWorkspaces=null;state.taskWorkspaceError={code:error.code,status:error.status};
+    }
+    if(!namespace)return;
     const list=await requestJson(api(`api/tasks?${new URLSearchParams({namespace})}`),{signal,validate:validTaskList});
     if(generation!==taskEpoch)return;
     if(list.tasks.some(task=>task.namespace!==namespace))throw Object.assign(new Error(),{code:'invalid'});
@@ -109,18 +119,28 @@ async function refreshTasks() {
       if(generation!==taskEpoch)return;
       if(value.snapshot.task.namespace!==namespace || value.snapshot.task.task_id!==selected)throw Object.assign(new Error(),{code:'invalid'});
       state.taskSnapshot=value.snapshot;
+      try {
+        const uses=await requestJson(api(`api/tasks/${encodeURIComponent(selected)}/experience-uses?${new URLSearchParams({namespace})}`),{signal,validate:validExperienceUses});
+        if(generation!==taskEpoch)return;
+        if(uses.uses.some(use=>use.record.observation.namespace!==namespace || use.record.observation.task_id!==selected))throw Object.assign(new Error(),{code:'invalid'});
+        state.taskUses=uses.uses;state.taskUseError=null;
+      } catch(error) {
+        if(generation!==taskEpoch)return;
+        if(error.status===401){lock();return;}
+        state.taskUses=null;state.taskUseError={code:error.code,status:error.status};
+      }
     }
   } catch(error) {
     if(generation!==taskEpoch)return;
     if(error.status===401){lock();return;}
-    state.taskSnapshot=null; state.taskError={code:error.code,status:error.status};
+    state.taskSnapshot=null; state.taskUses=null; state.taskUseError=null; state.taskError={code:error.code,status:error.status};
   } finally { if(generation===taskEpoch){state.taskBusy=false;draw();} }
 }
 $('task-scope').addEventListener('submit',event=>{
   event.preventDefault();clearTasks();state.taskNamespace=$('task-namespace').value.trim();draw();void refreshTasks();
 });
 $('task-select').addEventListener('change',event=>{
-  state.taskId=event.target.value;state.taskSnapshot=null;draw();void refreshTasks();
+  state.taskId=event.target.value;state.taskSnapshot=null;state.taskUses=null;state.taskUseError=null;draw();void refreshTasks();
 });
 $('navigation').addEventListener('click', event => {
   const view = event.target.closest('button[data-view]')?.dataset.view;

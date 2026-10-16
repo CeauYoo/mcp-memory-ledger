@@ -162,7 +162,10 @@ fn artifact_checks_are_local_bounded_and_do_not_promote_checkpoint_claims() {
         {"uri":"result.txt","digest":"sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"},
         {"uri":"result.txt"}
     ]},"artifact_verification":"not_performed"});
-    let observed = observe(root.path(), &data);
+    // Production bindings canonicalize the workspace root before artifact observation.
+    // macOS temp paths may use /var aliases; Windows canonical paths use verbatim prefixes.
+    let canonical_root = root.path().canonicalize().unwrap();
+    let observed = observe(&canonical_root, &data);
     assert_eq!(observed[0]["observation"]["result"], "passed");
     assert_eq!(observed[1]["observation"]["reason"], "artifact_missing");
     assert_eq!(observed[2]["observation"]["result"], "not_performed");
@@ -183,5 +186,29 @@ fn artifact_symlink_escape_is_not_read() {
     assert_eq!(
         result[0]["observation"]["reason"],
         "symlink_reference_unsupported"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn artifact_observation_uses_canonical_binding_with_aliased_parent() {
+    use agent_llm_mm::adapters::codex_context::artifacts::observe;
+    let parent = tempfile::tempdir().unwrap();
+    let real_root = parent.path().join("workspace");
+    std::fs::create_dir(&real_root).unwrap();
+    std::fs::write(real_root.join("result.txt"), b"hello").unwrap();
+    let alias = parent.path().join("workspace-alias");
+    std::os::unix::fs::symlink(&real_root, &alias).unwrap();
+    let data = json!({"checkpoint":{"artifacts":[{"uri":"result.txt",
+        "digest":format!("sha256:{}", protocol::digest(b"hello"))}]}});
+    // An unnormalized root must not weaken the observer's canonical boundary check.
+    assert_eq!(
+        observe(&alias, &data)[0]["observation"]["reason"],
+        "outside_workspace"
+    );
+    let bound_root = alias.canonicalize().unwrap();
+    assert_eq!(
+        observe(&bound_root, &data)[0]["observation"]["result"],
+        "passed"
     );
 }

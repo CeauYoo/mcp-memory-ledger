@@ -514,7 +514,7 @@ async fn unknown_or_mismatched_workspace_bindings_cannot_initialize() {
         assert!(!bridge.close().await.success());
     }
     let mut valid = fixture.bridge(&fixture.a, "still-valid");
-    assert_eq!(valid.tools().await.len(), 31);
+    assert_eq!(valid.tools().await.len(), 34);
     assert!(valid.close().await.success());
     core.stop().await;
 }
@@ -559,7 +559,7 @@ async fn only_one_core_can_own_a_socket_or_database() {
         "another database must not bypass ownership of the endpoint"
     );
     let mut bridge = fixture.bridge(&fixture.a, "original-core");
-    assert_eq!(bridge.tools().await.len(), 31);
+    assert_eq!(bridge.tools().await.len(), 34);
     assert!(bridge.close().await.success());
     core.stop().await;
     let restarted = fixture.start().await;
@@ -1024,7 +1024,7 @@ async fn disable_and_unbind_revoke_live_sessions_before_receipt_replay() {
     set_workspace_active(&fixture.registry, &fixture.a.id, false).unwrap();
     denied(&a.request("tools/list", json!({})).await.unwrap());
     denied(&a.call("ingest_interaction", write.clone()).await);
-    assert_eq!(b.tools().await.len(), 31);
+    assert_eq!(b.tools().await.len(), 34);
     set_workspace_active(&fixture.registry, &fixture.a.id, true).unwrap();
     let replay = a.call("ingest_interaction", write.clone()).await;
     assert_eq!(content(&replay)["event_id"], content(&original)["event_id"]);

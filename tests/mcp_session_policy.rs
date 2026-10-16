@@ -1,5 +1,6 @@
 //! Pure boundary attacks: no database, network, credentials, or model runtime.
 use agent_llm_mm::{
+    domain::experience_use::DeriveExperienceRequest,
     interfaces::mcp::{dto::IngestInteractionParams, session_policy::*},
     support::workspace_registry::SessionGrant,
 };
@@ -15,6 +16,8 @@ const WRITES: &[&str] = &[
     "ingest_interaction",
     "supersede_memory",
     "record_episode",
+    "record_experience_use",
+    "derive_experience_from_use",
     "propose_experience_candidate",
     "set_experience_candidate_status",
     "revise_experience_candidate",
@@ -53,6 +56,28 @@ fn fixture(name: &str) -> Map<String, Value> {
         | "get_task"
         | "build_task_resume_context" => json!({"task_id":"synthetic"}),
         "list_tasks" => json!({}),
+        "list_experience_uses" => json!({"task_id":"synthetic"}),
+        "derive_experience_from_use" => json!({
+            "request_id":"synthetic-request", "use_id":"synthetic-use",
+            "episode_id":"synthetic-episode", "candidate_id":"synthetic-candidate",
+            "episode_content": {
+                "title":"synthetic", "objective":"test", "actions":[], "observations":["synthetic"],
+                "outcome":"test", "lesson":"test", "limitations":[], "source_event_refs":["event:synthetic"]
+            },
+            "candidate_content": {
+                "kind":"semantic", "title":"synthetic", "statement":"test", "steps":[],
+                "limitations":[], "source_episode_ids":["synthetic-episode"]
+            }
+        }),
+        "record_experience_use" => json!({
+            "request_id":"synthetic-request", "use_id":"synthetic-use",
+            "task_id":"synthetic", "task_version":1, "expected_task_version":1,
+            "candidate_id":"synthetic", "candidate_version":1, "expected_candidate_version":1,
+            "decision":"proposed", "reason":"synthetic report",
+            "conditions":[{"condition":"synthetic applicability", "assessment":"unknown"}],
+            "action_event_refs":[], "outcome_event_refs":[], "verification":"not_performed",
+            "evaluation_method":"caller report", "limitations":["not verified"], "related_use_id":null
+        }),
         "ingest_interaction" => json!({
             "event":{"owner":"World","kind":"Conversation","summary":"synthetic"},
             "claim_drafts":[{"owner":"World","subject":"fixture","predicate":"is","object":"synthetic","mode":"Said"}],
@@ -130,12 +155,12 @@ fn with_scope(name: &str, scope: &str) -> Map<String, Value> {
 }
 
 #[test]
-fn explicit_inventory_covers_all_38_existing_tools_and_defaults_are_materialized() {
-    assert_eq!(allowed_tool_names().len() + DENIED.len(), 38);
+fn explicit_inventory_covers_all_41_existing_tools_and_defaults_are_materialized() {
+    assert_eq!(allowed_tool_names().len() + DENIED.len(), 41);
     let mut unique = allowed_tool_names().to_vec();
     unique.sort_unstable();
     unique.dedup();
-    assert_eq!(unique.len(), 31);
+    assert_eq!(unique.len(), 34);
     for name in allowed_tool_names() {
         let args = fixture(name);
         let before = args.clone();
@@ -604,4 +629,83 @@ fn task_tools_are_bound_to_project_and_revocation_is_checked_on_each_call() {
             PolicyError::ScopeDenied
         );
     }
+}
+
+#[test]
+fn experience_use_contract_accepts_only_reviewed_fields_and_rechecks_scope() {
+    use agent_llm_mm::domain::experience_use::{
+        ListExperienceUsesRequest, RecordExperienceUseRequest,
+    };
+    let mut permissions = grant();
+    let approved = authorize_tool_call(
+        &permissions,
+        "derive_experience_from_use",
+        &fixture("derive_experience_from_use"),
+    )
+    .unwrap();
+    let request: DeriveExperienceRequest =
+        serde_json::from_value(Value::Object(approved.args)).unwrap();
+    request.validate().unwrap();
+    let approved = authorize_tool_call(
+        &permissions,
+        "record_experience_use",
+        &fixture("record_experience_use"),
+    )
+    .unwrap();
+    let request: RecordExperienceUseRequest =
+        serde_json::from_value(Value::Object(approved.args)).unwrap();
+    request.validate().unwrap();
+    let approved = authorize_tool_call(
+        &permissions,
+        "list_experience_uses",
+        &fixture("list_experience_uses"),
+    )
+    .unwrap();
+    let request: ListExperienceUsesRequest =
+        serde_json::from_value(Value::Object(approved.args)).unwrap();
+    request.validate().unwrap();
+    for name in [
+        "record_experience_use",
+        "list_experience_uses",
+        "derive_experience_from_use",
+    ] {
+        let mut args = fixture(name);
+        args.insert("trusted_host".into(), json!(true));
+        assert_eq!(
+            authorize_tool_call(&permissions, name, &args).unwrap_err(),
+            PolicyError::InvalidArguments
+        );
+        assert_eq!(
+            authorize_tool_call(&permissions, name, &with_scope(name, FOREIGN)).unwrap_err(),
+            PolicyError::ScopeDenied
+        );
+    }
+    permissions.writable_namespaces.clear();
+    assert_eq!(
+        authorize_tool_call(
+            &permissions,
+            "record_experience_use",
+            &fixture("record_experience_use")
+        )
+        .unwrap_err(),
+        PolicyError::ScopeDenied
+    );
+    assert!(
+        authorize_tool_call(
+            &permissions,
+            "list_experience_uses",
+            &fixture("list_experience_uses")
+        )
+        .is_ok()
+    );
+    permissions.readable_namespaces.clear();
+    assert_eq!(
+        authorize_tool_call(
+            &permissions,
+            "list_experience_uses",
+            &fixture("list_experience_uses")
+        )
+        .unwrap_err(),
+        PolicyError::ScopeDenied
+    );
 }

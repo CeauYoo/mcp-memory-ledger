@@ -21,7 +21,7 @@ pub const EXPORT_FORMAT_VERSION: u32 = 1;
 pub const MAX_EXPORT_RECORDS: usize = 10_000;
 pub const MAX_EXPORT_RELATIONS: usize = 100_000;
 pub const MAX_EXPORT_BYTES: usize = 16 * 1024 * 1024;
-pub const EXPORT_OMISSION_POLICY: &str = "Unknown or mixed scope and records with incomplete original source closure are omitted. Claims retain all original evidence links or are omitted; source-less Claims remain source-less. Workspace tasks, task revisions/requirements/checkpoints, global identity/commitments, operation logs, receipts, trigger keys, feedback candidates, and derived indexes are excluded. Caller-authored scoped content is preserved; this is not a secret-redaction service or a replayable backup.";
+pub const EXPORT_OMISSION_POLICY: &str = "Unknown or mixed scope and records with incomplete original source closure are omitted. Claims retain all original evidence links or are omitted; source-less Claims remain source-less. Workspace tasks, task revisions/requirements/checkpoints, experience-use observations and their event links, global identity/commitments, operation logs, receipts, trigger keys, feedback candidates, and derived indexes are excluded. Caller-authored scoped content is preserved; this is not a secret-redaction service or a replayable backup.";
 
 fn default_records() -> usize {
     1000

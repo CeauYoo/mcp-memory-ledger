@@ -30,3 +30,6 @@ pub(crate) mod namespace_adoption;
 pub use namespace_adoption::AdoptionInventory;
 
 mod task;
+mod task_workspace_reads;
+
+mod experience_use;

@@ -1,5 +1,9 @@
 # MCP Memory Ledger
 
+## 动作检查候选切片（T09–T11）
+
+新增原生 `codex-actions` 的 deny-only 参数检查、独立操作者策略与配置/撤回预览，详见[动作检查合同](docs/codex-action-checks.md)。默认只检查匹配的 apply_patch；普通任务修订自动读取当前 active 版本，policy epoch 不随任务版本提升。shell、hosted tools、stdin、宿主故障和同 OS 用户篡改不受全面保护。已通过云端定向测试与严格 Clippy；真实宿主动作检查仍待验收，没有安装用户配置。
+
 ## 当前开发切片
 
 按[唯一实施计划](docs/plans/2026-10-16-task-continuity-and-host-integration.md)推进任务要求、进度续接与客户端接入。本轮新增[任务账本](docs/task-ledger.md)、[Codex 上下文适配器](docs/codex-task-context-adapter.md)及原监控界面的只读任务摘要；新增能力的验证状态见[当前状态](docs/project-status.md)。源码更新不等于已部署，真实宿主注入与模型采用须分别取得证据。
@@ -14,6 +18,8 @@
 
 ## 能做什么
 
+- **记录经验采用反馈**：`record_experience_use` / `list_experience_uses` 与 `experience-use record|list|derive --json` 记录精确任务/经验版本、适用条件、采用/拒绝理由及结果来源；调用方报告不等于真实模型采用或独立验证。追加观察保留历史，当前可复用状态在查询时重新判断；显式 `derive_experience_from_use` 可分阶段恢复写入 Episode 与待审候选，不自动激活。已通过云端定向回归，三平台与真实宿主结果单独记录。
+
 - **保存任务要求与续接状态**：任务修订、稳定要求 ID、候选隔离、checkpoint 与完整性诊断；内容是有来源的调用方报告，不授予执行权限。
 - **接入 Codex 上下文**：原生适配器提供显式任务选择、配置预览和生命周期 JSON；输出与真实宿主接受分开记录，支持范围见适配器合同。
 
@@ -26,7 +32,7 @@
 - **版本化全局 self-model**：identity/commitment 追加版本、同范围可见 diff、expected-version 冲突检测和显式组件补偿回滚；仍受既有 Claim、证据与全局写边界约束。详见[合同](docs/self-model-versions.md)。
 - **本地数据运维**：显式初始化/迁移、默认只读诊断、索引检查/重建、备份恢复，以及有界只读 scoped export。
 
-当前 standalone `serve` 注册 **38 个 MCP 工具**；核心工作空间会话开放其中 **31 个**，其余 7 个全局入口拒绝。新增 6 个任务工具沿用逐调用范围与撤销检查，验证状态以本提交结果为准。工具用途见[工具与合同索引](docs/tool-reference.md)，模式差异见[本机核心合同](docs/local-workspace-core.md)。二进制/crate 兼容名称仍是 `agent_llm_mm`，脚本和配置前缀仍是 `agent-llm-mm`。
+当前 standalone `serve` 注册 **41 个 MCP 工具**；核心工作空间会话开放其中 **34 个**，其余 7 个全局入口拒绝。新增 6 个任务工具和 3 个经验采用工具沿用逐调用范围与撤销检查，验证状态以本提交结果为准。工具用途见[工具与合同索引](docs/tool-reference.md)，模式差异见[本机核心合同](docs/local-workspace-core.md)。二进制/crate 兼容名称仍是 `agent_llm_mm`，脚本和配置前缀仍是 `agent-llm-mm`。
 
 ## 从这里开始
 
@@ -65,3 +71,5 @@
 ## 参与开发
 
 阅读 [CONTRIBUTING](CONTRIBUTING.md)、[项目起点与原则](docs/origin-and-principles.md) 和[路线图](docs/roadmap.md)。报告问题见 [SUPPORT](SUPPORT.md)，安全问题先核实 [SECURITY](SECURITY.md) 所述私密渠道；[协作准则](CODE_OF_CONDUCT.md)仍是拟定稿，[CHANGELOG](CHANGELOG.md)不构成发布批准。唯一执行队列是 [active plan](docs/plans/README.md)；历史计划、阶段证据和发布草案不能替代它。
+
+See [experience-use contract](docs/experience-use-feedback.md) for schema 9, caller-report boundaries, read-time invalidation, recoverable pending derivation, and explicit partial status of T12/T14–T16.

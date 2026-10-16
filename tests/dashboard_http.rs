@@ -487,7 +487,17 @@ async fn legacy_dashboard_never_exposes_task_records() {
         .await
         .unwrap();
     assert_eq!(status["tasks_available"], false);
-    for route in ["tasks", "tasks/anything"] {
+    let workspaces = client
+        .get(format!("{}/api/task-workspaces", handle.base_url()))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(workspaces.status(), StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(
+        workspaces.json::<serde_json::Value>().await.unwrap(),
+        json!({"error":"task workspaces unavailable"})
+    );
+    for route in ["tasks", "tasks/anything", "tasks/anything/experience-uses"] {
         let response = client
             .get(format!(
                 "{}/api/{route}?namespace=project/test",
@@ -499,7 +509,7 @@ async fn legacy_dashboard_never_exposes_task_records() {
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
         assert_eq!(
             response.json::<serde_json::Value>().await.unwrap(),
-            json!({"error":"task records unavailable"})
+            json!({"error": if route.ends_with("experience-uses") { "experience use records unavailable" } else { "task records unavailable" }})
         );
     }
 }

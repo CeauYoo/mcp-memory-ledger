@@ -2,6 +2,7 @@ pub mod cli;
 pub mod config;
 pub mod database_backup;
 pub mod doctor;
+pub mod experience_use_cli;
 #[cfg(feature = "release-tools")]
 pub mod local_alpha_evidence;
 #[cfg(feature = "release-tools")]

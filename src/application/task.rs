@@ -74,7 +74,12 @@ fn size(context: &mut TaskResumeContext) -> Result<usize, AppError> {
 /// Task+checkpoint are read atomically. Optional recall uses separate reads, whose
 /// exact versions are retained; the response never asserts a cross-store snapshot.
 pub async fn build_task_resume_context<
-    S: TaskStore + MemoryReadStore + TextMemoryStore + ExperienceStore + Sync,
+    S: TaskStore
+        + MemoryReadStore
+        + TextMemoryStore
+        + ExperienceStore
+        + crate::ports::experience_use_store::ExperienceUseStore
+        + Sync,
 >(
     store: &S,
     r: TaskContextRequest,
@@ -139,6 +144,36 @@ pub async fn build_task_resume_context<
             context.can_resume = false;
         }
     }
+    // Derived reuse eligibility is computed anew, never a persisted trusted cache.
+    match super::experience_use::list_experience_uses(
+        store,
+        crate::domain::experience_use::ListExperienceUsesRequest {
+            namespace: r.namespace.clone(),
+            task_id: r.task_id.clone(),
+            limit: 100,
+            after_id: None,
+        },
+    )
+    .await
+    {
+        Ok(uses) => {
+            if uses.iter().any(|u| {
+                !u.currently_reusable
+                    && u.record.observation.decision
+                        == crate::domain::experience_use::ExperienceUseDecision::Adopted
+            }) {
+                context.diagnostics.push(
+                    "prior_adopted_experience_invalidated_review_history_before_reuse".into(),
+                );
+            }
+            if uses.len() == 100 {
+                context.diagnostics.push("experience_use_invalidation_scan_bounded_paginate_history_for_remaining_records".into());
+            }
+        }
+        Err(_) => context.diagnostics.push(
+            "experience_use_invalidation_status_unavailable_do_not_assume_prior_reuse_valid".into(),
+        ),
+    }
     // Required task data always takes precedence. Reserve space for honest selection diagnostics.
     let base = size(&mut context)?;
     if base.saturating_add(1024) < r.max_bytes {
@@ -193,6 +228,36 @@ pub async fn build_task_resume_context<
                     .push("optional_experiences_unavailable".into()),
             }
         }
+        // Optional experience is a read-time suggestion, never an applicability proof.
+        context.diagnostics.push(
+            "experience_applicability_unknown_review_conditions_and_limitations_before_adoption"
+                .into(),
+        );
+        let mut revalidated = Vec::new();
+        for selected in std::mem::take(&mut context.experiences) {
+            let current = super::experience::get_candidate(
+                store,
+                crate::domain::experience::GetCandidateRequest {
+                    namespace: r.namespace.clone(),
+                    candidate_id: selected.candidate_id.clone(),
+                    version: None,
+                },
+            )
+            .await;
+            match current {
+                Ok(Some(current))
+                    if current.version == selected.version
+                        && current.status
+                            == crate::domain::experience::ExperienceStatus::Active =>
+                {
+                    revalidated.push(selected)
+                }
+                _ => context
+                    .diagnostics
+                    .push("experience_invalidated_during_selection_omitted".into()),
+            }
+        }
+        context.experiences = revalidated;
         let latest = get_task_snapshot(store, &r.namespace, &r.task_id)
             .await?
             .ok_or_else(|| {

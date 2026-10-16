@@ -68,6 +68,7 @@ const assets = path.resolve('src/interfaces/dashboard/static');
 const taskSource={kind:'caller_reported'};
 const syntheticTask={namespace:'project/synthetic',task_id:'browser-task',version:2,title:'Synthetic continuity task',status:'paused',source:taskSource,requirements:[{requirement_id:'goal',kind:'goal',state:'reported',text:'Original browser goal',source:taskSource},{requirement_id:'keep',kind:'requirement',state:'reported',text:'<script>window.taskInjected=true</script>'+'長い要件 '.repeat(20),source:taskSource},{requirement_id:'candidate',kind:'requirement',state:'candidate',text:'Unconfirmed replacement',source:{kind:'model_asserted'}}]};
 const syntheticCheckpoint={namespace:'project/synthetic',task_id:'browser-task',task_version:1,sequence:1,recorded_at:'2026-10-16T00:00:00Z',source:taskSource,steps:[{step_id:'plan',text:'Plan only',mode:'Draft',verification:'not_performed',evidence_refs:[]}],blockers:['Awaiting result'],next_steps:['Check output'],artifacts:[]};
+const syntheticUse={record:{recorded_at:'2026-10-16T00:00:00Z',verification_basis:'caller_reported_not_independently_verified_no_causal_attribution',observation:{namespace:'project/synthetic',task_id:'browser-task',task_version:1,use_id:'browser-use',candidate_id:'browser-experience',candidate_version:2,decision:'adopted',reason:'Synthetic report',conditions:[{condition:'Fixture only',assessment:'caller_reported_satisfied'}],action_event_refs:['event:synthetic-outcome'],outcome_event_refs:['event:synthetic-outcome'],verification:'passed',evaluation_method:'Synthetic observation',limitations:['Not independently verified'],related_use_id:null}},currently_reusable:false,invalidation_reasons:['task_revision_no_longer_current_active']};
 const row = {id:'fixture',operation:'recall_memory',namespace:'project/synthetic',kind:'tool',status:'ok',summary:'Synthetic owner record',timestamp:'2026-10-15T00:00:00Z',payload:{},read_only:true};
 try {
   let url, taskNamespace='project/synthetic';
@@ -86,6 +87,13 @@ try {
       if(req.url.endsWith('/stream')) {res.writeHead(200,{'Content-Type':'text/event-stream'});res.write('data: {}\n\n');return;}
       const name=req.url.split('/api/')[1].split('?')[0];
       const value=name==='health'?{status:'ok',read_only:true}:name==='status'?{instance_id:'synthetic',process_id:1,event_capacity:32,history_available:false,tasks_available:true,sse_enabled:true}:name==='summary'?{runtime:{provider:'mock',transport:'local-core'},total_events:1,tool_events:1,reflection_events:0,failed_events:0}:name==='events'?[row]:row;
+      if(name==='task-workspaces') {
+        res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({namespaces:[taskNamespace],limit:100,has_more:false,read_only:true}));return;
+      }
+      if(name.endsWith('/experience-uses')) {
+        const namespace=new URL(req.url,'http://localhost').searchParams.get('namespace');
+        res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify({uses:namespace===taskNamespace?[syntheticUse]:[],limit:20,read_only:true}));return;
+      }
       if(name==='tasks' || name.startsWith('tasks/')) {
         const namespace=new URL(req.url,'http://localhost').searchParams.get('namespace');
         const present=namespace===taskNamespace;
@@ -139,6 +147,11 @@ try {
   });
   await check('owner task summary preserves requirements, pending candidates and stale checkpoint',async()=>{
     await until("!document.querySelector('#task-panel').hidden");
+    await until("document.querySelectorAll('#task-workspaces option').length===1");
+    assert.equal(await evaluate("document.querySelector('#task-workspaces option').value"),taskNamespace);
+    assert.equal(await evaluate("document.querySelector('#task-namespace').value"),'');
+    assert.ok((await evaluate("document.querySelector('[data-i18n=taskHostUnverified]').textContent")).includes('unverified'));
+    assert.equal(await evaluate("document.querySelector('#task-select').value"),'');
     await evaluate(`document.querySelector('#task-namespace').value=${JSON.stringify(taskNamespace)};document.querySelector('#task-scope').requestSubmit()`);
     await until("document.querySelector('#task-select').options.length===2");
     await choose('#task-select','browser-task');await until("!document.querySelector('#task-content').hidden");
@@ -147,6 +160,13 @@ try {
     assert.ok(content.includes('Earlier task revision'));assert.ok(content.includes('Not performed'));
     assert.equal(await evaluate("document.querySelectorAll('#task-requirements li').length"),1);
     assert.equal(await evaluate("Boolean(window.taskInjected)"),false);
+    await until("document.querySelectorAll('#task-uses > li').length===1");
+    const useText=await evaluate("document.querySelector('#task-uses').textContent");
+    assert.ok(useText.includes('Reported adopted'));assert.ok(useText.includes('Not currently reusable'));
+    assert.ok(useText.includes('Outcome sources'));assert.ok(useText.includes('event:'));
+    assert.ok(useText.includes('not independently verified'));
+    await evaluate("document.querySelector('#task-uses').parentElement.open=true;document.querySelector('#task-uses details').open=true");
+    await screenshot('owner-experience-reports');
     await evaluate("document.querySelector('#task-content details').open=true;document.querySelector('#task-checkpoint').open=true");
     for(const [locale,label] of [['zh-CN','已暂停'],['ja','一時停止'],['en','Paused']]) {
       await choose('#locale',locale);
@@ -161,6 +181,7 @@ try {
     await evaluate("document.querySelector('#task-namespace').value='project/empty-browser-fixture';document.querySelector('#task-scope').requestSubmit()");
     await until("document.querySelector('#task-message').textContent.includes('No tasks')");
     assert.equal(await evaluate("document.querySelector('#task-fields').textContent"),'');
+    assert.equal(await evaluate("document.querySelector('#task-uses').textContent"),'');
     await evaluate(`document.querySelector('#task-namespace').value=${JSON.stringify(taskNamespace)};document.querySelector('#task-scope').requestSubmit()`);
     await until("document.querySelector('#task-select').options.length===2");
     await choose('#task-select','browser-task');await until("!document.querySelector('#task-content').hidden");
@@ -170,7 +191,9 @@ try {
     await click('#owner-logout');await until("document.querySelector('#owner-auth').open");
     assert.equal(await evaluate("document.querySelector('#payload').textContent"),'');
     assert.equal(await evaluate("document.querySelector('#task-fields').textContent"),'');
+    assert.equal(await evaluate("document.querySelector('#task-uses').textContent"),'');
     assert.equal(await evaluate("document.querySelector('#task-namespace').value"),'');
+    assert.equal(await evaluate("document.querySelectorAll('#task-workspaces option').length"),0);
     assert.equal(await evaluate("document.querySelectorAll('#records button').length"),0);
     await login(capability);await until("!document.querySelector('#owner-auth').open && document.querySelectorAll('#records button').length>=1");
   });
