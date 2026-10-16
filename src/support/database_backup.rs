@@ -125,7 +125,13 @@ pub async fn transfer_database(
         report.schema_version,
         CURRENT_DATABASE_SCHEMA_VERSION
     );
-    let mut file = fs::File::open(&snapshot)?;
+    // Windows FlushFileBuffers (used by sync_all) requires GENERIC_WRITE.
+    // Reopen the completed private snapshot without create/truncate flags.
+    let mut file = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&snapshot)
+        .context("open completed snapshot for hashing and flush")?;
     let mut hash = Sha256::new();
     let mut buffer = [0_u8; 65536];
     loop {
@@ -135,7 +141,7 @@ pub async fn transfer_database(
         }
         hash.update(&buffer[..n]);
     }
-    file.sync_all()?;
+    file.sync_all().context("flush completed backup snapshot")?;
     drop(file);
     // hard_link is an atomic create-if-absent on both Unix and Windows, unlike rename.
     // It stays on the destination filesystem. Unsupported filesystems fail safely.
@@ -159,6 +165,15 @@ fn reject_symlinks(path: &Path) -> Result<()> {
             "parent-directory components are not accepted"
         );
         prefix.push(part);
+        if matches!(part, Component::Prefix(_)) {
+            ensure!(
+                path.has_root(),
+                "drive-prefixed database paths must be absolute"
+            );
+            // A Windows prefix such as \\?\C: is not an inspectable root until
+            // the following RootDir component supplies its final separator.
+            continue;
+        }
         match fs::symlink_metadata(&prefix) {
             Ok(meta) => ensure!(
                 !meta.file_type().is_symlink(),
@@ -262,4 +277,23 @@ async fn copy_snapshot(source: &Path, target: &Path) -> Result<()> {
     source_close?;
     target_close?;
     Ok(())
+}
+
+#[cfg(all(test, windows))]
+mod windows_path_tests {
+    use super::*;
+
+    #[test]
+    fn canonical_drive_prefix_is_not_opened_before_its_root_separator() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().canonicalize().unwrap();
+        assert!(matches!(
+            root.components().next(),
+            Some(Component::Prefix(_))
+        ));
+        reject_symlinks(&root).unwrap();
+        reject_symlinks(&root.join("new-snapshot.sqlite")).unwrap();
+        assert!(reject_symlinks(Path::new(r"C:relative.sqlite")).is_err());
+        assert!(reject_symlinks(&root.join("..").join("snapshot.sqlite")).is_err());
+    }
 }

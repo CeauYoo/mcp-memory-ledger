@@ -13,6 +13,7 @@ use std::{
     io::{BufRead, BufReader, Write},
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
+    str::FromStr,
     sync::{Mutex, OnceLock, mpsc},
     time::Duration,
     vec,
@@ -46,15 +47,13 @@ fn default_config_uses_user_scoped_database_under_application_support() {
 
     let config = AppConfig::default();
 
-    assert_eq!(
-        config.database_url,
-        sqlite_url(
-            &home_dir
-                .join("Library")
-                .join("Application Support")
-                .join("agent-llm-mm")
-                .join("agent-llm-mm.sqlite")
-        )
+    assert_database_filename(
+        &config.database_url,
+        &home_dir
+            .join("Library")
+            .join("Application Support")
+            .join("agent-llm-mm")
+            .join("agent-llm-mm.sqlite"),
     );
 }
 
@@ -63,7 +62,7 @@ fn default_config_uses_user_scoped_database_under_application_support() {
 fn default_config_uses_xdg_data_home_for_user_scoped_database() {
     let temp_dir = tempdir().expect("temp dir");
     let home_dir = temp_dir.path().join("home");
-    let xdg_data_home = temp_dir.path().join("xdg-data");
+    let xdg_data_home = temp_dir.path().join("xdg-data %20 space");
     let _guard = EnvGuard::apply([
         EnvChange::Unset(DATABASE_URL_ENV_VAR),
         EnvChange::Set("HOME", home_dir.to_string_lossy().into_owned()),
@@ -75,13 +74,11 @@ fn default_config_uses_xdg_data_home_for_user_scoped_database() {
 
     let config = AppConfig::default();
 
-    assert_eq!(
-        config.database_url,
-        sqlite_url(
-            &xdg_data_home
-                .join("agent-llm-mm")
-                .join("agent-llm-mm.sqlite")
-        )
+    assert_database_filename(
+        &config.database_url,
+        &xdg_data_home
+            .join("agent-llm-mm")
+            .join("agent-llm-mm.sqlite"),
     );
 }
 
@@ -89,7 +86,7 @@ fn default_config_uses_xdg_data_home_for_user_scoped_database() {
 #[cfg(windows)]
 fn default_config_uses_local_app_data_for_user_scoped_database() {
     let temp_dir = tempdir().expect("temp dir");
-    let local_app_data = temp_dir.path().join("AppData").join("Local");
+    let local_app_data = temp_dir.path().join("AppData").join("Local %20 space");
     let _guard = EnvGuard::apply([
         EnvChange::Unset(DATABASE_URL_ENV_VAR),
         EnvChange::Set(
@@ -100,13 +97,11 @@ fn default_config_uses_local_app_data_for_user_scoped_database() {
 
     let config = AppConfig::default();
 
-    assert_eq!(
-        config.database_url,
-        sqlite_url(
-            &local_app_data
-                .join("agent-llm-mm")
-                .join("agent-llm-mm.sqlite")
-        )
+    assert_database_filename(
+        &config.database_url,
+        &local_app_data
+            .join("agent-llm-mm")
+            .join("agent-llm-mm.sqlite"),
     );
 }
 
@@ -887,7 +882,12 @@ fn runtime_hook_contract_is_exactly_four_hooks() {
 }
 
 fn sqlite_url(path: &Path) -> String {
-    format!("sqlite://{}", path.to_string_lossy().replace('\\', "/"))
+    agent_llm_mm::support::sqlite_url::sqlite_file_url(path)
+}
+
+fn assert_database_filename(url: &str, expected: &Path) {
+    let options = sqlx::sqlite::SqliteConnectOptions::from_str(url).expect("valid SQLite URL");
+    assert_eq!(options.get_filename(), expected);
 }
 
 enum EnvChange {

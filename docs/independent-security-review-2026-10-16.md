@@ -127,4 +127,17 @@ Round-trip parsing is supplemented by a synthetic canonical-path init followed b
 
 The frozen correction additionally makes the existing encoded-path lifecycle regression use a canonical parent for real init/migrate and backup-file checks, and adds the existing real backup/restore integration suite to the Windows CI job. These strengthen coverage but do not establish a successful native rerun. The author reports Linux lib 47, backup 7, lifecycle 22 and adoption 21 tests plus strict Clippy passed; these are author-reported corrective-branch results. At this addendum, the corrective Windows CI has not passed and the original native gate remains open.
 
-The refreshed combined implementation manifest is `integrated-source-manifest.sha256`, SHA256 `58301ffd60451293ee0fd91b69d82b749e31bc7119ce29657f51e6584a4c5628`. The pre-correction manifest is retained under its historical filename above. This addendum reviews the source correction; release automation must associate subsequent CI evidence with the exact published corrective commit.
+The first corrective combined implementation manifest is retained as `integrated-source-manifest-windows-ci-fix1.sha256`, SHA256 `58301ffd60451293ee0fd91b69d82b749e31bc7119ce29657f51e6584a4c5628`. The pre-correction manifest is retained under its historical filename above. This addendum reviews the source correction; release automation must associate subsequent CI evidence with the exact published corrective commit.
+
+
+## Historical addendum: second Windows CI corrective delta
+
+Reviewed `windows-ci-fix2.patch` SHA256 `2980ffe749228e5146b5e5ba9f837b45229c93d6eb40823a29345427e6c9ee1b`, identified by the release team as a four-file correction after candidate `23ec301`. The patch hash was independently checked and the current integrated source inspected.
+
+Backup path traversal now postpones filesystem inspection of a Windows Prefix component until its RootDir separator is appended; it also rejects drive-relative paths. Inspection of the complete root and subsequent components remains in place, including symlink rejection and parent-component refusal. The Windows-specific regression checks a real canonical directory, a new output filename, drive-relative input and a parent-component input.
+
+Backup and migration flushes reopen their existing completed snapshots with read/write access, without create or truncate flags. This follows the documented Windows FlushFileBuffers requirement for GENERIC_WRITE: https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-flushfilebuffers . Private staging/file creation, validation before publication and atomic no-clobber hard-link publication remain unchanged. Flush errors still stop publication/migration; the correction does not claim Windows directory-fsync durability. The bootstrap changes compare SQLx-decoded filenames, including literal percent/space cases, rather than asserting a particular URL spelling; they do not alter production config behavior.
+
+No new blocking source defect was established in this focused correction. The author reports 56 Linux bootstrap/backup/lifecycle tests plus strict Clippy and formatting passed. This reviewer did not independently rerun those tests. The new Windows-specific regression and corrective native workflow remain pending; neither this addendum nor Linux results establish Windows acceptance.
+
+The current combined implementation manifest is `integrated-source-manifest.sha256`, SHA256 `94ca9fb3aadbafc021df7346ee7684cd9ad7a94fc2662dcc0de53508dd103fa6`. Both earlier manifests remain available under their historical filenames. Subsequent native results must be tied to the exact published corrective commit.

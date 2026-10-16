@@ -988,7 +988,11 @@ async fn create_backup_anchor(
     let escaped = snapshot.to_string_lossy().replace('\'', "''");
     execute(&mut connection, &format!("VACUUM INTO '{escaped}'")).await?;
     connection.close().await.map_err(sqlite_error)?;
-    fs::File::open(&snapshot)
+    // Windows requires write access on a handle passed to FlushFileBuffers.
+    fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&snapshot)
         .and_then(|file| file.sync_all())
         .map_err(|error| AppError::Message(format!("failed to sync migration backup: {error}")))?;
     // Atomic create-if-absent publication, including dangling symlinks and races.
