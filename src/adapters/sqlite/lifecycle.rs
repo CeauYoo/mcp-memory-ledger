@@ -1,3 +1,4 @@
+use crate::support::sqlite_url::sqlite_file_url as sqlite_url;
 use std::{
     collections::BTreeSet,
     fs,
@@ -1148,23 +1149,6 @@ fn private_directory(parent: &Path, prefix: &str) -> Result<PrivateDirectory, Ap
             "cannot create private sqlite staging directory: {error}"
         ))
     })
-}
-
-fn sqlite_url(path: &Path) -> String {
-    // Encode '%' too: a literal "%20" filename must never become a space.
-    let path = path.to_string_lossy();
-    #[cfg(windows)]
-    let path = path.replace('\\', "/");
-    let mut url = String::from("sqlite://");
-    for byte in path.bytes() {
-        if byte.is_ascii_alphanumeric() || b"/-._~:".contains(&byte) {
-            url.push(char::from(byte));
-        } else {
-            use std::fmt::Write;
-            write!(&mut url, "%{byte:02X}").expect("writing to a string cannot fail");
-        }
-    }
-    url
 }
 
 async fn reset_connection_pragmas(connection: &mut SqliteConnection) -> Result<(), AppError> {

@@ -7,7 +7,7 @@ use std::{fs, path::Path};
 use tempfile::tempdir;
 
 async fn database(path: &Path) {
-    initialize_database(&format!("sqlite://{}", path.display()))
+    initialize_database(&agent_llm_mm::support::sqlite_url::sqlite_file_url(path))
         .await
         .unwrap();
 }

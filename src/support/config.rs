@@ -1,3 +1,4 @@
+use crate::support::sqlite_url::sqlite_file_url as sqlite_url;
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -509,10 +510,6 @@ fn validate_chat_completion_config(
 
 fn default_database_url() -> String {
     std::env::var(DATABASE_URL_ENV_VAR).unwrap_or_else(|_| sqlite_url(&default_database_path()))
-}
-
-fn sqlite_url(path: &Path) -> String {
-    format!("sqlite://{}", path.to_string_lossy().replace('\\', "/"))
 }
 
 fn default_database_path() -> PathBuf {

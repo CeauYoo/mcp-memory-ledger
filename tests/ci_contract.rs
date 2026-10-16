@@ -38,6 +38,7 @@ fn ci_covers_linux_and_macos_quality_gates() {
         "mcp_session_policy",
         "local_core_cli",
         "local_core",
+        "database_backup",
     ] {
         assert!(
             workflow.contains(&format!("--test {suite}")),

@@ -427,10 +427,8 @@ mod tests {
     #[tokio::test]
     async fn bilingual_scope_literal_and_claim_priority_eval() {
         let directory = tempfile::tempdir().unwrap();
-        let url = format!(
-            "sqlite://{}",
-            directory.path().join("recall.sqlite").display()
-        );
+        let url =
+            crate::support::sqlite_url::sqlite_file_url(&directory.path().join("recall.sqlite"));
         let store = SqliteStore::bootstrap(&url).await.unwrap();
         event(
             &store,
@@ -544,10 +542,8 @@ mod tests {
     #[tokio::test]
     async fn store_rejects_unscoped_and_oversized_queries() {
         let directory = tempfile::tempdir().unwrap();
-        let url = format!(
-            "sqlite://{}",
-            directory.path().join("recall.sqlite").display()
-        );
+        let url =
+            crate::support::sqlite_url::sqlite_file_url(&directory.path().join("recall.sqlite"));
         let store = SqliteStore::bootstrap(&url).await.unwrap();
         for query in [
             TextMemoryQuery {
@@ -572,10 +568,8 @@ mod tests {
     #[tokio::test]
     async fn indexed_query_plan_materializes_match_before_scope_lookup() {
         let directory = tempfile::tempdir().unwrap();
-        let url = format!(
-            "sqlite://{}",
-            directory.path().join("plan.sqlite").display()
-        );
+        let url =
+            crate::support::sqlite_url::sqlite_file_url(&directory.path().join("plan.sqlite"));
         let store = SqliteStore::bootstrap(&url).await.unwrap();
         event(&store, "event", "user", "user/alice", "coffee target").await;
         claim(&store, "claim", "user/alice", "coffee target", "active").await;

@@ -23,6 +23,7 @@ pub mod release_decision;
 #[cfg(feature = "release-tools")]
 pub mod release_evidence_index;
 pub mod remote_team;
+pub mod sqlite_url;
 pub mod status_sync;
 pub mod support_bundle;
 pub mod tracing;

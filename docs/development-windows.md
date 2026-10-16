@@ -241,3 +241,9 @@ Python 的 SQLite 连接上下文只管理事务，不负责关闭连接。包�
 工作流显式关闭连接，包括异常路径，避免 Windows 临时目录删除时出现 WinError 32。
 CI 将各项 Python 验证拆成独立步骤；任何失败都会使该 job 失败，不会被后续成功命令掩盖。
 是否已通过仍须查看当前精确提交的 Windows CI，不以脚本存在或其他平台通过代替。
+
+### Canonical Windows SQLite paths and ACL fixture regression
+
+Native CI exposed canonical Windows `\\?\` filenames being interpolated into SQLite URLs. Internal path-to-URL conversion now shares one byte-preserving percent encoder; `%`, `?`, `#`, spaces and Windows separators survive SQLx decoding as the same filename. Session, adoption and backup fixtures use it, and a regression opens the initialized canonical file again via explicit SQLx filename options. This fixes path construction; it does not relax private path/ACL validation.
+
+Windows SDDL intentionally converts an object-allow (`OA`) ACE without either GUID into a normal allow ACE. ACL tests assert that normalization separately and use actual GUID-bearing object ACEs to verify fail-closed rejection. Native CI must rerun; cross-target checks alone are insufficient.

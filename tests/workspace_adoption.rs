@@ -25,7 +25,7 @@ impl Fixture {
         let root = base.join("project");
         fs::create_dir(&root).unwrap();
         let db = base.join("synthetic.sqlite");
-        initialize_database(&format!("sqlite://{}", db.display()))
+        initialize_database(&agent_llm_mm::support::sqlite_url::sqlite_file_url(&db))
             .await
             .unwrap();
         let result = Self {

@@ -1,3 +1,4 @@
+use agent_llm_mm::support::sqlite_url::sqlite_file_url as sqlite_url;
 #[path = "support/legacy_schema.rs"]
 mod legacy_schema;
 use std::{
@@ -15,19 +16,6 @@ use agent_llm_mm::{
 };
 use sqlx::{Connection, Row, SqliteConnection, sqlite::SqliteConnectOptions};
 use tempfile::tempdir;
-
-fn sqlite_url(path: &Path) -> String {
-    let path = path.to_string_lossy();
-    #[cfg(windows)]
-    let path = path.replace('\\', "/");
-    format!(
-        "sqlite://{}",
-        path.replace('%', "%25")
-            .replace('?', "%3F")
-            .replace('#', "%23")
-            .replace(' ', "%20")
-    )
-}
 
 async fn create_legacy_database(path: &Path, valid_namespace: bool) {
     let url = sqlite_url(path);
@@ -846,6 +834,7 @@ fn private_lifecycle_modes_under_multiple_umasks() {
 #[tokio::test]
 async fn encoded_paths_reserve_the_actual_sqlx_file_without_overwriting() {
     let directory = tempdir().unwrap();
+    let canonical = directory.path().canonicalize().unwrap();
     for (name, encoded) in [
         ("space name.sqlite", "space%20name.sqlite"),
         ("percent%20.sqlite", "percent%2520.sqlite"),
@@ -855,20 +844,20 @@ async fn encoded_paths_reserve_the_actual_sqlx_file_without_overwriting() {
         #[cfg(unix)]
         ("back\\slash.sqlite", "back%5Cslash.sqlite"),
     ] {
-        let path = directory.path().join(name);
-        let url = format!("{}/{}", sqlite_url(directory.path()), encoded);
+        let path = canonical.join(name);
+        let url = format!("{}/{}", sqlite_url(&canonical), encoded);
         create_legacy_database(&path, true).await;
         assert!(path.exists());
         let before = fs::read(&path).unwrap();
         assert!(initialize_database(&url).await.is_err());
         assert_eq!(fs::read(&path).unwrap(), before);
-        assert!(!directory.path().join(encoded).exists());
+        assert!(!canonical.join(encoded).exists());
         let migration = migrate_database(&url).await.unwrap();
         assert!(Path::new(migration.backup_path.as_ref().unwrap()).is_file());
         assert!(inspect_database(&url).await.unwrap().is_current());
-        let new_url = format!("{}/new-{encoded}", sqlite_url(directory.path()));
+        let new_url = format!("{}/new-{encoded}", sqlite_url(&canonical));
         initialize_database(&new_url).await.unwrap();
-        assert!(directory.path().join(format!("new-{name}")).is_file());
+        assert!(canonical.join(format!("new-{name}")).is_file());
     }
     for url in [
         "sqlite::memory:",

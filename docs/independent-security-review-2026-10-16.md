@@ -98,10 +98,33 @@ The author reports 92 focused tests, strict all-target/all-feature Clippy and fo
 
 ## Final integrated-source conclusion
 
-The integrated candidate was reviewed against baseline `ef27d4358d721a1186592bdcd0ca8b2b3346c73e` plus the three frozen patches identified above. The 33 changed source, test, verification-script, workflow and Cargo files are recorded in `integrated-source-manifest.sha256`; that manifest has SHA256 `41049a89edeb786fea1255419336a19dc58986b0a334eae93f224d30e88cde96`. Each implementation file matched its reviewed author tree. The expected Cargo union was checked separately for the URL dependency, Windows APIs and TLS patch upgrades. `git diff --check` passed. Documentation changes are outside that implementation manifest.
+The integrated candidate was reviewed against baseline `ef27d4358d721a1186592bdcd0ca8b2b3346c73e` plus the three frozen patches identified above. The 33 changed source, test, verification-script, workflow and Cargo files are recorded in `integrated-source-manifest-pre-windows-ci-fix.sha256`; that historical manifest has SHA256 `41049a89edeb786fea1255419336a19dc58986b0a334eae93f224d30e88cde96`. Each implementation file matched its reviewed author tree. The expected Cargo union was checked separately for the URL dependency, Windows APIs and TLS patch upgrades. `git diff --check` passed. Documentation changes are outside that implementation manifest.
 
 F1 and F2 have reviewed source fixes in this combined candidate. The selected affected dependency versions in F3 are updated. No additional blocking implementation defect was established by the final merge comparison. This conclusion is bounded by the stated coverage: it is not an exhaustive vulnerability assessment or a guarantee of isolation from processes running as the same OS user.
 
 The integrator reports the final combined regression outcome as 834 of 846 distinct Rust tests passed, with 12 local-core tests blocked at AF_UNIX core startup by OS `EPERM`; they did not reach their intended assertions. An initial build-directory symlink fixture conflict was corrected without source changes before rerunning affected suites. The reviewer inspected `integrated-rust.log` and `integrated-rust-rerun.log`, including the startup denial. The integrator also reports 125 Python tests, 9 Node tests, 33 project-status checks, formatting, strict Clippy and diff checks passed. This is not a full Rust pass, and IPC integration remains unverified in this environment. Windows native execution remains an explicit release gate: compile/typecheck and Linux tests do not establish real Windows ACL, named-pipe, child termination/restart or filesystem-lock behavior. The claimed Windows support level must remain provisional until that evidence exists. The release owner must bind subsequent native results to the exact published candidate identity.
 
 Recommended follow-through: preserve the encoded-path/no-clobber and multi-umask privacy regressions; retain cross-namespace incoming-edge, malformed-type and schema-object refusal tests; run a current complete dependency advisory scan; and require native Windows verification for the exact release candidate. Existing broadly readable backups or abandoned rehearsal copies created by older releases are not retroactively repaired by this patch. Owners should review their retention and permissions without exposing those contents in diagnostic logs.
+
+
+## Historical addendum: Windows CI corrective-delta review
+
+Date: 2026-10-16 UTC. Read-only review of the corrective working-tree delta against the staged integrated candidate identified by the release team as ea7dde3. The local checkout HEAD remains the earlier baseline; the staged `windows_security.rs` SHA256 is `27ba13468948b1bc1616772589ad5f96d951569a9467c445ed66562a16bfd24c`. This note does not claim a newly published commit identity or a native execution result.
+
+## ACL failure diagnosis
+
+The failing test expected an OA entry with no object GUIDs for the current owner to be rejected. Microsoft documents that ConvertStringSecurityDescriptorToSecurityDescriptorW normalizes this representation into ACCESS_ALLOWED_ACE_TYPE. Acceptance of the resulting ordinary current-user allow entry matches the intended policy; this failure does not establish that the validator accepts actual object ACEs.
+
+Source: https://learn.microsoft.com/en-us/windows/win32/api/sddl/nf-sddl-convertstringsecuritydescriptortosecuritydescriptorw
+
+The corrective test keeps a normalization positive case and adds object GUID, inherited-object GUID, and both-GUID cases. It asserts the parsed ACE type and requires the specific unsupported-entry error from the validator. Thus an SDDL conversion failure cannot satisfy the negative test accidentally. The production ACL validator is unchanged. Native execution of these tests is still required.
+
+## SQLite filename correction
+
+The corrective shared sqlite_file_url helper encodes OS filename bytes, including percent signs and Windows backslashes/question marks, instead of changing the canonical extended-length path prefix. Config, lifecycle and backup inspection now use the same conversion. This also removes raw-path URL construction in affected fixtures. The review found no new blocking source defect in this focused change.
+
+Round-trip parsing is supplemented by a synthetic canonical-path init followed by a separate filename-based read. Final native evidence should include actual lifecycle migration and backup/restore, since preserving SQLx's parsed filename alone does not establish SQLite's filesystem behavior. The original report's native Windows gate remains open until the exact corrective release candidate passes those checks.
+
+The frozen correction additionally makes the existing encoded-path lifecycle regression use a canonical parent for real init/migrate and backup-file checks, and adds the existing real backup/restore integration suite to the Windows CI job. These strengthen coverage but do not establish a successful native rerun. The author reports Linux lib 47, backup 7, lifecycle 22 and adoption 21 tests plus strict Clippy passed; these are author-reported corrective-branch results. At this addendum, the corrective Windows CI has not passed and the original native gate remains open.
+
+The refreshed combined implementation manifest is `integrated-source-manifest.sha256`, SHA256 `58301ffd60451293ee0fd91b69d82b749e31bc7119ce29657f51e6584a4c5628`. The pre-correction manifest is retained under its historical filename above. This addendum reviews the source correction; release automation must associate subsequent CI evidence with the exact published corrective commit.

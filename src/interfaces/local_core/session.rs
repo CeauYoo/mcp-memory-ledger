@@ -540,7 +540,9 @@ mod tests {
             let registry = directory.join("registry.json");
             let workspace = register_workspace(&registry, &root).unwrap();
             let config = AppConfig {
-                database_url: format!("sqlite://{}", directory.join("synthetic.sqlite").display()),
+                database_url: crate::support::sqlite_url::sqlite_file_url(
+                    &directory.join("synthetic.sqlite"),
+                ),
                 ..AppConfig::default()
             };
             let store = SqliteStore::bootstrap(&config.database_url).await.unwrap();

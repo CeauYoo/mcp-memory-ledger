@@ -117,14 +117,7 @@ pub async fn transfer_database(
     }
     drop(file);
     copy_snapshot(source, &snapshot).await?;
-    let path = snapshot
-        .to_str()
-        .context("database path must be valid UTF-8")?;
-    ensure!(
-        !path.contains(['?', '#']),
-        "database parent path cannot contain URL query or fragment characters"
-    );
-    let report = inspect_database(&format!("sqlite://{}", path.replace('\\', "/"))).await?;
+    let report = inspect_database(&crate::support::sqlite_url::sqlite_file_url(&snapshot)).await?;
     ensure!(
         report.is_current(),
         "snapshot rejected: {} (schema {:?}, supported {}); use a matching binary for older backups and explicitly migrate a separate copy",

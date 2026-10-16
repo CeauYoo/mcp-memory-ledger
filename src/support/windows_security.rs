@@ -602,8 +602,17 @@ mod tests {
     use super::*;
     use std::io::Write;
     use windows_sys::Win32::Security::{GetSecurityDescriptorDacl, GetSecurityDescriptorOwner};
+    use windows_sys::Win32::System::SystemServices::ACCESS_ALLOWED_OBJECT_ACE_TYPE;
 
     fn check_sddl(sddl: &str, directory: bool) -> Result<()> {
+        check_sddl_with_ace_type(sddl, directory, None)
+    }
+
+    fn check_sddl_with_ace_type(
+        sddl: &str,
+        directory: bool,
+        expected_type: Option<u32>,
+    ) -> Result<()> {
         let sddl = wide(OsStr::new(sddl))?;
         let mut descriptor = null_mut();
         // SAFETY: valid UTF-16 input and writable output; allocation is scoped below.
@@ -626,6 +635,19 @@ mod tests {
             GetSecurityDescriptorDacl(descriptor, &mut present, &mut dacl, &mut defaulted)
         })?;
         ensure!(present != 0, "missing DACL");
+        if let Some(expected_type) = expected_type {
+            assert!(!dacl.is_null(), "ACE fixture requires a non-NULL DACL");
+            // SAFETY: the parsed descriptor owns this ACL until validation returns.
+            assert_eq!(unsafe { (*dacl).AceCount }, 1);
+            let mut ace = null_mut();
+            // SAFETY: the fixture has exactly one ACE and output storage is valid.
+            check(unsafe { GetAce(dacl, 0, &mut ace) })?;
+            assert_eq!(
+                unsafe { (*ace.cast::<ACE_HEADER>()).AceType as u32 },
+                expected_type,
+                "SDDL fixture did not produce its intended ACE type"
+            );
+        }
         validate_acl(owner, dacl, directory)
     }
 
@@ -660,13 +682,42 @@ mod tests {
             );
         }
         assert!(check_sddl(&format!("O:WDD:(A;;GA;;;{sid})"), true).is_err());
-        assert!(check_sddl(&format!("O:{sid}D:(OA;;GA;;;{sid})"), true).is_err());
         assert!(validate_acl(user.as_ptr(), null_mut(), false).is_err());
         // Inherit-only entries do not grant access to a file itself, but could
         // expose future SQLite WAL/journal children of a directory.
         let inherit = format!("O:{sid}D:(A;OICIIO;GR;;;WD)(A;;GA;;;{sid})");
         assert!(check_sddl(&inherit, false).is_ok());
         assert!(check_sddl(&inherit, true).is_err());
+    }
+
+    #[test]
+    fn object_ace_fixtures_check_normalization_and_reject_actual_object_entries() {
+        let sid = UserSid::current().unwrap().text().unwrap();
+        // The Win32 converter normalizes OA without either GUID to a normal A:
+        // https://learn.microsoft.com/windows/win32/api/sddl/nf-sddl-convertstringsecuritydescriptortosecuritydescriptorw
+        assert!(
+            check_sddl_with_ace_type(
+                &format!("O:{sid}D:(OA;;GA;;;{sid})"),
+                true,
+                Some(ACCESS_ALLOWED_ACE_TYPE),
+            )
+            .is_ok()
+        );
+        let guid = "01234567-89ab-cdef-0123-456789abcdef";
+        for (object_guid, inherit_guid) in [(guid, ""), ("", guid), (guid, guid)] {
+            let error = check_sddl_with_ace_type(
+                &format!("O:{sid}D:(OA;;GA;{object_guid};{inherit_guid};{sid})"),
+                true,
+                Some(ACCESS_ALLOWED_OBJECT_ACE_TYPE),
+            )
+            .unwrap_err();
+            assert!(
+                error
+                    .to_string()
+                    .starts_with("unsupported private-state DACL entry"),
+                "object ACE must be rejected by policy, not fixture parsing: {error}"
+            );
+        }
     }
 
     #[test]

@@ -3,9 +3,11 @@ use agent_llm_mm::{adapters::sqlite::SqliteStore, application::experience, domai
 
 impl Fixture {
     async fn histories(&self, suffix: &str, namespace: &str, event: &str, claim: &str) {
-        let store = SqliteStore::bootstrap(&format!("sqlite://{}", self.db.display()))
-            .await
-            .unwrap();
+        let store = SqliteStore::bootstrap(&agent_llm_mm::support::sqlite_url::sqlite_file_url(
+            &self.db,
+        ))
+        .await
+        .unwrap();
         let ep = format!("ep{suffix}");
         let candidate = format!("xp{suffix}");
         experience::create_episode(

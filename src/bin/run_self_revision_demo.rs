@@ -1,3 +1,4 @@
+use agent_llm_mm::support::sqlite_url::sqlite_file_url as sqlite_url;
 use std::{
     fs,
     io::{self, BufRead, BufReader, Write},
@@ -252,10 +253,6 @@ fn remove_existing_sqlite_files(database_path: &Path) -> Result<()> {
         }
     }
     Ok(())
-}
-
-fn sqlite_url(path: &Path) -> String {
-    format!("sqlite://{}", path.to_string_lossy().replace('\\', "/"))
 }
 
 fn sibling_binary(name: &str) -> PathBuf {

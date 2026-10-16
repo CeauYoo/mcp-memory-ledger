@@ -61,9 +61,8 @@ impl Fixture {
         let b = register_workspace(&registry, root_b).unwrap();
         let config = AppConfig {
             transport: TransportKind::Stdio,
-            database_url: format!(
-                "sqlite://{}",
-                directory.path().join("memory.sqlite").display()
+            database_url: agent_llm_mm::support::sqlite_url::sqlite_file_url(
+                &directory.path().join("memory.sqlite"),
             ),
             model_provider: ModelProviderKind::Mock,
             model_config: ModelConfig::Mock,
@@ -537,9 +536,8 @@ async fn only_one_core_can_own_a_socket_or_database() {
         .is_err()
     );
     let mut other_database = fixture.config.clone();
-    other_database.database_url = format!(
-        "sqlite://{}",
-        fixture.directory.path().join("other.sqlite").display()
+    other_database.database_url = agent_llm_mm::support::sqlite_url::sqlite_file_url(
+        &fixture.directory.path().join("other.sqlite"),
     );
     initialize_database(&other_database.database_url)
         .await
