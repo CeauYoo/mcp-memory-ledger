@@ -2,16 +2,18 @@
 
 当前 schema **7**。所有操作先确认 `AGENT_LLM_MM_CONFIG` 指向的配置，以及实际 `database_url`；使用绝对路径，并将开发/测试库与正式库分开。配置方式见[快速开始](quickstart.md)。
 
-## 二进制只有四类命令
+## 二进制数据库命令
 
 ```text
 agent_llm_mm init
 agent_llm_mm migrate
 agent_llm_mm doctor --read-only
 agent_llm_mm serve
+agent_llm_mm backup --db /absolute/path/memory.sqlite --output /absolute/path/backup.sqlite
+agent_llm_mm restore --db /absolute/path/backup.sqlite --output /absolute/path/restored.sqlite
 ```
 
-这里 `agent_llm_mm` 代表你实际构建的绝对 binary 路径（Windows 加 `.exe`）。没有 `backup`、`restore`、`install` 或 `--config` 参数；配置通过环境变量加载。省略命令等于 `serve`，省略 doctor flag 等于只读。`doctor --allow-bootstrap` 明确允许改库，不是常规诊断替代品。
+这里 `agent_llm_mm` 代表你实际构建的绝对 binary 路径（Windows 加 `.exe`）。`backup` / `restore` 只接受显式 `--db` 与 `--output` 文件路径，不读取配置、连接模型或启动服务；其他数据库命令的配置通过环境变量加载。没有 `install` 或 `--config` 参数。省略命令等于 `serve`，省略 doctor flag 等于只读。`doctor --allow-bootstrap` 明确允许改库，不是常规诊断替代品。
 
 | 场景 | 操作与边界 |
 | --- | --- |
@@ -37,18 +39,25 @@ Schema7 增加 append-only 全局 self-model 版本。旧库迁移只捕获当�
 
 ## 备份与恢复到新路径
 
-在支持这些 shell 脚本的 Unix 环境：
+优先使用原生命令（Unix / Windows 同一参数合同，Windows 使用实际绝对路径与 `.exe`）：
 
-```sh
-./scripts/backup-sqlite.sh /absolute/path/memory.sqlite /absolute/path/backups
-./scripts/restore-sqlite.sh /absolute/path/backups/actual-backup.bak /absolute/path/restored.sqlite
+```text
+agent_llm_mm backup --db /absolute/path/memory.sqlite --output /absolute/path/backups/snapshot.sqlite
+agent_llm_mm restore --db /absolute/path/backups/snapshot.sqlite --output /absolute/path/restored.sqlite
 ```
 
-备份文件名以脚本实际返回值为准，不照抄占位名称。restore 拒绝已存在的目标文件。恢复后创建指向新路径的独立配置，用同一 binary 做只读 doctor；旧版本备份可能仍需先迁移副本。核验完整性与查询后再手动切换客户端配置，保留原库，避免原地覆盖。
+- SQLite online backup API 从只读源连接获取一致快照，包括尚未 checkpoint 的已提交 WAL 数据；不裸复制在线主库，也不对源执行迁移或 checkpoint。写入持续繁忙时最多等待约 60 秒后失败。
+- 目标父目录必须已存在，目标文件及其 `-wal` / `-shm` / `-journal` 必须不存在；拒绝 symlink 路径、`..` 路径组件和覆盖。私有 staging 经 SQLite `integrity_check` 和现有只读 doctor 的 current-schema、canonical 结构、migration ledger、外键与 self-model 检查后，才以原子 no-clobber hard link 发布为单个 SQLite 文件。目标文件系统必须支持 hard link；不支持时安全失败，不降级为覆盖 rename。
+- 当前仅接受此 binary 的 current schema **7**，不把同版本损坏结构或仅有 version 数字的文件当作有效备份。旧版/未来版库拒绝；用匹配版本 binary 恢复到独立副本，再另行显式迁移，不自动升级原库。相同 schema 但不兼容 canonical 结构也拒绝。
+- 返回 JSON 包含输出绝对路径、schema 版本和 SHA-256，供记录与后续核对；不建立远端副本、调度任务或自动验证外部提供的 checksum。备份包含完整记忆数据，应保存在受控目录，不是脱敏 support bundle。
+- 普通失败删除本次私有 staging，不删除既有目标或任何源文件。强制终止/掉电可能留下 `.agent-sqlite-backup-*` 私有目录；它不是成功产物。只有成功返回的目标才完成所有校验；在只读核验前不要手动使用残留临时文件。该实现不承诺掉电持久性或生产 DR。
+- 恢复不修改配置、不自动切换客户端、不激活 workspace。恢复后另建指向新路径的配置，运行 `doctor --read-only`，核验记忆查询，再手动切换客户端，保留原库。
 
-`backup-sqlite.sh` 检测到 `sqlite3` 时用 `.backup`；缺少它时会回退文件复制并提示先停写入者。不能把该 fallback 当作在线一致性备份；尤其不能在写入或存在未合并 WAL 时盲目复制主文件。优先安装可信来源的 sqlite3 或使用 SQLite backup API，并核验恢复结果。
+### Workspace registry 是独立管理状态
 
-Windows 的当前 native CI 用 Python `sqlite3.Connection.backup` 验证恢复；这不证明 Unix shell helper 在 PowerShell 中可直接运行。可运行[隔离 smoke](runnable-memory-workflow.md)理解流程，但它的合成库演练不是正式库运维命令。Windows 平台支持范围见[开发指南](development-windows.md)。
+原生命令当前是 **数据库单文件快照**，JSON 明确返回 `registry_included: false`。不包含 workspace registry、配置、API key 或日志。Registry 保存 workspace stable ID 与权限映射，数据库备份本身不能重建这些映射。需要完整 workspace 恢复时，应停止 registry 管理写入，再单独安全保存实际 registry 文件（包括 stable IDs 与权限）；恢复时由管理员显式审阅和配置，不能把恢复数据库视为已授权/已激活 workspace。本轮没有跨数据库与 registry 的原子 manifest bundle，也不声称并发文件复制可提供一致 registry 快照。
+
+旧 Unix `scripts/backup-sqlite.sh` / `restore-sqlite.sh` 仍是独立 helper。缺少 `sqlite3` 时旧 backup helper 会回退文件复制，必须先停写入者；不要将该 fallback 当作在线备份。原生命令没有这一 fallback，也不依赖 shell 或 sqlite3 CLI。跨平台实现不等于 Windows/macOS 真实 fresh-machine 证据；相关发布门继续开放。
 
 ## 索引与只读导出
 

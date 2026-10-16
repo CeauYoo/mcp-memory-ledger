@@ -1,6 +1,18 @@
 # 本机核心与工作空间验收矩阵
 
-更新：2026-10-15。总体状态：**进行中，尚未完成新核心/桥验收，未部署**。本页仅记录[唯一 active plan](plans/2026-07-10-product-replan.md)的 M1.W1–W4 证据、缺口和退出条件，不另设执行队列。当前正式 Mac 二进制仍为 `d9e33d38c73c66cf7e13bb7e843b7c8283be1fb4`；本轮不替换它，不改全局客户端/API 配置，不安装开机服务，不停止用户正常进程。
+## 2026-10-16 新功能与证据分层
+
+当前增量已接入，**未提交，待最终同源验证**：workspace unbind/disable/enable；只读 inspect/status 与 client-config TOML；原生 backup/restore 到新路径。接口分别见[生命周期](local-workspace-core.md)、[配置输出](workspace-client-config.md)、[数据库恢复](database-operations.md)。这些操作默认保留账本与回执；registry 独立备份，恢复不自动授予权限或切换部署。
+
+此前提交 `f8eb9ed` 的 [CI run 38709687717](https://github.com/yooyui/mcp-memory-ledger/actions/runs/38709687717) 已全绿：Ubuntu/macOS 各 794 项 Rust 测试、Windows 429 项，以及 Ubuntu 真实 Chromium 核心网页检查。Windows 仍不支持新核心；这些结果不覆盖本次未提交改动。这是此前核心集成的精确平台证据，不是新增生命周期/配置/原生备份的通过结果。独立安全审查与新核心真实客户端自然语言尚未通过，fresh-machine、真实模型效果/费用和人工发布仍开放。
+
+本轮冻结源码的 Linux 云端检查：812 项 Rust 全功能测试去重后 801 通过、11 项 `local_core` 因 AF_UNIX `EPERM` 环境阻断；首轮另 1 项构建缓存路径问题经仅调整忽略的构建目录后重跑通过。all-targets/all-features Clippy、fmt、diff-check、status-sync（33 项）通过。详细原始计数与重跑口径见[测试指南](testing-guide-2026-03-24.md#2026-10-16-新功能的必要验证入口)。这不替代当前增量的精确提交 CI，也不关闭真实客户端或安全审查门。
+
+本轮增加的验收范围：解绑旧路径/停用后旧连接下一请求与 replay 拒绝；enable 有效 root 条件；只读配置检查与 TOML 不变更配置或声称运行健康；current schema 一致快照、恢复新路径、不覆盖与 registry 独立性。此处不重新开启全部文档阶段，也不把 M1 外部门当作这些 M2 实用功能的实现前置条件。
+
+以下 2026-10-15 矩阵与云端 EPERM 记录是历史阶段快照；其“平台 CI 待验收”已由上述 f8eb9ed 更新，但未关闭真实客户端或当前增量门。
+
+历史快照：2026-10-15。该时点总体状态：**进行中，尚未完成新核心/桥验收，未部署**。本页仅记录[唯一 active plan](plans/2026-07-10-product-replan.md)的 M1.W1–W4 证据、缺口和退出条件，不另设执行队列。当前正式 Mac 二进制仍为 `d9e33d38c73c66cf7e13bb7e843b7c8283be1fb4`；本轮不替换它，不改全局客户端/API 配置，不安装开机服务，不停止用户正常进程。
 
 ## 范围与设计合同
 
@@ -60,7 +72,7 @@ initialize 未声明 roots；16 次诊断 `roots/list` 都返回空 roots，工�
 
 本次打包实现将 `verify-local-core.py` 及两种桥样例纳入精确源码包资产；Unix 解包验证调用包内验证器，失败阻断候选通过，Windows 明确标记新核心 unsupported 并保留旧 stdio 验证。新增 CI Unix 验证器安全回归入口。云端当前定向结果为 45 项 portable package Python 测试、17 项 local-core verifier Python 测试通过；这不是实际包构建/新核心运行通过。最终 Rust/全量测试数字须绑定最终源码后另记。云端运行环境的 Unix socket 创建被系统以 `EPERM` 拒绝；这不是核心运行通过或路径权限修复结果，不绕过环境限制。实际 Unix 进程/核心/候选闭环须由对应精确提交的 Ubuntu/macOS CI 提供，CI 保持失败即阻断并保存合成验证摘要。
 
-一次全局配置只在客户端启动桥时提供正确项目 cwd 的情况下适用；当前连接不会自动跟随项目移动。个人权限管理已有显式 CLI，不等于网页授权界面。旧 `project/foo` 数据不自动 adopt 为 `project/<uuid>`；先保留旧模式与备份，不静默改历史。注册表需要另行备份，`bind` 当前为新增别名，不宣称撤销旧根。
+一次全局配置只在客户端启动桥时提供正确项目 cwd 的情况下适用；当前连接不会自动跟随项目移动。个人权限管理已有显式 CLI，不等于网页授权界面。旧 `project/foo` 数据不自动 adopt 为 `project/<uuid>`；先保留旧模式与备份，不静默改历史。注册表需要另行备份，`bind` 仍仅新增别名；2026-10-16 已新增显式 `unbind` 解除旧根，以及独立 `disable` / `enable`，不会删除账本数据。
 
 管理员 CLI 与网页登录已接线：公开静态 shell 无运行数据，API/SSE 使用独立 Bearer，凭据只留标签页内存，锁定清空数据，刷新需重登，精确 Host/同源检查拒绝跨站。前端 Node 定向9项通过；真实 Chromium 在本云端启动时也被 Unix socket `EPERM` 阻断，不能把 Node 测试当浏览器实测。对应浏览器脚本 `--binary` 模式已接入 Ubuntu CI，使用真实隔离 Rust core；不带该参数只验证合成 Node API，两者不得混算；正式凭据和管理面未配置。
 

@@ -77,6 +77,19 @@ args = ["bridge", "--socket", "/absolute/local-state/ipc/core.sock", "--workspac
 - 普通 clone/worktree/相邻目录默认分别注册为不同 ID；不会根据 Git remote、父路径或名称猜为同一项目。
 - 目录移动后旧根不可用会拒绝工具调用。管理员可用 `workspace ... bind --id UUID --root /new/root` 显式加入新路径，保留 ID/记忆；然后重连。`bind` 是增加别名，不删除旧绑定，也不自动识别替换旧路径的目录。若保留旧路径或允许恶意同 UID 修改路径，不构成安全隔离；不要把路径身份当文件系统不可伪造证明。
 
+管理员可停用、重新启用或精确撤销 root；这些操作不是 MCP 工具，不删除账本、workspace ID 或已有 grants：
+
+```sh
+/absolute/bin/agent_llm_mm workspace --registry /absolute/local-state/workspaces.json disable --id UUID
+/absolute/bin/agent_llm_mm workspace --registry /absolute/local-state/workspaces.json unbind --id UUID --root /absolute/old-project
+/absolute/bin/agent_llm_mm workspace --registry /absolute/local-state/workspaces.json bind --id UUID --root /absolute/new-project
+/absolute/bin/agent_llm_mm workspace --registry /absolute/local-state/workspaces.json enable --id UUID
+```
+
+`unbind` 必须使用 `list` 返回的已存绝对路径文本，不解析符号链接、不匹配父目录或相似路径，旧目录已删除也可撤销。目标 ID 不存在或该精确路径属于其他 ID 会报错；该 ID 已无此路径时重复撤销是无写入的幂等成功。可撤销最后一个 root，此后任何会话解析都拒绝。`active` 与 roots 分开保存：解绑不改变 active；停用后 register/bind 不会隐式启用；enable 要求至少一个已绑定的现存目录。旧 registry 缺少 active 字段时视为 true。
+
+停用或解绑在旧连接的下一次 tools/list、tools/call 生效，包括 durable receipt replay 之前；已经获准 dispatch 的操作不追溯取消。重新启用或恢复原 root 绑定可恢复该固定连接访问，移动到新 root 的连接仍须重新建立。个人 grants 保留不等于停用期间可读取。
+
 个人共享需要明确授权：
 
 ```sh
@@ -112,7 +125,7 @@ AGENT_LLM_MM_CONFIG=/absolute/local-state/core.toml /absolute/bin/agent_llm_mm c
 
 旧 `project/foo` 不会自动变成新注册产生的 `project/<uuid>`。当前没有 namespace adopt、重标历史或跨域迁移命令，也不能用个人 grant 绕过项目隔离。请先只读盘点旧 namespace 并保留原配置/数据库备份；需要读取旧项目历史时继续使用旧 standalone 模式和独立数据库路径。不要把切换入口误认为已迁移数据，不要同时用旧 `serve` 与核心写同一个库。后续数据映射必须单独设计回执、证据关系与恢复验证。
 
-注册表也是恢复资产：数据库备份不包含注册表。保留其稳定 ID、根绑定和授权；不要把私有注册表上传到支持报告。`bind` 只增加根别名，当前没有 unbind/remove 管理命令；移动目录后旧路径仍获绑定，重新使用旧路径前应先人工审查注册表和授权，不能声称旧路径已经撤销。
+注册表也是恢复资产：数据库备份不包含注册表。保留其稳定 ID、根绑定、active 状态和授权；不要把私有注册表上传到支持报告。`bind` 只增加根别名；移动目录后须显式 `unbind` 撤销旧路径，避免以后重新创建该目录时恢复旧绑定。
 
 使用 `scripts/verify-local-core.py --binary /absolute/bin/agent_llm_mm --output /absolute/isolated-output` 做无 Rust 运行 PATH、两项目写入、重连、证据、更正、历史、强制终止、回执重放及恢复到新路径核验。它只操作自己创建的进程和数据库，运行结果保留在显式输出目录。该脚本实现/通过状态以[矩阵](workspace-core-acceptance.md)为准。
 

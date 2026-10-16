@@ -18,6 +18,7 @@ async-trait = "0.1"
 axum = "0.8"
 chrono = { version = "0.4", features = ["serde"] }
 flate2 = { version = "1", optional = true }
+libsqlite3-sys = "0.30.1"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 rmcp = { version = "0.5", features = ["transport-io"] }
 schemars = "1"
@@ -27,6 +28,7 @@ sha2 = "0.10"
 subtle = "2.6"
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite"] }
 tar = { version = "0.4", default-features = false, optional = true }
+tempfile = "3"
 thiserror = "2"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
@@ -35,9 +37,6 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 uuid = { version = "1", features = ["serde", "v4"] }
 zip = { version = "2", default-features = false, optional = true }
-
-[dev-dependencies]
-tempfile = "3"
 
 [[bin]]
 name = "agent_llm_mm"

@@ -1,6 +1,20 @@
+## 2026-10-16 当前执行切片：先补齐工作空间与恢复功能
+
+状态：`active / implementation in progress / uncommitted, verification pending`。当前优先完成实际功能，不重做文档主阶段；允许将 M2 有界可用性功能前移，不因 M1 外部验收未完成而阻塞实现。以下是唯一当前执行入口，后文日期段保留历史依据。
+
+- [ ] **Workspace lifecycle**：`workspace unbind --id UUID --root ABS` 精确移除已存 root（可不存在）；`disable --id UUID` / `enable --id UUID` 显式停用/恢复。ID、授权和账本保留；active 与 bound 独立，enable 须有有效 root。旧连接在下一 tools/list/tools/call、包括 replay 前重新鉴权，已派发操作不追溯取消。实现已接入，待最终同源验证。见[合同](../local-workspace-core.md)。
+- [ ] **Read-only setup assistance**：`workspace inspect` / `status` 输出 registry JSON；`client-config --socket ABS --mode fixed|global` 输出 TOML。只读、不连接核心或账本、不写客户端配置、不授予权限；global 模式需客户端提供正确启动 cwd。实现已接入，待最终同源验证。见[命令](../workspace-client-config.md)。
+- [ ] **Native backup and restore**：`backup --db ABS --output NEW_ABS` / `restore --db ABS --output NEW_ABS`，current schema7、SQLite online backup、一致 WAL、校验后 no-clobber 发布。registry 单独保存；不自动迁移、激活 workspace 或切换客户端。实现已接入，待最终同源验证。见[操作边界](../database-operations.md)。
+
+此前提交 `f8eb9ed` 的 [CI run 38709687717](https://github.com/yooyui/mcp-memory-ledger/actions/runs/38709687717) 已全绿：Ubuntu/macOS 各 794 项 Rust 测试、Windows 429 项，以及 Ubuntu 真实 Chromium 核心网页检查。Windows 仍不支持新核心；这些结果不覆盖本次未提交改动。独立安全审查、新核心真实客户端自然语言、fresh-machine、真实模型效果/费用及人工发布仍未通过。完成上述有限实现不等于全部规划完成。
+
+本轮仅修改助手云端工作区；保留用户数据、历史与回执，不访问 Mac、调用真实模型、推送或替换正式部署。完成代码后做必要回归与文档一致性检查；失败须修复或明确阻断，不以旧 CI 代替新证据。
+
+---
+
 ## 2026-10-15 当前执行切片：本机核心与可信工作空间
 
-状态：`active / M1.W1 in progress / implementation and acceptance pending`。用户已批准在原本地记忆主线上补齐单一本机核心服务、轻量 stdio 桥、可信 workspace 绑定、服务端范围授权、个人记忆显式共享与统一监控。本段是当前执行入口；后文带日期的旧队列与基线保留追溯，不覆盖本段。对应[验收矩阵](../workspace-core-acceptance.md)只记录证据，不另设执行队列。
+状态：`active / M1.W1 in progress / implementation and acceptance pending`。用户已批准在原本地记忆主线上补齐单一本机核心服务、轻量 stdio 桥、可信 workspace 绑定、服务端范围授权、个人记忆显式共享与统一监控。本段保留 2026-10-15 的设计与验收依赖；当前实现切片以页首 2026-10-16 段为准。对应[验收矩阵](../workspace-core-acceptance.md)只记录证据，不另设执行队列。
 
 ### 审计结论与复用边界
 
@@ -88,7 +102,7 @@
 
 # MCP Memory Ledger 全新项目规划
 
-状态：`active / M0 complete / M1.W1 in progress`；历史完成切片保留如下，当前顺序以本文件顶部 2026-10-15 段为准。
+状态：`active / M0 complete / M1.W1 in progress`；历史完成切片保留如下，当前顺序以本文件顶部 2026-10-16 段为准。
 规划日期：`2026-07-10`
 规划输入基线：`dev-work@6fcbb5f`
 主线整理基线：`1f7390d`

@@ -14,19 +14,75 @@ pub use unix::{CoreHandle, start_core};
 
 use crate::support::workspace_registry::{
     WorkspaceRegistry, bind_workspace_root, register_workspace, set_personal_grant,
+    set_workspace_active, unbind_workspace_root,
 };
 use anyhow::Result;
 use cli::{LocalCommand, WorkspaceAction};
 
 pub async fn run_command(command: LocalCommand) -> Result<()> {
     match command {
+        LocalCommand::WorkspaceHelp => {
+            println!(
+                "{}",
+                crate::support::workspace_client_config::WORKSPACE_HELP
+            );
+            Ok(())
+        }
         LocalCommand::Workspace { registry, action } => {
             let result = match action {
+                WorkspaceAction::Inspect { id, root } => {
+                    let root = if id.is_none() && root.is_none() {
+                        Some(std::env::current_dir()?)
+                    } else {
+                        root
+                    };
+                    serde_json::to_value(
+                        crate::support::workspace_client_config::inspect_registry(
+                            &registry,
+                            id.as_deref(),
+                            root.as_deref(),
+                        )?,
+                    )?
+                }
+                WorkspaceAction::Status { id, root } => serde_json::to_value(
+                    crate::support::workspace_client_config::inspect_registry(
+                        &registry,
+                        id.as_deref(),
+                        root.as_deref(),
+                    )?,
+                )?,
+                WorkspaceAction::ClientConfig {
+                    mode,
+                    socket,
+                    id,
+                    root,
+                } => {
+                    let output = crate::support::workspace_client_config::render_client_config(
+                        &registry,
+                        &socket,
+                        &std::env::current_exe()?,
+                        mode,
+                        id.as_deref(),
+                        root.as_deref(),
+                        &std::env::current_dir()?,
+                    )?;
+                    print!("{output}");
+                    return Ok(());
+                }
                 WorkspaceAction::Register { root } => {
                     serde_json::to_value(register_workspace(registry, root)?)?
                 }
                 WorkspaceAction::Bind { id, root } => {
                     serde_json::to_value(bind_workspace_root(registry, id, root)?)?
+                }
+                WorkspaceAction::Unbind { id, root } => {
+                    serde_json::to_value(unbind_workspace_root(registry, id, root)?)?
+                }
+                WorkspaceAction::Disable { id } => {
+                    serde_json::to_value(set_workspace_active(registry, id, false)?)?
+                }
+                WorkspaceAction::Enable { id } => {
+                    serde_json::to_value(set_workspace_active(registry, id, true)?)?
                 }
                 WorkspaceAction::Grant {
                     id,
@@ -100,6 +156,8 @@ async fn run_transport(command: LocalCommand) -> Result<()> {
                 .map_err(|_| anyhow::anyhow!("launch directory is not an available registered workspace; explicitly run workspace --registry <registry> register --root <project-root>, then reconnect from that exact directory"))?;
             unix::run_bridge(socket, grant.workspace_id, root, client_label).await
         }
-        LocalCommand::Workspace { .. } => unreachable!("handled before transport"),
+        LocalCommand::Workspace { .. } | LocalCommand::WorkspaceHelp => {
+            unreachable!("handled before transport")
+        }
     }
 }

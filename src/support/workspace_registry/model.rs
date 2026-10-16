@@ -25,6 +25,8 @@ pub type Registry = WorkspaceRegistry;
 #[serde(deny_unknown_fields)]
 pub struct WorkspaceRegistration {
     pub id: String,
+    #[serde(default = "default_active")]
+    pub active: bool,
     pub roots: Vec<PathBuf>,
     pub project_namespace: String,
     pub personal_grants: Vec<ScopeGrant>,
@@ -94,8 +96,8 @@ impl WorkspaceRegistry {
                 "workspace namespace must match its stable id"
             );
             ensure!(
-                !workspace.roots.is_empty() && workspace.roots.len() <= MAX_ROOTS,
-                "workspace requires 1 to {MAX_ROOTS} roots"
+                workspace.roots.len() <= MAX_ROOTS,
+                "workspace supports at most {MAX_ROOTS} roots"
             );
             for root in &workspace.roots {
                 validate_absolute_path(root)?;
@@ -126,6 +128,8 @@ impl WorkspaceRegistry {
             .iter()
             .find(|workspace| workspace.id == id)
             .ok_or_else(|| anyhow::anyhow!("workspace id is not registered"))?;
+        ensure!(workspace.active, "workspace is disabled");
+        ensure!(!workspace.roots.is_empty(), "workspace has no bound roots");
         Ok(workspace.session_grant())
     }
 
@@ -159,6 +163,7 @@ impl WorkspaceRegistry {
         let workspace = WorkspaceRegistration {
             project_namespace: format!("project/{id}"),
             id,
+            active: true,
             roots: vec![root],
             personal_grants: Vec::new(),
         };
@@ -190,6 +195,39 @@ impl WorkspaceRegistry {
             "too many workspace roots"
         );
         workspace.roots.push(root);
+        Ok(workspace.clone())
+    }
+
+    /// Remove only the exact stored path. No filesystem access or alias expansion.
+    pub(crate) fn unbind_exact(&mut self, id: &str, root: &Path) -> Result<WorkspaceRegistration> {
+        self.validate()?;
+        validate_absolute_path(root)?;
+        // Report an unknown identity before considering another workspace's roots.
+        self.find_mut(id)?;
+        let root_text = root.as_os_str();
+        ensure!(
+            !self.workspaces.iter().any(|workspace| workspace.id != id
+                && workspace
+                    .roots
+                    .iter()
+                    .any(|stored| stored.as_os_str() == root_text)),
+            "root is bound to another workspace"
+        );
+        let workspace = self.find_mut(id)?;
+        workspace
+            .roots
+            .retain(|stored| stored.as_os_str() != root_text);
+        Ok(workspace.clone())
+    }
+
+    pub(crate) fn set_active(&mut self, id: &str, active: bool) -> Result<WorkspaceRegistration> {
+        self.validate()?;
+        let workspace = self.find_mut(id)?;
+        ensure!(
+            !active || !workspace.roots.is_empty(),
+            "workspace has no bound roots"
+        );
+        workspace.active = active;
         Ok(workspace.clone())
     }
 
@@ -310,4 +348,8 @@ pub(crate) fn validate_personal_namespace(namespace: &str) -> Result<()> {
         "invalid personal namespace identifier"
     );
     Ok(())
+}
+
+fn default_active() -> bool {
+    true
 }

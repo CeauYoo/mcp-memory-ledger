@@ -7,6 +7,10 @@ use anyhow::Result;
 #[tokio::main]
 async fn main() -> Result<()> {
     agent_llm_mm::support::tracing::init_tracing();
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if agent_llm_mm::support::database_backup::try_run_cli(&args).await? {
+        return Ok(());
+    }
     if let Some(command) = agent_llm_mm::interfaces::local_core::cli::parse_args(std::env::args())?
     {
         return agent_llm_mm::interfaces::local_core::run_command(command).await;

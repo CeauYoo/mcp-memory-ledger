@@ -1072,4 +1072,64 @@ mod tests {
         assert_eq!(fixture.logs().await, before);
         client.finish().await;
     }
+    #[tokio::test]
+    async fn lifecycle_revocation_rejects_open_session_reads_and_receipt_replay() {
+        use crate::support::workspace_registry::{
+            bind_workspace_root, set_workspace_active, unbind_workspace_root,
+        };
+        let fixture = Fixture::new().await;
+        let mut client = Client::connect(fixture.session()).await;
+        let write = json!({
+            "event":{"owner":"World","kind":"Conversation","summary":"lifecycle-synthetic"},
+            "claim_drafts":[],"episode_reference":null,"request_id":"lifecycle-retry"
+        });
+        let original = client.call("ingest_interaction", write.clone()).await;
+        assert!(original.get("result").is_some(), "{original}");
+        for disabled in [true, false] {
+            if disabled {
+                set_workspace_active(&fixture.registry, &fixture.workspace_id, false).unwrap();
+            } else {
+                unbind_workspace_root(&fixture.registry, &fixture.workspace_id, &fixture.root)
+                    .unwrap();
+            }
+            for (tool, args) in [
+                ("ingest_interaction", write.clone()),
+                ("recall_memory", json!({"query":"lifecycle-synthetic"})),
+                ("export_memory", json!({})),
+            ] {
+                let denied = client.call(tool, args).await;
+                assert_eq!(
+                    denied["error"]["message"],
+                    "session workspace binding is unavailable"
+                );
+            }
+            assert!(
+                client
+                    .request("tools/list", json!({}))
+                    .await
+                    .get("error")
+                    .is_some()
+            );
+            if disabled {
+                set_workspace_active(&fixture.registry, &fixture.workspace_id, true).unwrap();
+            } else {
+                bind_workspace_root(&fixture.registry, &fixture.workspace_id, &fixture.root)
+                    .unwrap();
+            }
+            let replay = client.call("ingest_interaction", write.clone()).await;
+            assert_eq!(
+                replay["result"]["structuredContent"]["event_id"],
+                original["result"]["structuredContent"]["event_id"]
+            );
+            assert_eq!(replay["result"]["structuredContent"]["replayed"], true);
+        }
+        let receipts = fixture
+            .logs()
+            .await
+            .into_iter()
+            .filter(|entry| entry.actor_id == "durable_write_receipt_v1")
+            .count();
+        assert_eq!(receipts, 1);
+        client.finish().await;
+    }
 }

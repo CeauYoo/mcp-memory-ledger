@@ -586,3 +586,54 @@ fn admin_cli_requires_explicit_loopback_and_capability_file_pair() {
         Some(LocalCommand::Core { admin: Some(_), .. })
     ));
 }
+
+#[test]
+fn parses_workspace_lifecycle_and_rejects_unrelated_flags() {
+    let registry = path("registry");
+    let root = path("deleted-root");
+    for (action, expected) in [
+        ("disable", WorkspaceAction::Disable { id: ID.into() }),
+        ("enable", WorkspaceAction::Enable { id: ID.into() }),
+    ] {
+        assert_eq!(
+            parse(&["workspace", "--registry", &registry, action, "--id", ID]).unwrap(),
+            Some(LocalCommand::Workspace {
+                registry: registry.clone().into(),
+                action: expected
+            })
+        );
+        assert!(
+            parse(&[
+                "workspace",
+                "--registry",
+                &registry,
+                action,
+                "--id",
+                ID,
+                "--root",
+                &root
+            ])
+            .is_err()
+        );
+    }
+    assert_eq!(
+        parse(&[
+            "workspace",
+            "--registry",
+            &registry,
+            "unbind",
+            "--id",
+            ID,
+            "--root",
+            &root
+        ])
+        .unwrap(),
+        Some(LocalCommand::Workspace {
+            registry: registry.into(),
+            action: WorkspaceAction::Unbind {
+                id: ID.into(),
+                root: root.into()
+            }
+        })
+    );
+}

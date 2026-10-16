@@ -279,3 +279,149 @@ fn non_utf8_roots_fail_closed() {
     assert!(register_workspace(&path, &root).is_err());
     assert!(!path.exists());
 }
+
+#[test]
+fn lifecycle_preserves_identity_grants_and_requires_explicit_enable() {
+    use agent_llm_mm::support::workspace_registry::{set_workspace_active, unbind_workspace_root};
+    let (temp, path, root) = fixture();
+    let original = register_workspace(&path, &root).unwrap();
+    let granted = set_personal_grant(&path, &original.id, "user/default", true, true).unwrap();
+    let disabled = set_workspace_active(&path, &original.id, false).unwrap();
+    assert!(!disabled.active);
+    assert_eq!(disabled.personal_grants, granted.personal_grants);
+    assert!(resolve_workspace(&path, &root).is_err());
+    assert!(resolve_workspace_id(&path, &original.id).is_err());
+    let bytes = fs::read(&path).unwrap();
+    assert_eq!(
+        set_workspace_active(&path, &original.id, false).unwrap(),
+        disabled
+    );
+    assert_eq!(register_workspace(&path, &root).unwrap(), disabled);
+    assert_eq!(fs::read(&path).unwrap(), bytes);
+    let moved = temp.path().join("moved");
+    fs::rename(&root, &moved).unwrap();
+    assert!(set_workspace_active(&path, &original.id, true).is_err());
+    let unbound = unbind_workspace_root(&path, &original.id, &root).unwrap();
+    assert!(unbound.roots.is_empty());
+    assert!(!unbound.active);
+    assert_eq!(
+        unbind_workspace_root(&path, &original.id, &root).unwrap(),
+        unbound
+    );
+    assert!(set_workspace_active(&path, &original.id, true).is_err());
+    let rebound = bind_workspace_root(&path, &original.id, &moved).unwrap();
+    assert!(!rebound.active);
+    assert!(resolve_workspace(&path, &moved).is_err());
+    let enabled = set_workspace_active(&path, &original.id, true).unwrap();
+    assert!(enabled.active);
+    assert_eq!(enabled.id, original.id);
+    assert_eq!(enabled.personal_grants, granted.personal_grants);
+    assert!(
+        resolve_workspace(&path, &moved)
+            .unwrap()
+            .allows_write("user/default")
+    );
+}
+
+#[test]
+fn unbind_is_exact_and_zero_roots_never_authorizes_a_session() {
+    use agent_llm_mm::support::workspace_registry::{set_workspace_active, unbind_workspace_root};
+    let (temp, path, root) = fixture();
+    let workspace = register_workspace(&path, &root).unwrap();
+    let similar = temp.path().join("project-other");
+    fs::create_dir(&similar).unwrap();
+    bind_workspace_root(&path, &workspace.id, &similar).unwrap();
+    unbind_workspace_root(&path, &workspace.id, root.join("child")).unwrap();
+    assert_eq!(
+        WorkspaceRegistry::load(&path).unwrap().workspaces[0]
+            .roots
+            .len(),
+        2
+    );
+    unbind_workspace_root(&path, &workspace.id, &root).unwrap();
+    assert!(resolve_workspace(&path, &root).is_err());
+    assert!(resolve_workspace(&path, &similar).is_ok());
+    let empty = unbind_workspace_root(&path, &workspace.id, &similar).unwrap();
+    assert!(
+        empty.active,
+        "unbind must preserve explicit activation choice"
+    );
+    assert!(empty.roots.is_empty());
+    assert!(resolve_workspace_id(&path, &workspace.id).is_err());
+    assert!(set_workspace_active(&path, &workspace.id, true).is_err());
+    let unknown = uuid::Uuid::new_v4().to_string();
+    assert!(
+        unbind_workspace_root(&path, &unknown, &root)
+            .unwrap_err()
+            .to_string()
+            .contains("not registered")
+    );
+    assert!(set_workspace_active(&path, &unknown, false).is_err());
+    assert!(unbind_workspace_root(&path, &workspace.id, "relative").is_err());
+    let foreign = register_workspace(&path, &root).unwrap();
+    assert_ne!(foreign.id, workspace.id);
+    assert!(unbind_workspace_root(&path, &workspace.id, &root).is_err());
+}
+
+#[test]
+fn legacy_registry_without_active_remains_readable_and_enabled() {
+    let (_temp, path, root) = fixture();
+    let original = register_workspace(&path, &root).unwrap();
+    let mut value: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    value["workspaces"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("active");
+    private_write(&path, serde_json::to_vec(&value).unwrap());
+    assert!(WorkspaceRegistry::load(&path).unwrap().workspaces[0].active);
+    assert_eq!(
+        resolve_workspace(&path, &root).unwrap().workspace_id,
+        original.id
+    );
+}
+
+#[test]
+fn concurrent_lifecycle_updates_do_not_lose_independent_changes() {
+    use agent_llm_mm::support::workspace_registry::{set_workspace_active, unbind_workspace_root};
+    let (temp, path, root) = fixture();
+    let workspace = register_workspace(&path, &root).unwrap();
+    let barrier = Arc::new(Barrier::new(8));
+    let mut handles = Vec::new();
+    for index in 0..8 {
+        let path = path.clone();
+        let id = workspace.id.clone();
+        let barrier = barrier.clone();
+        let root = if index == 0 {
+            root.clone()
+        } else {
+            temp.path().join(format!("alias-{index}"))
+        };
+        if index > 0 {
+            fs::create_dir(&root).unwrap();
+        }
+        handles.push(thread::spawn(move || {
+            barrier.wait();
+            match index {
+                0 => {
+                    unbind_workspace_root(&path, &id, root).unwrap();
+                }
+                1 => {
+                    set_workspace_active(&path, &id, false).unwrap();
+                }
+                _ => {
+                    bind_workspace_root(&path, &id, root).unwrap();
+                }
+            }
+            set_personal_grant(&path, &id, format!("user/concurrent-{index}"), true, false)
+                .unwrap();
+        }));
+    }
+    for handle in handles {
+        handle.join().unwrap();
+    }
+    let current = &WorkspaceRegistry::load(&path).unwrap().workspaces[0];
+    assert!(!current.active);
+    assert_eq!(current.roots.len(), 6);
+    assert!(!current.roots.contains(&root));
+    assert_eq!(current.personal_grants.len(), 8);
+}

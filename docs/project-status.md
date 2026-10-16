@@ -1,5 +1,19 @@
 # 当前实现状态
 
+## 2026-10-16 当前切片：生命周期、配置输出与原生恢复
+
+当前工作区已接入三项功能，**尚未提交，最终同源验证与新提交 CI 待完成**。这是 M1.W1/W2 的可用性补齐及 M2 实用功能的有限前移；不等待 M1 外部验收才开始实现，也不自动关闭任何里程碑。
+
+| 新能力 | 当前合同 |
+| --- | --- |
+| `workspace unbind / disable / enable` | 精确解绑存储 root；停用保留 ID、授权与账本；旧连接下一请求含 replay 前重新拒绝；启用须有有效 root，已派发操作不追溯取消。见[生命周期](local-workspace-core.md) |
+| `workspace inspect / status / client-config` | 只读 registry JSON / stdout TOML，不读账本或连接核心，不修改配置/权限；配置可用性不等于运行健康。见[配置生成](workspace-client-config.md) |
+| `backup / restore --db ... --output ...` | SQLite online backup、一致 WAL 快照、current schema7 校验、新目标 no-clobber；registry 独立、不自动迁移/切换/激活。见[运维](database-operations.md) |
+
+此前提交 `f8eb9ed` 的 [CI run 38709687717](https://github.com/yooyui/mcp-memory-ledger/actions/runs/38709687717) 已全绿：Ubuntu/macOS 各 794 项 Rust 测试、Windows 429 项，以及 Ubuntu 真实 Chromium 核心网页检查。Windows 仍不支持新核心；这些结果不覆盖本次未提交改动。新增功能的独立安全审查、完整同源回归、跨平台精确 CI 仍待记录；新核心真实客户端自然语言、fresh-machine、真实模型/费用与人工发布仍开放。无 Mac 操作、真实模型调用、推送或正式部署替换。
+
+以下 2026-10-15 段落是此前集成阶段的证据快照；其中“最终 CI 待完成”已由上述旧提交 CI 更新，但不代表当前新增改动已通过。
+
 ## 2026-10-15 当前切片：工作空间核心（进行中）
 
 [本机核心与固定桥](local-workspace-core.md)纳入[唯一 active plan](plans/2026-07-10-product-replan.md)。Unix 核心统一持有数据库和 observer；桥按 `--workspace-id`/`--workspace-root` 显式固定绑定，或通过 `--registry` 在启动时按真实 cwd 精确解析；后者可全局配置一次，但固定 cwd 客户端须用显式模式，连接不会跟随项目移动。registry 每次调用刷新个人读写授权。25 个范围工具允许，7 个全局工具隐藏/拒绝；core ingest 关闭自动反思。核心默认不开监控 HTTP，管理员 CLI 与标签页内存登录入口已接入，公开静态壳不含运行数据，API/SSE 继续独立 Bearer；真实核心端到端尚待验收，未配置生产凭据。

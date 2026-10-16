@@ -1,5 +1,11 @@
 # MCP Memory Ledger 路线图
 
+## 2026-10-16 Now：先补齐可用功能
+
+当前执行切片为 workspace 解绑/停用/启用、只读检查与客户端 TOML 生成、原生 backup/restore 到新路径，代码已接入但未提交、待最终验证。见[状态](project-status.md)、[生命周期](local-workspace-core.md)、[配置输出](workspace-client-config.md)和[恢复手册](database-operations.md)。
+
+允许将 M2 中这些有界实用功能前移，不以 M1 真实客户端验收尚缺为实现阻塞；保留数据、不自动部署、不扩入远程/自治。此前 `f8eb9ed` 精确 CI 已绿，但独立安全审查、新核心真实客户端自然语言、fresh-machine 与发布门仍开放。后文 W1–W4 是依赖和验收范围，不是要求先重复文档/测试阶段才能继续功能的队列。
+
 ## 2026-10-15 本机核心与工作空间方向
 
 用户已批准在本地主线补齐单核心服务、轻量 stdio 桥、稳定 workspace 绑定、服务端范围授权、个人记忆显式共享与统一监控。当前 **M1.W1 进行中，新核心/桥待验收、未部署**；具体顺序只由[唯一 active plan](plans/2026-07-10-product-replan.md)管理，[验收矩阵](workspace-core-acceptance.md)记录证据与未测边界。
@@ -40,11 +46,11 @@ M0 的 scoped snapshot、治理原子性、显式数据库生命周期、loopbac
 
 源代码绑定 portable build/解包验证与实际 Windows wrapper 行为测试已有实现和历史精确提交证据；无需重复领取。新核心/桥须扩展候选验证，并区分 macOS/Linux 新路径与 Windows legacy stdio。当前进度以[状态页](project-status.md)、[本地包合同](portable-packages.md)及[本轮验收矩阵](workspace-core-acceptance.md)为准。
 
-在 M1 退出门基础上补齐：
+M2 的正式退出仍依赖 M1 退出门；有界实现可按顶部当前切片前移：
 
 - 已具备可追溯 binary archive/checksum 与 configured-host CI 的无 Rust 解包闭环；仍须真实 fresh-machine 10 分钟内验收；
 - Windows x86_64 / PowerShell 7.6.6 已有实际 wrapper 与包验证证据；持续验证新 head，并明确其他 OS/架构与用户客户端支持范围；
-- backup → restore-to-new-path → read-only verify → manual switch；
+- 原生 backup / restore-to-new-path 已进入当前实现切片；read-only verify 与 manual switch 保持显式步骤，跨平台和真实恢复证据继续单列；
 - 一个真实 provider 的连通/解析证据（需明确数据与费用授权）；
 - 人工 release decision、rollback note 和公开文档审阅。
 

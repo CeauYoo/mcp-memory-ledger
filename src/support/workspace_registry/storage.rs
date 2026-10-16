@@ -37,6 +37,44 @@ pub fn bind_workspace_root(
     })
 }
 
+/// Revoke the exact registered absolute path, even when the old directory is gone.
+/// Repeating an unbind is harmless. Zero roots makes the workspace unavailable.
+pub fn unbind_workspace_root(
+    path: impl AsRef<Path>,
+    id: impl AsRef<str>,
+    root: impl AsRef<Path>,
+) -> Result<WorkspaceRegistration> {
+    update(path.as_ref(), false, |registry| {
+        registry.unbind_exact(id.as_ref(), root.as_ref())
+    })
+}
+
+/// Preserve identity, grants and ledger data. Enabling needs a live registered root.
+/// Binding a new root never implicitly enables a disabled workspace.
+pub fn set_workspace_active(
+    path: impl AsRef<Path>,
+    id: impl AsRef<str>,
+    active: bool,
+) -> Result<WorkspaceRegistration> {
+    update(path.as_ref(), false, |registry| {
+        if active {
+            let workspace = registry
+                .workspaces
+                .iter()
+                .find(|workspace| workspace.id == id.as_ref())
+                .ok_or_else(|| anyhow::anyhow!("workspace id is not registered"))?;
+            ensure!(
+                workspace
+                    .roots
+                    .iter()
+                    .any(|root| canonical_root(root).is_ok_and(|canonical| canonical == *root)),
+                "enabling workspace requires an existing registered root"
+            );
+        }
+        registry.set_active(id.as_ref(), active)
+    })
+}
+
 /// Both permissions false revokes the grant. Writes always require reads.
 pub fn set_personal_grant(
     path: impl AsRef<Path>,

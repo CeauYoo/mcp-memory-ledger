@@ -11,5 +11,5 @@ mod storage;
 pub use model::{Registry, ScopeGrant, SessionGrant, WorkspaceRegistration, WorkspaceRegistry};
 pub use storage::{
     bind_workspace_root, register_workspace, resolve_workspace, resolve_workspace_id,
-    set_personal_grant,
+    set_personal_grant, set_workspace_active, unbind_workspace_root,
 };

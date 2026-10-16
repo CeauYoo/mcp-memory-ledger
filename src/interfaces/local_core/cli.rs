@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LocalCommand {
+    WorkspaceHelp,
     Core {
         socket: PathBuf,
         registry: PathBuf,
@@ -39,12 +40,36 @@ pub struct AdminOptions {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WorkspaceAction {
+    Inspect {
+        id: Option<String>,
+        root: Option<PathBuf>,
+    },
+    Status {
+        id: Option<String>,
+        root: Option<PathBuf>,
+    },
+    ClientConfig {
+        mode: crate::support::workspace_client_config::ClientMode,
+        socket: PathBuf,
+        id: Option<String>,
+        root: Option<PathBuf>,
+    },
     Register {
         root: PathBuf,
     },
     Bind {
         id: String,
         root: PathBuf,
+    },
+    Unbind {
+        id: String,
+        root: PathBuf,
+    },
+    Disable {
+        id: String,
+    },
+    Enable {
+        id: String,
     },
     Grant {
         id: String,
@@ -69,6 +94,8 @@ const BRIDGE_FLAGS: &[&str] = &[
     "--client-label",
 ];
 const WORKSPACE_FLAGS: &[&str] = &[
+    "--mode",
+    "--socket",
     "--registry",
     "--root",
     "--id",
@@ -84,6 +111,10 @@ type Flags = BTreeMap<&'static str, String>;
 /// Recognized commands fail closed on invalid arguments. Error messages never
 /// interpolate supplied values or unknown flag names, which may be sensitive.
 pub fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Option<LocalCommand>> {
+    let args: Vec<String> = args.into_iter().collect();
+    if args.len() == 3 && args[1] == "workspace" && matches!(args[2].as_str(), "--help" | "-h") {
+        return Ok(Some(LocalCommand::WorkspaceHelp));
+    }
     let mut args = args.into_iter();
     let _program = args.next();
     let command = match args.next().as_deref() {
@@ -145,6 +176,46 @@ fn parse_workspace(args: impl Iterator<Item = String>) -> Result<LocalCommand> {
     let (mut flags, action) = collect_flags(args, WORKSPACE_FLAGS, true)?;
     let registry = absolute_path(take_required(&mut flags, "--registry")?)?;
     let action = match action {
+        Some(action @ ("inspect" | "status")) => {
+            require_only(&flags, &["--id", "--root"])?;
+            let id = flags.remove("--id").map(canonical_uuid).transpose()?;
+            let root = flags.remove("--root").map(absolute_path).transpose()?;
+            ensure!(
+                id.is_none() || root.is_none(),
+                "choose either --id or --root"
+            );
+            if action == "inspect" {
+                WorkspaceAction::Inspect { id, root }
+            } else {
+                WorkspaceAction::Status { id, root }
+            }
+        }
+        Some("client-config") => {
+            require_only(&flags, &["--mode", "--socket", "--id", "--root"])?;
+            let mode = match take_required(&mut flags, "--mode")?.as_str() {
+                "fixed" => crate::support::workspace_client_config::ClientMode::Fixed,
+                "global" => crate::support::workspace_client_config::ClientMode::Global,
+                _ => bail!("client-config mode must be fixed or global"),
+            };
+            let socket = absolute_path(take_required(&mut flags, "--socket")?)?;
+            let id = flags.remove("--id").map(canonical_uuid).transpose()?;
+            let root = flags.remove("--root").map(absolute_path).transpose()?;
+            ensure!(
+                id.is_none() || root.is_none(),
+                "choose either --id or --root"
+            );
+            ensure!(
+                mode != crate::support::workspace_client_config::ClientMode::Global
+                    || (id.is_none() && root.is_none()),
+                "global mode uses launch cwd; --id/--root are not allowed"
+            );
+            WorkspaceAction::ClientConfig {
+                mode,
+                socket,
+                id,
+                root,
+            }
+        }
         Some("register") => {
             require_only(&flags, &["--root"])?;
             WorkspaceAction::Register {
@@ -156,6 +227,22 @@ fn parse_workspace(args: impl Iterator<Item = String>) -> Result<LocalCommand> {
             WorkspaceAction::Bind {
                 id: canonical_uuid(take_required(&mut flags, "--id")?)?,
                 root: absolute_path(take_required(&mut flags, "--root")?)?,
+            }
+        }
+        Some("unbind") => {
+            require_only(&flags, &["--id", "--root"])?;
+            WorkspaceAction::Unbind {
+                id: canonical_uuid(take_required(&mut flags, "--id")?)?,
+                root: absolute_path(take_required(&mut flags, "--root")?)?,
+            }
+        }
+        Some(action @ ("disable" | "enable")) => {
+            require_only(&flags, &["--id"])?;
+            let id = canonical_uuid(take_required(&mut flags, "--id")?)?;
+            if action == "disable" {
+                WorkspaceAction::Disable { id }
+            } else {
+                WorkspaceAction::Enable { id }
             }
         }
         Some("grant") => {
@@ -210,7 +297,13 @@ fn collect_flags(
                 "register" => "register",
                 "bind" => "bind",
                 "grant" => "grant",
+                "unbind" => "unbind",
+                "disable" => "disable",
+                "enable" => "enable",
                 "list" => "list",
+                "inspect" => "inspect",
+                "status" => "status",
+                "client-config" => "client-config",
                 _ => bail!("unsupported workspace action"),
             });
         }

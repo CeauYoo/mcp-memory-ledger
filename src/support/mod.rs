@@ -1,5 +1,6 @@
 pub mod cli;
 pub mod config;
+pub mod database_backup;
 pub mod doctor;
 #[cfg(feature = "release-tools")]
 pub mod local_alpha_evidence;
@@ -25,4 +26,5 @@ pub mod remote_team;
 pub mod status_sync;
 pub mod support_bundle;
 pub mod tracing;
+pub mod workspace_client_config;
 pub mod workspace_registry;

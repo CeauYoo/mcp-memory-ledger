@@ -1,5 +1,24 @@
 # Self-Agent MCP 测试指南（2026-03-24，按 2026-07-15 fresh 验证更新）
 
+## 2026-10-16 新功能的必要验证入口
+
+先完成本轮功能，再用以下定向检查确认对应合同；不重复整轮文档主阶段。当前改动未提交，以下命令是复现入口，不能当作全部已通过：
+
+```sh
+cargo test --test workspace_registry --test local_core_cli --test workspace_client_config --test database_backup
+cargo test --test local_core
+./scripts/status-sync-check.sh
+git diff --check
+```
+
+当前工作区定向结果（2026-10-16，功能实现者已执行）：`cargo test --offline --test workspace_registry --test local_core_cli` 为 14 + 16 项通过；`cargo test --offline --test workspace_client_config --test local_core_cli` 为 5 + 16 项通过（后者重复，不累加）；`cargo test --offline --test database_backup` 为 7 项通过；`cargo test --offline --lib interfaces::local_core::session::tests` 为 8 项通过。仅是 Linux 云端 mock 定向证据，未覆盖完整当前源码、独立安全审查或跨平台新提交 CI。
+
+本轮冻结源码完整检查（2026-10-16）：`cargo test --offline --all-features --no-fail-fast` 跑完 812 项，首轮 800 通过、12 失败。11 项 `local_core` Unix socket 测试均在 fixture 启动处被当前云端 sandbox 的 AF_UNIX `EPERM` 阻断（独立 socket 创建探针同样拒绝）。另 1 项旧 demo wrapper 硬编码 `target/debug`，与本轮独立 `CARGO_TARGET_DIR` 不一致；在忽略的构建目录恢复指向本轮缓存的标准路径后，`self_revision_demo_runner` 两项重跑通过，无产品源码改动。去重结果为 **801 通过、11 项环境阻断**，不是全套通过。`cargo clippy --offline --all-targets --all-features -- -D warnings`、`cargo fmt --all -- --check`、`git diff --check` 与 `status-sync-check`（33 项）通过。使用 Rust 1.95、debug=0、incremental=0；无真实模型调用。当前增量的精确提交平台 CI 仍待验证。
+
+检查解绑已移动 root、停用/恢复与旧连接 replay 拒绝；只读 inspect/status 不改变 registry，生成 TOML 可解析且不写客户端配置；backup/restore 包含已提交 WAL、拒绝旧 schema/损坏结构/既有目标/sidecar，失败不损伤源文件或既有目标。registry 不在数据库快照中，恢复不自动激活/切换。
+
+此前提交 `f8eb9ed` 的 [CI run 38709687717](https://github.com/yooyui/mcp-memory-ledger/actions/runs/38709687717) 已全绿：Ubuntu/macOS 各 794 项 Rust 测试、Windows 429 项，以及 Ubuntu 真实 Chromium 核心网页检查。Windows 仍不支持新核心；这些结果不覆盖本次未提交改动。新改动须取得自己的回归与精确提交结果；独立安全审查、新核心真实客户端自然语言及 fresh-machine 仍未通过。Unix 实际进程检查受平台/环境限制时明确记录，不能宣称 Windows 新核心支持。下方 2026-10-15 定向数字和环境阻断保留当时含义。
+
 ## 2026-10-15 工作空间核心验证（进行中）
 
 按[唯一active plan](plans/2026-07-10-product-replan.md)与[验收矩阵](workspace-core-acceptance.md)执行，不把源码存在或定向测试当全套通过。当前已有registry11项、实际Codex roots67条断言、管理员监控7项及legacy HTTP6项定向证据；历史首轮完整集成发现3项失败；云端已续建，最终同源回归仍待完成。最终总数、独立审查与精确提交CI尚待收口，以下命令只是复现入口。

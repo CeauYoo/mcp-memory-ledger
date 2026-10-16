@@ -1,5 +1,15 @@
 # MCP Memory Ledger
 
+## 2026-10-16 实用功能续建（未提交，待验证）
+
+本次优先补齐三项真实功能：
+
+- [工作空间生命周期](docs/local-workspace-core.md)：`workspace unbind` 解除指定旧 root；`disable` / `enable` 停用和恢复已有身份，保留记忆与个人授权，不删除用户数据。
+- [检查与客户端配置](docs/workspace-client-config.md)：`workspace inspect` / `status` 只读检查注册状态；`client-config --mode fixed|global --socket ...` 将桥配置 TOML 输出到 stdout，审阅后手动合并，不改客户端配置，也不代表核心运行健康。
+- [原生备份恢复](docs/database-operations.md)：`backup --db ... --output ...` / `restore --db ... --output ...` 使用 SQLite 一致快照，只接受 current schema、恢复到不存在的新路径；registry 独立保存，不自动切换部署。
+
+此前提交 `f8eb9ed` 的 [CI run 38709687717](https://github.com/yooyui/mcp-memory-ledger/actions/runs/38709687717) 已全绿：Ubuntu/macOS 各 794 项 Rust 测试、Windows 429 项，以及 Ubuntu 真实 Chromium 核心网页检查。Windows 仍不支持新核心；这些结果不覆盖本次未提交改动。独立安全审查、新核心真实客户端自然语言、fresh-machine 与发布门仍未通过；正式 Mac 部署未替换。下方带日期记录保留历史范围。
+
 ## 2026-10-15 本机核心与验收进度
 
 已安装旧版 `d9e33d3` 的 Mac 验收完成 20 项直接 MCP 协议检查、11 项网页检查，以及一个真实用户自然语言主动 `recall_memory` → `get_memory`、后续更正样本；该样本也发现重复召回。原始记录保留本机，范围见[验收矩阵](docs/workspace-core-acceptance.md)。这不等于新架构、长期稳定性或模型效果通过。

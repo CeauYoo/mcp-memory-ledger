@@ -5,10 +5,10 @@
 ## 当前计划
 
 - [2026-07-10-product-replan.md](2026-07-10-product-replan.md)
-  - 状态：`active / M0 complete / M1.W1–W4 integration and acceptance pending`；已完成历史切片保留在 active plan 中
+  - 状态：`active / M0 complete / workspace usability and native recovery implementation pending verification`；已完成历史切片保留在 active plan 中
   - 目标：把现有 technical MVP 收束为可信、可检索、可审计、可恢复的本地 MCP Memory Ledger
   - 当前里程碑：`M1 Trustworthy Recall`
-  - 当前执行状态：2026-10-15 单核心/可信workspace/全局桥入口与管理员监控在集成；文档和候选验证已接线，真实Unix闭环须精确提交CI，详见[验收矩阵](../workspace-core-acceptance.md)。schema7 有界全局 self-model 版本/diff/显式补偿已完成本地验证，见[阶段结果](2026-10-10-schema7-results.md)；schema6、in-crate 模块拆分、上下文/诊断与 caller budget 的有限实现已完成；M1.3.0 与 M2.0.1 已完成。剩余真实用户客户端/fresh-machine/正式发布与真实模型效果门见[最终核对](2026-10-09-original-plan-final-reconciliation.md)，不是重复实现队列
+  - 当前执行状态：2026-10-16 优先实现 workspace unbind/disable/enable、只读 inspect/status/client-config 与原生 backup/restore；代码已接入、未提交，待最终同源验证。此前 f8eb9ed 精确 CI 已绿，不覆盖新增改动。部分 M2 实用功能允许前移，M1 未闭外部门不阻塞该实现；独立安全审查、新核心真实客户端自然语言、fresh-machine 与发布门继续开放，详见[验收矩阵](../workspace-core-acceptance.md)。schema7 有界全局 self-model 版本/diff/显式补偿已完成本地验证，见[阶段结果](2026-10-10-schema7-results.md)；schema6、in-crate 模块拆分、上下文/诊断与 caller budget 的有限实现已完成；M1.3.0 与 M2.0.1 已完成。剩余真实用户客户端/fresh-machine/正式发布与真实模型效果门见[最终核对](2026-10-09-original-plan-final-reconciliation.md)，不是重复实现队列
 
 ## 权威层级
 
