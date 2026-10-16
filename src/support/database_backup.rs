@@ -294,6 +294,16 @@ mod windows_path_tests {
         reject_symlinks(&root).unwrap();
         reject_symlinks(&root.join("new-snapshot.sqlite")).unwrap();
         assert!(reject_symlinks(Path::new(r"C:relative.sqlite")).is_err());
-        assert!(reject_symlinks(&root.join("..").join("snapshot.sqlite")).is_err());
+        // PathBuf::join normalizes away `..` after a Windows verbatim prefix.
+        // Append raw OS text so the validator actually receives traversal input.
+        let mut traversal = root.as_os_str().to_os_string();
+        traversal.push(r"\..\snapshot.sqlite");
+        let traversal = PathBuf::from(traversal);
+        assert!(
+            traversal
+                .components()
+                .any(|part| part == Component::ParentDir)
+        );
+        assert!(reject_symlinks(&traversal).is_err());
     }
 }

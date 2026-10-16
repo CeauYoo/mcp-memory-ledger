@@ -190,11 +190,18 @@ fn restore_rejects_parent_directory_components_in_target_path() {
 
     let temp_dir = tempdir().expect("temp dir");
     let backup_path = temp_dir.path().join("backup.sqlite.bak");
-    let target_path = temp_dir
-        .path()
-        .join("restore")
-        .join("..")
-        .join("target.sqlite");
+    // Preserve the lexical traversal even if the temp path has a verbatim prefix.
+    let mut target_path = temp_dir.path().as_os_str().to_os_string();
+    let separator = std::path::MAIN_SEPARATOR;
+    target_path.push(format!(
+        "{separator}restore{separator}..{separator}target.sqlite"
+    ));
+    let target_path = PathBuf::from(target_path);
+    assert!(
+        target_path
+            .components()
+            .any(|part| part == std::path::Component::ParentDir)
+    );
     create_placeholder_file(&backup_path);
 
     let output = run_script(&[

@@ -140,4 +140,9 @@ Backup and migration flushes reopen their existing completed snapshots with read
 
 No new blocking source defect was established in this focused correction. The author reports 56 Linux bootstrap/backup/lifecycle tests plus strict Clippy and formatting passed. This reviewer did not independently rerun those tests. The new Windows-specific regression and corrective native workflow remain pending; neither this addendum nor Linux results establish Windows acceptance.
 
-The current combined implementation manifest is `integrated-source-manifest.sha256`, SHA256 `94ca9fb3aadbafc021df7346ee7684cd9ad7a94fc2662dcc0de53508dd103fa6`. Both earlier manifests remain available under their historical filenames. Subsequent native results must be tied to the exact published corrective commit.
+The manifest for this correction is retained as `integrated-source-manifest-windows-ci-fix2.sha256`, SHA256 `94ca9fb3aadbafc021df7346ee7684cd9ad7a94fc2662dcc0de53508dd103fa6`. Both earlier manifests remain available under their historical filenames. Subsequent native results must be tied to the exact published corrective commit.
+
+
+### Release verification note: lexical traversal fixtures
+
+The subsequent native run passed 52 library tests but exposed a fixture that used PathBuf::join after a Windows verbatim prefix; this normalized away the intended parent component before validation. The corrective delta changes only two test fixtures to append raw OS text and assert an actual ParentDir component before checking rejection. Production behavior is unchanged. One Linux legacy restore fixture and formatting/diff checks passed; native Windows execution remains pending. This release-verification note is not an additional independent security review. The refreshed full-file source/test manifest is `integrated-source-manifest.sha256`, SHA256 `d5c3a664ec9339813d77c28d44e1c3027dcd51e99a092d761ac684b9874c8916`.
