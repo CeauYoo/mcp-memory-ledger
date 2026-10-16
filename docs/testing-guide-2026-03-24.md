@@ -1,5 +1,7 @@
 # Self-Agent MCP 测试指南（2026-03-24，按 2026-07-15 fresh 验证更新）
 
+旧域接入定向回归：`cargo test --test workspace_adoption` 与 `cargo test --lib interfaces::local_core::session::tests`。只使用隔离合成库，核对只读 preview、scope 来源闭包、锁冲突、旧数据/receipt 不变与固定握手 namespace；详见[合同](workspace-legacy-adoption.md)。
+
 ## 2026-10-16 新功能的必要验证入口
 
 先完成本轮功能，再用以下定向检查确认对应合同；不重复整轮文档主阶段。当前改动未提交，以下命令是复现入口，不能当作全部已通过：

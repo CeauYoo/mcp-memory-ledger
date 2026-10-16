@@ -129,7 +129,7 @@ pub(crate) fn load(path: &Path) -> Result<WorkspaceRegistry> {
     Ok(registry)
 }
 
-fn update<F>(path: &Path, create: bool, change: F) -> Result<WorkspaceRegistration>
+pub(super) fn update<F>(path: &Path, create: bool, change: F) -> Result<WorkspaceRegistration>
 where
     F: FnOnce(&mut WorkspaceRegistry) -> Result<WorkspaceRegistration>,
 {
@@ -149,7 +149,7 @@ where
     Ok(result)
 }
 
-fn canonical_root(root: &Path) -> Result<PathBuf> {
+pub(super) fn canonical_root(root: &Path) -> Result<PathBuf> {
     // Relative roots are ambiguous across callers; canonical aliases of an
     // absolute directory are deliberately supported.
     let text = root
@@ -165,7 +165,7 @@ fn canonical_root(root: &Path) -> Result<PathBuf> {
     Ok(root)
 }
 
-fn validate_registry_path(path: &Path) -> Result<()> {
+pub(super) fn validate_registry_path(path: &Path) -> Result<()> {
     validate_absolute_path(path)?;
     ensure!(
         path.file_name().is_some(),
@@ -260,6 +260,8 @@ impl RegistryLock {
     fn acquire(registry_path: &Path) -> Result<Self> {
         let path = sibling(registry_path, ".lock");
         let started = Instant::now();
+        #[cfg(windows)]
+        let mut unexplained_denial_since = None;
         loop {
             match private_create(&path) {
                 Ok(file) => {
@@ -275,6 +277,10 @@ impl RegistryLock {
                         .downcast_ref::<std::io::Error>()
                         .is_some_and(|error| error.kind() == std::io::ErrorKind::AlreadyExists) =>
                 {
+                    #[cfg(windows)]
+                    {
+                        unexplained_denial_since = None;
+                    }
                     // Never delete an unknown lock, even if its owner appears gone.
                     if started.elapsed() >= Duration::from_secs(2) {
                         bail!(
@@ -284,10 +290,50 @@ impl RegistryLock {
                     }
                     thread::sleep(Duration::from_millis(10));
                 }
-                Err(error) => return Err(error.context("create workspace registry lock")),
+                Err(error) => {
+                    #[cfg(windows)]
+                    if let Some(io_error) = error.downcast_ref::<std::io::Error>() {
+                        // Windows can return ACCESS_DENIED while the previous lock
+                        // is delete-pending, or sharing/lock violations on cleanup.
+                        // A real ACL denial must remain a denial, not a stale-lock error.
+                        let known_lock = fs::symlink_metadata(&path).is_ok_and(|metadata| {
+                            metadata.is_file() && !metadata.file_type().is_symlink()
+                        });
+                        let unconfirmed_elapsed = if known_lock {
+                            unexplained_denial_since = None;
+                            Duration::ZERO
+                        } else {
+                            unexplained_denial_since
+                                .get_or_insert_with(Instant::now)
+                                .elapsed()
+                        };
+                        if windows_lock_retry(
+                            io_error.raw_os_error(),
+                            known_lock,
+                            started.elapsed(),
+                            unconfirmed_elapsed,
+                        ) {
+                            thread::sleep(Duration::from_millis(10));
+                            continue;
+                        }
+                    }
+                    return Err(error.context("create workspace registry lock"));
+                }
             }
         }
     }
+}
+
+#[cfg(any(windows, test))]
+fn windows_lock_retry(
+    code: Option<i32>,
+    known_lock: bool,
+    elapsed: Duration,
+    unconfirmed_elapsed: Duration,
+) -> bool {
+    matches!(code, Some(5 | 32 | 33))
+        && elapsed < Duration::from_secs(2)
+        && (known_lock || unconfirmed_elapsed < Duration::from_millis(100))
 }
 
 impl Drop for RegistryLock {
@@ -325,6 +371,19 @@ fn atomic_replace(
     registry: &WorkspaceRegistry,
     before_commit: impl FnOnce() -> Result<()>,
 ) -> Result<()> {
+    atomic_replace_with_sync(path, registry, before_commit, || {
+        #[cfg(unix)]
+        File::open(path.parent().expect("validated registry path"))?.sync_all()?;
+        Ok(())
+    })
+}
+
+fn atomic_replace_with_sync(
+    path: &Path,
+    registry: &WorkspaceRegistry,
+    before_commit: impl FnOnce() -> Result<()>,
+    sync_directory: impl FnOnce() -> Result<()>,
+) -> Result<()> {
     registry.validate()?;
     let mut data = serde_json::to_vec_pretty(registry)?;
     data.push(b'\n');
@@ -340,14 +399,57 @@ fn atomic_replace(
     before_commit()?;
     validate_registry_path(path)?;
     fs::rename(&temp.0, path).context("atomically replace workspace registry")?;
-    #[cfg(unix)]
-    File::open(path.parent().expect("validated registry path"))?.sync_all()?;
+    sync_directory().context("workspace registry replacement is already visible, but directory durability is unconfirmed; inspect the registry before retrying")?;
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn windows_lock_contention_retry_is_bounded_and_preserves_other_errors() {
+        for code in [5, 32, 33] {
+            assert!(windows_lock_retry(
+                Some(code),
+                false,
+                Duration::ZERO,
+                Duration::ZERO
+            ));
+            assert!(windows_lock_retry(
+                Some(code),
+                false,
+                Duration::from_secs(1),
+                Duration::ZERO
+            ));
+            assert!(!windows_lock_retry(
+                Some(code),
+                false,
+                Duration::from_millis(100),
+                Duration::from_millis(100)
+            ));
+            assert!(windows_lock_retry(
+                Some(code),
+                true,
+                Duration::from_millis(100),
+                Duration::from_millis(100)
+            ));
+            assert!(!windows_lock_retry(
+                Some(code),
+                true,
+                Duration::from_secs(2),
+                Duration::ZERO
+            ));
+        }
+        for code in [None, Some(2), Some(3), Some(87)] {
+            assert!(!windows_lock_retry(
+                code,
+                true,
+                Duration::ZERO,
+                Duration::ZERO
+            ));
+        }
+    }
 
     #[test]
     fn failed_atomic_commit_preserves_previous_registry_and_removes_own_temp_file() {
@@ -373,5 +475,31 @@ mod tests {
         assert_eq!(fs::read_dir(temp.path()).unwrap().count(), 1);
         atomic_replace(&path, &changed, || Ok(())).unwrap();
         assert_eq!(load(&path).unwrap(), changed);
+    }
+    #[test]
+    fn failed_directory_sync_reports_publication_instead_of_claiming_no_change() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().canonicalize().unwrap().join("registry.json");
+        let mut registry = WorkspaceRegistry::default();
+        registry
+            .register_canonical(
+                dir.path().canonicalize().unwrap(),
+                Uuid::new_v4().to_string(),
+            )
+            .unwrap();
+        let error = atomic_replace_with_sync(
+            &path,
+            &registry,
+            || Ok(()),
+            || bail!("injected directory sync failure"),
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("already visible"));
+        assert!(
+            error
+                .to_string()
+                .contains("inspect the registry before retrying")
+        );
+        assert_eq!(load(&path).unwrap(), registry);
     }
 }

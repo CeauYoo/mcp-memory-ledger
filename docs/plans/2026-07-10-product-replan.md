@@ -1,5 +1,7 @@
 ## 2026-10-16 当前执行切片：先补齐工作空间与恢复功能
 
+旧项目基础事实显式接入首片补充 `adopt-preview` / `adopt`、registry v2 namespace 映射与旧连接 fail-closed。高级历史全闭包接入仍开放；不得把保守首片当作任意旧库迁移。见[限定合同](../workspace-legacy-adoption.md)。
+
 状态：`active / implementation in progress / uncommitted, verification pending`。当前优先完成实际功能，不重做文档主阶段；允许将 M2 有界可用性功能前移，不因 M1 外部验收未完成而阻塞实现。以下是唯一当前执行入口，后文日期段保留历史依据。
 
 - [ ] **Workspace lifecycle**：`workspace unbind --id UUID --root ABS` 精确移除已存 root（可不存在）；`disable --id UUID` / `enable --id UUID` 显式停用/恢复。ID、授权和账本保留；active 与 bound 独立，enable 须有有效 root。旧连接在下一 tools/list/tools/call、包括 replay 前重新鉴权，已派发操作不追溯取消。实现已接入，待最终同源验证。见[合同](../local-workspace-core.md)。

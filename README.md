@@ -1,5 +1,7 @@
 # MCP Memory Ledger
 
+旧项目基础事实可先用 `workspace adopt-preview` 盘点，再显式 `adopt` 新建 UUID → 旧 namespace 映射；不改数据库历史/receipt。首片遇高级历史会明确保守阻断，不能视作任意旧库通用迁移。见[支持边界与示例](docs/workspace-legacy-adoption.md)。
+
 ## 2026-10-16 实用功能续建（未提交，待验证）
 
 本次优先补齐三项真实功能：

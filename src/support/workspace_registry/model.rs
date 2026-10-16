@@ -81,19 +81,34 @@ impl WorkspaceRegistry {
     /// Pure structural validation. Existing roots may later move or be offline;
     /// only an explicit root resolution accesses the filesystem.
     pub fn validate(&self) -> Result<()> {
-        ensure!(self.version == 1, "unsupported workspace registry version");
+        ensure!(
+            matches!(self.version, 1 | 2),
+            "unsupported workspace registry version"
+        );
         ensure!(
             self.workspaces.len() <= MAX_WORKSPACES,
             "too many workspaces"
         );
         let mut ids = HashSet::new();
         let mut roots = HashSet::new();
+        let mut projects = HashSet::new();
         for workspace in &self.workspaces {
             validate_id(&workspace.id)?;
             ensure!(ids.insert(&workspace.id), "duplicate workspace id");
+            let default_namespace = format!("project/{}", workspace.id);
+            if self.version == 1 || workspace.project_namespace != default_namespace {
+                if self.version == 1 {
+                    ensure!(
+                        workspace.project_namespace == default_namespace,
+                        "version 1 workspace namespace must match its stable id"
+                    );
+                } else {
+                    validate_legacy_namespace(&workspace.project_namespace)?;
+                }
+            }
             ensure!(
-                workspace.project_namespace == format!("project/{}", workspace.id),
-                "workspace namespace must match its stable id"
+                projects.insert(&workspace.project_namespace),
+                "project namespace is already registered"
             );
             ensure!(
                 workspace.roots.len() <= MAX_ROOTS,
@@ -171,6 +186,33 @@ impl WorkspaceRegistry {
         Ok(workspace)
     }
 
+    pub(crate) fn adopt_canonical(
+        &mut self,
+        root: PathBuf,
+        namespace: &str,
+        new_id: String,
+    ) -> Result<WorkspaceRegistration> {
+        self.validate()?;
+        validate_legacy_namespace(namespace)?;
+        ensure!(
+            !self.workspaces.iter().any(|w| w.roots.contains(&root)),
+            "adoption root is already registered; existing workspaces cannot be remapped"
+        );
+        ensure!(
+            !self
+                .workspaces
+                .iter()
+                .any(|w| w.project_namespace == namespace),
+            "project namespace is already registered"
+        );
+        let mut workspace = self.register_canonical(root, new_id)?;
+        workspace.project_namespace = namespace.to_owned();
+        *self.workspaces.last_mut().expect("new registration") = workspace.clone();
+        self.version = 2;
+        self.validate()?;
+        Ok(workspace)
+    }
+
     pub(crate) fn bind_canonical(
         &mut self,
         id: &str,
@@ -204,19 +246,18 @@ impl WorkspaceRegistry {
         validate_absolute_path(root)?;
         // Report an unknown identity before considering another workspace's roots.
         self.find_mut(id)?;
-        let root_text = root.as_os_str();
         ensure!(
             !self.workspaces.iter().any(|workspace| workspace.id != id
                 && workspace
                     .roots
                     .iter()
-                    .any(|stored| stored.as_os_str() == root_text)),
+                    .any(|stored| exact_root_match(stored, root))),
             "root is bound to another workspace"
         );
         let workspace = self.find_mut(id)?;
         workspace
             .roots
-            .retain(|stored| stored.as_os_str() != root_text);
+            .retain(|stored| !exact_root_match(stored, root));
         Ok(workspace.clone())
     }
 
@@ -352,4 +393,81 @@ pub(crate) fn validate_personal_namespace(namespace: &str) -> Result<()> {
 
 fn default_active() -> bool {
     true
+}
+
+/// UUID-shaped project domains are reserved for stable workspace identities.
+pub(crate) fn validate_legacy_namespace(namespace: &str) -> Result<()> {
+    // Share the exact downstream export/experience namespace contract.
+    crate::domain::experience::validate_namespace(namespace)?;
+    let suffix = namespace
+        .strip_prefix("project/")
+        .ok_or_else(|| anyhow::anyhow!("adoption requires a project namespace"))?;
+    ensure!(
+        Uuid::parse_str(suffix).is_err(),
+        "UUID project namespaces are reserved for workspace identities"
+    );
+    Ok(())
+}
+
+/// Windows canonicalization adds a verbatim prefix. Compare only deterministic
+/// path spellings, never filesystem aliases, ancestors, or case-folded names.
+fn exact_root_match(stored: &Path, requested: &Path) -> bool {
+    if stored.as_os_str() == requested.as_os_str() {
+        return true;
+    }
+    #[cfg(windows)]
+    if let (Some(stored), Some(requested)) = (stored.to_str(), requested.to_str()) {
+        return windows_root_key(stored) == windows_root_key(requested);
+    }
+    false
+}
+
+#[cfg(any(windows, test))]
+fn windows_root_key(path: &str) -> String {
+    let ordinary = if let Some(unc) = path.strip_prefix(r"\\?\UNC\") {
+        format!(r"\\{unc}")
+    } else if let Some(disk) = path.strip_prefix(r"\\?\")
+        && disk.as_bytes().first().is_some_and(u8::is_ascii_alphabetic)
+        && disk.as_bytes().get(1..3) == Some(b":\\")
+    {
+        disk.to_owned()
+    } else {
+        path.to_owned()
+    };
+    // Slash spelling is equivalent in ordinary Win32 paths; preserve all names,
+    // dot segments and trailing separators, so none becomes a fuzzy match.
+    let mut key = ordinary.replace('/', r"\");
+    if key.as_bytes().first().is_some_and(u8::is_ascii_alphabetic)
+        && key.as_bytes().get(1..3) == Some(b":\\")
+    {
+        key.replace_range(..1, &key[..1].to_ascii_uppercase());
+    }
+    key
+}
+
+#[cfg(test)]
+mod path_identity_tests {
+    use super::windows_root_key as key;
+
+    #[test]
+    fn windows_canonical_prefix_has_exact_lexical_equivalence_without_io() {
+        assert_eq!(key(r"\\?\C:\gone\project"), key(r"C:\gone\project"));
+        assert_eq!(key(r"\\?\C:\gone\project"), key("c:/gone/project"));
+        assert_eq!(
+            key(r"\\?\UNC\server\share\gone"),
+            key(r"\\server\share\gone")
+        );
+        for other in [
+            r"C:\gone\project-other",
+            r"C:\gone",
+            r"C:\gone\project\child",
+            r"C:\gone\Project",
+            r"C:\gone\.\project",
+            r"C:\gone\other\..\project",
+            r"\\.\C:\gone\project",
+            r"D:\gone\project",
+        ] {
+            assert_ne!(key(r"\\?\C:\gone\project"), key(other));
+        }
+    }
 }

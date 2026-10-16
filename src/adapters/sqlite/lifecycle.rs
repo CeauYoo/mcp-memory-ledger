@@ -748,7 +748,7 @@ async fn inspect_pool(
     report
 }
 
-async fn inspect_connection(
+pub(super) async fn inspect_connection(
     connection: &mut SqliteConnection,
     operation: &str,
     database_exists: bool,

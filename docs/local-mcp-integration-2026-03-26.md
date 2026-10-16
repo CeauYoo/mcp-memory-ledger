@@ -1,5 +1,7 @@
 # 本机 MCP 接入
 
+旧 namespace 接入必须显式预览与 adopt，不能把现有 workspace 默认域改名。新 core 应使用 registry 实际返回的 project namespace（普通注册为 UUID 域，v2 adopted workspace 保留旧域）；参见[首片支持合同](workspace-legacy-adoption.md)。
+
 ## 2026-10-15 先选连接模式
 
 - 原 `serve`：客户端每次启动独立运行时，32个工具；下面的JSON/TOML例子均属此模式。全局注册一次不意味着后台只有一个进程，namespace只是数据范围。
@@ -53,7 +55,7 @@ env = { AGENT_LLM_MM_CONFIG = "/absolute/path/ledger-demo.toml" }
 ## 3. 连接后验证
 
 1. 原standalone模式重新加载/连接server，检查`tools/list`返回32个工具；新核心应只列25个，并另外验证直接调用被隐藏的7个工具也被拒绝。
-2. 原standalone模式用`ingest_interaction`向`project/demo`写入合成Event/Claim并保存ID；新核心必须使用registry返回的`project/<id>`，不得把示例namespace当成已授权范围。
+2. 原standalone模式用`ingest_interaction`向`project/demo`写入合成Event/Claim并保存ID；新核心必须使用registry返回的实际project namespace，不得把示例namespace当成已授权范围。
 3. 断开再连接；用 `recall_memory` 查原文，再 `get_memory` 查看 evidence/provenance。
 4. 按[完整工作流](runnable-memory-workflow.md)更正并查看历史；确认其他 namespace 不混入。
 

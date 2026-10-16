@@ -40,6 +40,12 @@ pub struct AdminOptions {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WorkspaceAction {
+    Adopt {
+        root: PathBuf,
+        namespace: String,
+        database: PathBuf,
+        preview: bool,
+    },
     Inspect {
         id: Option<String>,
         root: Option<PathBuf>,
@@ -94,6 +100,7 @@ const BRIDGE_FLAGS: &[&str] = &[
     "--client-label",
 ];
 const WORKSPACE_FLAGS: &[&str] = &[
+    "--database",
     "--mode",
     "--socket",
     "--registry",
@@ -176,6 +183,15 @@ fn parse_workspace(args: impl Iterator<Item = String>) -> Result<LocalCommand> {
     let (mut flags, action) = collect_flags(args, WORKSPACE_FLAGS, true)?;
     let registry = absolute_path(take_required(&mut flags, "--registry")?)?;
     let action = match action {
+        Some(action @ ("adopt" | "adopt-preview")) => {
+            require_only(&flags, &["--root", "--namespace", "--database"])?;
+            WorkspaceAction::Adopt {
+                root: absolute_path(take_required(&mut flags, "--root")?)?,
+                namespace: take_required(&mut flags, "--namespace")?,
+                database: absolute_path(take_required(&mut flags, "--database")?)?,
+                preview: action == "adopt-preview",
+            }
+        }
         Some(action @ ("inspect" | "status")) => {
             require_only(&flags, &["--id", "--root"])?;
             let id = flags.remove("--id").map(canonical_uuid).transpose()?;
@@ -294,6 +310,8 @@ fn collect_flags(
             ensure!(workspace_action, "unexpected local command argument");
             ensure!(action.is_none(), "workspace requires exactly one action");
             action = Some(match argument.as_str() {
+                "adopt" => "adopt",
+                "adopt-preview" => "adopt-preview",
                 "register" => "register",
                 "bind" => "bind",
                 "grant" => "grant",

@@ -425,3 +425,21 @@ fn concurrent_lifecycle_updates_do_not_lose_independent_changes() {
     assert!(!current.roots.contains(&root));
     assert_eq!(current.personal_grants.len(), 8);
 }
+
+#[cfg(windows)]
+#[test]
+fn windows_unbind_accepts_original_absolute_spelling_after_directory_is_removed() {
+    use agent_llm_mm::support::workspace_registry::unbind_workspace_root;
+    let (_temp, path, root) = fixture();
+    let workspace = register_workspace(&path, &root).unwrap();
+    assert!(workspace.roots[0].to_str().unwrap().starts_with(r"\\?\"));
+    let ordinary = root.to_str().unwrap().replace('\\', "/");
+    fs::remove_dir(&root).unwrap();
+    let removed = unbind_workspace_root(&path, &workspace.id, &ordinary).unwrap();
+    assert!(removed.roots.is_empty());
+    assert_eq!(
+        unbind_workspace_root(&path, &workspace.id, &ordinary).unwrap(),
+        removed
+    );
+    assert!(resolve_workspace_id(&path, &workspace.id).is_err());
+}

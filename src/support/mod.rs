@@ -28,3 +28,6 @@ pub mod support_bundle;
 pub mod tracing;
 pub mod workspace_client_config;
 pub mod workspace_registry;
+
+#[cfg(unix)]
+pub(crate) mod local_file_lock;

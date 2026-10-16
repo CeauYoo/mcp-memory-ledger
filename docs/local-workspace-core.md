@@ -1,5 +1,7 @@
 # 本机核心与固定工作空间桥
 
+旧 project namespace 不会通过 register 自动接入。基础事实首片支持先 `adopt-preview` 再 `adopt` 创建新 UUID 映射；v2 registry 允许保留旧域，握手与逐调用固定核验 namespace。高级历史支持范围、锁与 standalone 后续写入边界见[旧域显式接入](workspace-legacy-adoption.md)。
+
 状态：2026-10-15 开发切片，隔离验收进行中。它是 technical MVP 的可选入口，不替换现有部署，也不安装开机服务。完整证据见[验收矩阵](workspace-core-acceptance.md)。
 
 ## 两种运行方式
@@ -23,7 +25,7 @@ mkdir -m 700 /absolute/local-state/ipc
 /absolute/bin/agent_llm_mm workspace --registry /absolute/local-state/workspaces.json register --root /absolute/project-a
 ```
 
-注册返回稳定 `id` 和 `project_namespace = project/<id>`。同一 canonical root 重复注册返回原 ID。注册表原子替换、私有权限、结构验证；损坏或锁文件冲突失败关闭，不覆盖原文件。
+首次普通注册返回稳定 `id` 和 `project_namespace = project/<id>`；显式 adopted workspace 保留旧 project namespace。同一 canonical root 重复注册返回原 ID 与原 namespace。注册表原子替换、私有权限、结构验证；损坏或锁文件冲突失败关闭，不覆盖原文件。Windows 锁删除/共享争用会短暂重试：有可见普通锁最多等待2秒，未确认锁存在的访问拒绝仅100毫秒宽限；持续拒绝保留原错误，绝不自动删除未知锁。
 
 核心继续使用现有 TOML 格式：
 
@@ -86,7 +88,7 @@ args = ["bridge", "--socket", "/absolute/local-state/ipc/core.sock", "--workspac
 /absolute/bin/agent_llm_mm workspace --registry /absolute/local-state/workspaces.json enable --id UUID
 ```
 
-`unbind` 必须使用 `list` 返回的已存绝对路径文本，不解析符号链接、不匹配父目录或相似路径，旧目录已删除也可撤销。目标 ID 不存在或该精确路径属于其他 ID 会报错；该 ID 已无此路径时重复撤销是无写入的幂等成功。可撤销最后一个 root，此后任何会话解析都拒绝。`active` 与 roots 分开保存：解绑不改变 active；停用后 register/bind 不会隐式启用；enable 要求至少一个已绑定的现存目录。旧 registry 缺少 active 字段时视为 true。
+`unbind` 使用 `list` 返回的已存绝对路径，或 Windows 上等价的普通磁盘/UNC 绝对路径表示（规范化产生的 `\\?\` 前缀与路径分隔符只作词法对应）。它不访问旧目录、不解析符号链接、不按目录名称大小写折叠、不匹配父目录或相似路径，旧目录已删除也可撤销。目标 ID 不存在或该精确路径属于其他 ID 会报错；该 ID 已无此路径时重复撤销是无写入的幂等成功。可撤销最后一个 root，此后任何会话解析都拒绝。`active` 与 roots 分开保存：解绑不改变 active；停用后 register/bind 不会隐式启用；enable 要求至少一个已绑定的现存目录。旧 registry 缺少 active 字段时视为 true。
 
 停用或解绑在旧连接的下一次 tools/list、tools/call 生效，包括 durable receipt replay 之前；已经获准 dispatch 的操作不追溯取消。重新启用或恢复原 root 绑定可恢复该固定连接访问，移动到新 root 的连接仍须重新建立。个人 grants 保留不等于停用期间可读取。
 
@@ -123,7 +125,7 @@ AGENT_LLM_MM_CONFIG=/absolute/local-state/core.toml /absolute/bin/agent_llm_mm c
 
 ### 从旧 standalone 数据切换
 
-旧 `project/foo` 不会自动变成新注册产生的 `project/<uuid>`。当前没有 namespace adopt、重标历史或跨域迁移命令，也不能用个人 grant 绕过项目隔离。请先只读盘点旧 namespace 并保留原配置/数据库备份；需要读取旧项目历史时继续使用旧 standalone 模式和独立数据库路径。不要把切换入口误认为已迁移数据，不要同时用旧 `serve` 与核心写同一个库。后续数据映射必须单独设计回执、证据关系与恢复验证。
+旧 `project/foo` 不会自动变成新注册产生的 `project/<uuid>`。现有基础事实首片可通过 `adopt-preview` 盘点，再显式 `adopt` 新建 UUID → 旧 namespace 映射；不重标历史、不跨域复制，也不能用个人 grant 绕过项目隔离。高级历史未支持且会明确保守阻断，详见[支持集合](workspace-legacy-adoption.md)。先保留原配置、数据库与 registry 备份。被阻断的旧库继续保留原模式，不要清洗历史绕过检查。执行后仍需管理员停止或重新配置旧 standalone 写入客户端；不要把接入映射误认为客户端已切换，也不要让旧 `serve` 与核心并写同一个库。
 
 注册表也是恢复资产：数据库备份不包含注册表。保留其稳定 ID、根绑定、active 状态和授权；不要把私有注册表上传到支持报告。`bind` 只增加根别名；移动目录后须显式 `unbind` 撤销旧路径，避免以后重新创建该目录时恢复旧绑定。
 

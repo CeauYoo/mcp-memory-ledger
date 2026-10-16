@@ -1,9 +1,9 @@
 //! Unix IPC and lifecycle effects. Authorization remains in pure session policy;
 //! registry/CLI binding is trusted only against model-supplied tool arguments.
+use crate::support::local_file_lock::PrivateLock;
 use std::{
-    fs::{self, File, OpenOptions},
-    io,
-    os::unix::fs::{FileTypeExt, MetadataExt, OpenOptionsExt, PermissionsExt},
+    fs, io,
+    os::unix::fs::{FileTypeExt, MetadataExt, PermissionsExt},
     path::{Path, PathBuf},
     str::FromStr,
     sync::Arc,
@@ -241,10 +241,10 @@ async fn accept_session(
             grant.workspace_id == binding.workspace_id,
             "workspace binding mismatch"
         );
-        Ok::<_, anyhow::Error>(binding)
+        Ok::<_, anyhow::Error>((binding, grant))
     })
     .await;
-    let binding = match binding {
+    let (binding, grant) = match binding {
         Ok(Ok(binding)) => binding,
         _ => {
             let _ = stream.write_all(b"{\"accepted\":false}\n").await;
@@ -257,7 +257,7 @@ async fn accept_session(
         store,
         observer,
         registry,
-        binding.workspace_id,
+        grant,
         binding.workspace_root,
         binding.client_label,
     )
@@ -376,48 +376,6 @@ fn validate_private_parent(path: &Path, uid: u32) -> Result<()> {
         "socket directory must be owned and private (0700)"
     );
     Ok(())
-}
-
-struct PrivateLock(File);
-impl PrivateLock {
-    fn acquire(path: &Path, uid: u32) -> Result<Self> {
-        let file = match OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create_new(true)
-            .mode(0o600)
-            .open(path)
-        {
-            Ok(file) => file,
-            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
-                let before = fs::symlink_metadata(path)?;
-                ensure!(
-                    before.is_file()
-                        && !before.file_type().is_symlink()
-                        && before.uid() == uid
-                        && before.nlink() == 1
-                        && before.permissions().mode() & 0o077 == 0,
-                    "core lock must be an owned private regular file"
-                );
-                let file = OpenOptions::new().read(true).write(true).open(path)?;
-                let after = file.metadata()?;
-                ensure!(
-                    before.dev() == after.dev() && before.ino() == after.ino(),
-                    "core lock changed while opening"
-                );
-                file
-            }
-            Err(error) => return Err(error.into()),
-        };
-        file.try_lock()
-            .context("another core owns this database or socket")?;
-        Ok(Self(file))
-    }
-}
-impl Drop for PrivateLock {
-    fn drop(&mut self) {
-        let _ = self.0.unlock();
-    }
 }
 
 struct CoreResources {

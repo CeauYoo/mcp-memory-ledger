@@ -30,6 +30,25 @@ pub async fn run_command(command: LocalCommand) -> Result<()> {
         }
         LocalCommand::Workspace { registry, action } => {
             let result = match action {
+                WorkspaceAction::Adopt {
+                    root,
+                    namespace,
+                    database,
+                    preview,
+                } => {
+                    let report = if preview {
+                        crate::support::workspace_registry::preview_adoption(
+                            &registry, &root, &namespace, &database,
+                        )
+                        .await?
+                    } else {
+                        crate::support::workspace_registry::adopt_workspace(
+                            &registry, &root, &namespace, &database,
+                        )
+                        .await?
+                    };
+                    serde_json::to_value(report)?
+                }
                 WorkspaceAction::Inspect { id, root } => {
                     let root = if id.is_none() && root.is_none() {
                         Some(std::env::current_dir()?)

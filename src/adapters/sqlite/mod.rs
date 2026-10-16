@@ -25,3 +25,6 @@ mod ledger_export;
 
 mod self_model_version_reads;
 mod self_model_versions;
+
+pub(crate) mod namespace_adoption;
+pub use namespace_adoption::AdoptionInventory;

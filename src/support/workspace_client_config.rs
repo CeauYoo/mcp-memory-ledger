@@ -256,6 +256,7 @@ pub fn render_client_config(
 
 pub const WORKSPACE_HELP: &str = "Workspace administration (same-user local MVP)
   workspace --registry <absolute-file> register --root <absolute-dir>
+  workspace --registry <absolute-file> adopt-preview|adopt --root <absolute-dir> --namespace project/<legacy-name> --database <existing-file>
   workspace --registry <absolute-file> bind|unbind --id <UUID> --root <absolute-dir>
   workspace --registry <absolute-file> enable|disable --id <UUID>
   workspace --registry <absolute-file> grant --id <UUID> --namespace user/<name> --read true|false --write true|false
@@ -265,6 +266,9 @@ pub const WORKSPACE_HELP: &str = "Workspace administration (same-user local MVP)
   workspace --registry <absolute-file> client-config --socket <absolute-socket> --mode fixed [--id <UUID> | --root <absolute-dir>]
   workspace --registry <absolute-file> client-config --socket <absolute-socket> --mode global
 
+adopt-preview reports basic-facts-v1 support and blockers without writes; adopt rechecks under core/SQLite locks.
+Advanced reflection/experience/candidate/trigger histories anywhere are conservatively unsupported.
+Adoption preserves DB/receipts, creates a new UUID mapping in registry v2, and never switches clients.
 inspect defaults to exact current directory; status defaults to all registrations.
 client-config prints TOML only; it does not change client files or grants.
 fixed defaults to exact current directory; --id selects its first valid bound root.

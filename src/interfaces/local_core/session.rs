@@ -151,6 +151,7 @@ pub(crate) struct BoundSession {
     observer: DashboardObserver,
     registry: PathBuf,
     workspace_id: String,
+    project_namespace: String,
     workspace_root: PathBuf,
     client_label: String,
     session_id: String,
@@ -165,7 +166,7 @@ impl BoundSession {
         store: SqliteStore,
         observer: DashboardObserver,
         registry: PathBuf,
-        workspace_id: String,
+        grant: SessionGrant,
         workspace_root: PathBuf,
         client_label: String,
     ) -> Self {
@@ -175,7 +176,8 @@ impl BoundSession {
             store,
             observer,
             registry,
-            workspace_id,
+            workspace_id: grant.workspace_id,
+            project_namespace: grant.project_namespace,
             workspace_root,
             client_label,
             session_id: Uuid::new_v4().to_string(),
@@ -196,13 +198,15 @@ impl BoundSession {
     }
 
     fn project_namespace(&self) -> String {
-        format!("project/{}", self.workspace_id)
+        self.project_namespace.clone()
     }
 
     fn current_grant(&self) -> Result<SessionGrant, McpError> {
         let grant =
             resolve_workspace(&self.registry, &self.workspace_root).map_err(|_| binding_error())?;
-        if grant.workspace_id != self.workspace_id {
+        if grant.workspace_id != self.workspace_id
+            || grant.project_namespace != self.project_namespace
+        {
             return Err(binding_error());
         }
         Ok(grant)
@@ -556,7 +560,7 @@ mod tests {
                 self.store.clone(),
                 self.observer.clone(),
                 self.registry.clone(),
-                self.workspace_id.clone(),
+                resolve_workspace(&self.registry, &self.root).unwrap(),
                 self.root.clone(),
                 "trusted-fixture-client".into(),
             )
@@ -1131,5 +1135,54 @@ mod tests {
             .count();
         assert_eq!(receipts, 1);
         client.finish().await;
+    }
+    #[tokio::test]
+    async fn handshake_namespace_is_fixed_and_mapping_changes_reject_old_connection() {
+        let fixture = Fixture::new().await;
+        let mut client = Client::connect(fixture.session()).await;
+        let write = json!({"event":{"owner":"World","kind":"Conversation","summary":"namespace-binding-test"},"claim_drafts":[],"episode_reference":null,"request_id":"mapping-replay"});
+        assert!(
+            client
+                .call("ingest_interaction", write.clone())
+                .await
+                .get("result")
+                .is_some()
+        );
+        // Administrative file tampering is not a supported remap command. A live
+        // session still must reject even this same-ID mapping change.
+        let mut registry =
+            crate::support::workspace_registry::WorkspaceRegistry::load(&fixture.registry).unwrap();
+        registry.version = 2;
+        registry.workspaces[0].project_namespace = "project/legacy".into();
+        std::fs::write(&fixture.registry, serde_json::to_vec(&registry).unwrap()).unwrap();
+        for (tool, args) in [
+            ("recall_memory", json!({"query":"namespace-binding-test"})),
+            ("ingest_interaction", write),
+            ("export_memory", json!({})),
+        ] {
+            assert_eq!(
+                client.call(tool, args).await["error"]["message"],
+                "session workspace binding is unavailable"
+            );
+        }
+        assert!(
+            client
+                .request("tools/list", json!({}))
+                .await
+                .get("error")
+                .is_some()
+        );
+        client.finish().await;
+        let mut fresh = Client::connect(fixture.session()).await;
+        let result = fresh.call("ingest_interaction", json!({"event":{"owner":"World","kind":"Conversation","summary":"adopted-default"},"claim_drafts":[],"episode_reference":null,"request_id":"adopted-write"})).await;
+        assert!(result.get("result").is_some(), "{result}");
+        assert!(
+            fixture
+                .logs()
+                .await
+                .iter()
+                .any(|log| log.namespace.as_deref() == Some("project/legacy"))
+        );
+        fresh.finish().await;
     }
 }

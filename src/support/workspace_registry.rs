@@ -13,3 +13,6 @@ pub use storage::{
     bind_workspace_root, register_workspace, resolve_workspace, resolve_workspace_id,
     set_personal_grant, set_workspace_active, unbind_workspace_root,
 };
+
+mod adoption;
+pub use adoption::{AdoptionReport, adopt_workspace, preview_adoption};

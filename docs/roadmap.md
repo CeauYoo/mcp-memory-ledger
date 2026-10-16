@@ -1,5 +1,7 @@
 # MCP Memory Ledger 路线图
 
+旧项目接入新增基础事实首片（read-only preview + explicit adopt）；完整 reflection/experience/candidate 历史接入继续开放。首片保守阻断不能证明来源闭包的账本，不自动迁移或清洗。见[范围](workspace-legacy-adoption.md)。
+
 ## 2026-10-16 Now：先补齐可用功能
 
 当前执行切片为 workspace 解绑/停用/启用、只读检查与客户端 TOML 生成、原生 backup/restore 到新路径，代码已接入但未提交、待最终验证。见[状态](project-status.md)、[生命周期](local-workspace-core.md)、[配置输出](workspace-client-config.md)和[恢复手册](database-operations.md)。

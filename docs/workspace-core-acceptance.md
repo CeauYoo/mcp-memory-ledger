@@ -72,7 +72,7 @@ initialize 未声明 roots；16 次诊断 `roots/list` 都返回空 roots，工�
 
 本次打包实现将 `verify-local-core.py` 及两种桥样例纳入精确源码包资产；Unix 解包验证调用包内验证器，失败阻断候选通过，Windows 明确标记新核心 unsupported 并保留旧 stdio 验证。新增 CI Unix 验证器安全回归入口。云端当前定向结果为 45 项 portable package Python 测试、17 项 local-core verifier Python 测试通过；这不是实际包构建/新核心运行通过。最终 Rust/全量测试数字须绑定最终源码后另记。云端运行环境的 Unix socket 创建被系统以 `EPERM` 拒绝；这不是核心运行通过或路径权限修复结果，不绕过环境限制。实际 Unix 进程/核心/候选闭环须由对应精确提交的 Ubuntu/macOS CI 提供，CI 保持失败即阻断并保存合成验证摘要。
 
-一次全局配置只在客户端启动桥时提供正确项目 cwd 的情况下适用；当前连接不会自动跟随项目移动。个人权限管理已有显式 CLI，不等于网页授权界面。旧 `project/foo` 数据不自动 adopt 为 `project/<uuid>`；先保留旧模式与备份，不静默改历史。注册表需要另行备份，`bind` 仍仅新增别名；2026-10-16 已新增显式 `unbind` 解除旧根，以及独立 `disable` / `enable`，不会删除账本数据。
+一次全局配置只在客户端启动桥时提供正确项目 cwd 的情况下适用；当前连接不会自动跟随项目移动。个人权限管理已有显式 CLI，不等于网页授权界面。旧 `project/foo` 数据不自动改为 `project/<uuid>`；基础事实可按[显式接入合同](workspace-legacy-adoption.md)预览并 adopt 为新 UUID 对旧域的映射，高级历史继续明确阻断。保留备份，不静默改历史。注册表需要另行备份，`bind` 仍仅新增别名；2026-10-16 已新增显式 `unbind` 解除旧根，以及独立 `disable` / `enable`，不会删除账本数据。
 
 管理员 CLI 与网页登录已接线：公开静态 shell 无运行数据，API/SSE 使用独立 Bearer，凭据只留标签页内存，锁定清空数据，刷新需重登，精确 Host/同源检查拒绝跨站。前端 Node 定向9项通过；真实 Chromium 在本云端启动时也被 Unix socket `EPERM` 阻断，不能把 Node 测试当浏览器实测。对应浏览器脚本 `--binary` 模式已接入 Ubuntu CI，使用真实隔离 Rust core；不带该参数只验证合成 Node API，两者不得混算；正式凭据和管理面未配置。
 
