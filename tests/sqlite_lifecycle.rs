@@ -845,7 +845,14 @@ async fn encoded_paths_reserve_the_actual_sqlx_file_without_overwriting() {
         ("back\\slash.sqlite", "back%5Cslash.sqlite"),
     ] {
         let path = canonical.join(name);
-        let url = format!("{}/{}", sqlite_url(&canonical), encoded);
+        // Join OS paths before encoding; appending '/' to an encoded verbatim
+        // Windows directory would produce a different, mixed-separator path.
+        let url = sqlite_url(&path);
+        assert!(url.ends_with(encoded));
+        assert_eq!(
+            SqliteConnectOptions::from_str(&url).unwrap().get_filename(),
+            path
+        );
         create_legacy_database(&path, true).await;
         assert!(path.exists());
         let before = fs::read(&path).unwrap();
@@ -855,9 +862,17 @@ async fn encoded_paths_reserve_the_actual_sqlx_file_without_overwriting() {
         let migration = migrate_database(&url).await.unwrap();
         assert!(Path::new(migration.backup_path.as_ref().unwrap()).is_file());
         assert!(inspect_database(&url).await.unwrap().is_current());
-        let new_url = format!("{}/new-{encoded}", sqlite_url(&canonical));
+        let new_path = canonical.join(format!("new-{name}"));
+        let new_url = sqlite_url(&new_path);
+        assert!(new_url.ends_with(&format!("new-{encoded}")));
+        assert_eq!(
+            SqliteConnectOptions::from_str(&new_url)
+                .unwrap()
+                .get_filename(),
+            new_path
+        );
         initialize_database(&new_url).await.unwrap();
-        assert!(canonical.join(format!("new-{name}")).is_file());
+        assert!(new_path.is_file());
     }
     for url in [
         "sqlite::memory:",
