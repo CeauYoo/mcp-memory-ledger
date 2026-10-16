@@ -281,18 +281,25 @@ async fn preview_reports_schema_errors_and_registry_conflicts_without_modifying_
 #[test]
 fn adoption_cli_has_an_explicit_read_only_preview_and_rejects_extra_flags() {
     use agent_llm_mm::interfaces::local_core::cli::{LocalCommand, WorkspaceAction, parse_args};
+    // Parsing performs no I/O; derive platform-native absolute fixture paths.
+    let directory = std::env::current_dir()
+        .unwrap()
+        .join("synthetic-adoption-cli");
+    let registry = directory.join("registry.json").to_str().unwrap().to_owned();
+    let root = directory.join("root").to_str().unwrap().to_owned();
+    let database = directory.join("db.sqlite").to_str().unwrap().to_owned();
     let base = [
         "agent_llm_mm",
         "workspace",
         "--registry",
-        "/private/registry.json",
+        &registry,
         "adopt-preview",
         "--root",
-        "/private/root",
+        &root,
         "--namespace",
         "project/legacy",
         "--database",
-        "/private/db.sqlite",
+        &database,
     ];
     let parsed = parse_args(base.iter().map(|s| s.to_string()))
         .unwrap()
@@ -304,6 +311,12 @@ fn adoption_cli_has_an_explicit_read_only_preview_and_rejects_extra_flags() {
             ..
         }
     ));
+    for index in [3, 6, 10] {
+        let mut relative = base.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        relative[index] = "relative-path".into();
+        let error = parse_args(relative).unwrap_err();
+        assert!(error.to_string().contains("paths must be absolute"));
+    }
     let mut bad = base.iter().map(|s| s.to_string()).collect::<Vec<_>>();
     bad.extend(["--id".into(), uuid::Uuid::new_v4().to_string()]);
     assert!(parse_args(bad).is_err());
