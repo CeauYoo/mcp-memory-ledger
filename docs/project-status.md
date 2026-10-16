@@ -1,8 +1,23 @@
 # 当前实现状态
 
+## 任务续接首批源码实现
+
+Schema 8 增加任务要求修订、候选隔离、checkpoint 和有界续接上下文；6 个新任务 MCP 工具复用范围与撤销策略。原界面提供 owner-only 只读任务摘要，旧无凭据 observer 不暴露任务内容。原生 Codex 适配器提供显式项目默认任务、生命周期上下文输出和配置预览。
+
+- [任务合同与迁移](task-ledger.md)
+- [Codex 适配与真实证据边界](codex-task-context-adapter.md)
+- [网页任务摘要](dashboard-live-desk.md)
+
+本轮云端 Rust 878 项通过，14 项 IPC 环境阻断；严格 Clippy、Node 11 项及 Python 127 项通过。详细范围见[首批验证记录](task-continuity-validation-2026-10-16.md)，精确提交三平台 CI 仍须另行核验。
+
+当前为首批实现及集成检查阶段。调用方报告不等于认证用户输入或独立结果验证；hook 输出不等于宿主接受。真实 Codex 会话启动受云端沙箱限制，自动注入尚未验收；Windows 核心仍已支持，但新 hook 的 Windows shell 配置预览未验证。旧 schema 须显式迁移；scoped export 不包含任务数据，完整数据库备份包含。
+
+动作检查、经验采用反馈和语义检索继续按唯一计划推进，未因首批代码落盘宣称完成。实际用户机器配置和部署仍另行确认。
+
+
 ## 当前执行入口与已完成基线（2026-10-16）
 
-已批准按[完整唯一实施计划](plans/2026-10-16-task-continuity-and-host-integration.md)分阶段推进，当前首批为 P0 与 T01–T08。任务要求/checkpoint/宿主接入仍为新增实现队列，批准不等于已完成。
+已批准按[完整唯一实施计划](plans/2026-10-16-task-continuity-and-host-integration.md)分阶段推进，当前首批为 P0 与 T01–T08。首批源码已实现，当前处于集成审查与回归；真实宿主注入等未闭合项仍单列，批准不等于全部完成。
 
 基线 `7448b02a7de8d5dd32c32a149fdd024f798bbf0f` 的 [CI 38860968271](https://github.com/yooyui/mcp-memory-ledger/actions/runs/38860968271) 三平台全部成功：Ubuntu/macOS 各 848 项 Rust，Windows 514 项 configured Rust；三平台精确来源候选包通过，Windows named-pipe core 的 42 次 MCP 工具调用、隔离、确认写后重启/重放、备份恢复与清理通过。Ubuntu 真实 Chrome 检查通过。
 

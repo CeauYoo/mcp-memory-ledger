@@ -342,6 +342,7 @@ async fn ledger_rows_match_declared_versions_after_migration() {
             (5, "feedback_experience_and_retrieval".to_string()),
             (6, "temporal_metadata_and_reflection_scope".to_string()),
             (7, "versioned_self_model".to_string()),
+            (8, "workspace_task_ledger".to_string()),
         ]
     );
     connection.close().await.expect("close migrated");

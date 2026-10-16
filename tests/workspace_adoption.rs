@@ -388,3 +388,31 @@ async fn wal_preview_reads_uncheckpointed_facts_without_mutating_ledger_or_regis
 
 #[path = "workspace_adoption/history.rs"]
 mod history;
+
+#[tokio::test]
+async fn task_history_is_explicitly_blocked_even_when_not_in_requested_legacy_namespace() {
+    let f = Fixture::new().await;
+    let store = agent_llm_mm::adapters::sqlite::open_current_database(
+        &agent_llm_mm::support::sqlite_url::sqlite_file_url(&f.db),
+    )
+    .await
+    .unwrap();
+    let request=serde_json::from_value(serde_json::json!({
+        "namespace":"project/other","task_id":"task-one","request_id":"task-create","title":"Synthetic task","reason":"Test unsupported task adoption",
+        "source":{"kind":"caller_reported","reference":null},
+        "requirements":[{"requirement_id":"goal","kind":"goal","text":"Retain task history","state":"reported","source":{"kind":"caller_reported","reference":null},"replaces":null}]
+    })).unwrap();
+    agent_llm_mm::application::task::create_task(&store, request)
+        .await
+        .unwrap();
+    let report = f.preview().await;
+    assert!(!report.inventory.supported);
+    assert!(
+        report
+            .inventory
+            .blocked_reasons
+            .iter()
+            .any(|r| r.contains("workspace task history"))
+    );
+    assert!(!f.registry.exists());
+}

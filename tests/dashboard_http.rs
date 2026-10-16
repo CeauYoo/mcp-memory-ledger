@@ -388,6 +388,7 @@ async fn dashboard_base_path_redirect_assets_and_instance_metadata() {
         "transport.mjs",
         "render.mjs",
         "i18n.mjs",
+        "tasks.mjs",
     ] {
         let response = client
             .get(format!("{base}/assets/{name}"))
@@ -460,4 +461,45 @@ async fn dashboard_base_path_redirect_assets_and_instance_metadata() {
         .await
         .unwrap();
     assert_ne!(status["instance_id"], other["instance_id"]);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn legacy_dashboard_never_exposes_task_records() {
+    let directory = tempdir().unwrap();
+    let store = SqliteStore::bootstrap(&sqlite_url(directory.path().join("tasks.sqlite")))
+        .await
+        .unwrap();
+    let handle = start_dashboard_service_with_operation_log(
+        config("/"),
+        recorder_with_event(),
+        runtime(),
+        Some(store),
+    )
+    .await
+    .unwrap();
+    let client = Client::new();
+    let status: serde_json::Value = client
+        .get(format!("{}/api/status", handle.base_url()))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(status["tasks_available"], false);
+    for route in ["tasks", "tasks/anything"] {
+        let response = client
+            .get(format!(
+                "{}/api/{route}?namespace=project/test",
+                handle.base_url()
+            ))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(
+            response.json::<serde_json::Value>().await.unwrap(),
+            json!({"error":"task records unavailable"})
+        );
+    }
 }

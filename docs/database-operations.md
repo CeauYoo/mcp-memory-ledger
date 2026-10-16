@@ -1,6 +1,11 @@
 # 数据库初始化、升级与恢复
 
-当前 schema **7**。所有操作先确认 `AGENT_LLM_MM_CONFIG` 指向的配置，以及实际 `database_url`；使用绝对路径，并将开发/测试库与正式库分开。配置方式见[快速开始](quickstart.md)。
+## Schema 8 task records
+
+The current target adds versioned tasks, requirements, checkpoints and source edges. Existing schema 7 databases require explicit migration with the existing backup/rehearsal workflow; ordinary runtime opening never migrates. Full native DB backup/restore includes task records and durable receipts. Registry and Codex adapter state remain separate files and are not included in DB-only backup. [Task contract](task-ledger.md) · [adapter state](codex-task-context-adapter.md).
+
+
+当前 schema **8**。所有操作先确认 `AGENT_LLM_MM_CONFIG` 指向的配置，以及实际 `database_url`；使用绝对路径，并将开发/测试库与正式库分开。配置方式见[快速开始](quickstart.md)。
 
 ## 二进制数据库命令
 
@@ -48,7 +53,7 @@ agent_llm_mm restore --db /absolute/path/backups/snapshot.sqlite --output /absol
 
 - SQLite online backup API 从只读源连接获取一致快照，包括尚未 checkpoint 的已提交 WAL 数据；不裸复制在线主库，也不对源执行迁移或 checkpoint。写入持续繁忙时最多等待约 60 秒后失败。
 - 目标父目录必须已存在，目标文件及其 `-wal` / `-shm` / `-journal` 必须不存在；拒绝 symlink 路径、`..` 路径组件和覆盖。私有 staging 经 SQLite `integrity_check` 和现有只读 doctor 的 current-schema、canonical 结构、migration ledger、外键与 self-model 检查后，才以原子 no-clobber hard link 发布为单个 SQLite 文件。目标文件系统必须支持 hard link；不支持时安全失败，不降级为覆盖 rename。
-- 当前仅接受此 binary 的 current schema **7**，不把同版本损坏结构或仅有 version 数字的文件当作有效备份。旧版/未来版库拒绝；用匹配版本 binary 恢复到独立副本，再另行显式迁移，不自动升级原库。相同 schema 但不兼容 canonical 结构也拒绝。
+- 当前仅接受此 binary 的 current schema **8**，不把同版本损坏结构或仅有 version 数字的文件当作有效备份。旧版/未来版库拒绝；用匹配版本 binary 恢复到独立副本，再另行显式迁移，不自动升级原库。相同 schema 但不兼容 canonical 结构也拒绝。
 - 返回 JSON 包含输出绝对路径、schema 版本和 SHA-256，供记录与后续核对；不建立远端副本、调度任务或自动验证外部提供的 checksum。备份包含完整记忆数据，应保存在受控目录，不是脱敏 support bundle。
 - 普通失败删除本次私有 staging，不删除既有目标或任何源文件。强制终止/掉电可能留下 `.agent-sqlite-backup-*` 私有目录；它不是成功产物。只有成功返回的目标才完成所有校验；在只读核验前不要手动使用残留临时文件。该实现不承诺掉电持久性或生产 DR。
 - 恢复不修改配置、不自动切换客户端、不激活 workspace。恢复后另建指向新路径的配置，运行 `doctor --read-only`，核验记忆查询，再手动切换客户端，保留原库。

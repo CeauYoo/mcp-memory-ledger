@@ -102,6 +102,7 @@ async fn only_data_free_shell_is_public_and_every_api_requires_authorization() {
             "/assets/transport.mjs",
             "/assets/state.mjs",
             "/assets/i18n.mjs",
+            "/assets/tasks.mjs",
             "/api/status",
             "/api/summary",
             "/api/events",
@@ -110,6 +111,8 @@ async fn only_data_free_shell_is_public_and_every_api_requires_authorization() {
             "/api/operation-log",
             "/api/operation-log/missing",
             "/api/health",
+            "/api/tasks?namespace=project/test",
+            "/api/tasks/missing?namespace=project/test",
             "/not-a-route",
         ] {
             for credential in [None, Some("Bearer synthetic-wrong-capability")] {
@@ -477,4 +480,141 @@ async fn admin_rejects_foreign_host_origin_and_browser_cross_site_requests() {
             .unwrap()
             .contains("frame-ancestors 'none'")
     );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn owner_task_reads_are_scoped_read_only_and_preserve_checkpoint_version() {
+    use agent_llm_mm::{adapters::sqlite::SqliteStore, ports::task_store::TaskStore};
+    let directory = tempfile::tempdir().unwrap();
+    let database_url = format!(
+        "sqlite://{}",
+        directory.path().join("owner-tasks.sqlite").display()
+    );
+    let store = SqliteStore::bootstrap(&database_url).await.unwrap();
+    let handle = start_admin_dashboard_service(
+        config("/tasks/desk"),
+        runtime(),
+        observer(),
+        Some(store.clone()),
+        AdminGate::new(CAPABILITY).unwrap(),
+    )
+    .await
+    .unwrap();
+    let client = client();
+    let base = handle.base_url();
+    let get = |route: &str| {
+        client
+            .get(format!("{base}/api/{route}"))
+            .bearer_auth(CAPABILITY)
+    };
+    let empty: Value = get("tasks?namespace=project/test")
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(empty, json!({"tasks":[],"limit":100,"read_only":true}));
+    let source = json!({"kind":"caller_reported","reference":null});
+    store.create_task(serde_json::from_value(json!({
+        "namespace":"project/test","task_id":"task-1","request_id":"create-1","title":"Synthetic task",
+        "requirements":[
+            {"requirement_id":"goal","kind":"goal","text":"Keep original goal","state":"reported","source":source,"replaces":null},
+            {"requirement_id":"candidate","kind":"requirement","text":"Unconfirmed addition","state":"candidate","source":{"kind":"model_asserted"},"replaces":null}
+        ],"source":source,"reason":"Synthetic owner API test"
+    })).unwrap()).await.unwrap();
+    store.record_task_checkpoint(serde_json::from_value(json!({
+        "namespace":"project/test","task_id":"task-1","request_id":"checkpoint-1","checkpoint_id":"cp-1",
+        "expected_version":1,"expected_checkpoint_sequence":0,
+        "steps":[{"step_id":"planned","text":"Plan only","mode":"Draft","verification":"not_performed","evidence_refs":[]}],
+        "blockers":["Awaiting result"],"next_steps":["Verify output"],"artifacts":[],"source":source
+    })).unwrap()).await.unwrap();
+    store.revise_task(serde_json::from_value(json!({
+        "namespace":"project/test","task_id":"task-1","request_id":"pause-1","expected_version":1,
+        "changes":[],"status":"paused","source":source,"reason":"Explicit pause"
+    })).unwrap()).await.unwrap();
+    let list: Value = get("tasks?namespace=project/test")
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(list["tasks"][0]["status"], "paused");
+    assert_eq!(list["tasks"][0]["version"], 2);
+    let snapshot: Value = get("tasks/task-1?namespace=project/test")
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(snapshot["read_only"], true);
+    assert_eq!(snapshot["snapshot"]["task"]["version"], 2);
+    assert_eq!(snapshot["snapshot"]["checkpoint"]["task_version"], 1);
+    assert_eq!(
+        snapshot["snapshot"]["checkpoint"]["steps"][0]["verification"],
+        "not_performed"
+    );
+    let other: Value = get("tasks?namespace=project/other")
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(other["tasks"], json!([]));
+    assert_eq!(
+        get("tasks/task-1?namespace=project/other")
+            .send()
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::NOT_FOUND
+    );
+    for route in ["tasks?namespace=self", "tasks/task-1?namespace=self"] {
+        let response = get(route).send().await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            response.json::<Value>().await.unwrap(),
+            json!({"error":"invalid task query"})
+        );
+    }
+    for method in [Method::POST, Method::PUT, Method::PATCH, Method::DELETE] {
+        for route in ["tasks", "tasks/task-1"] {
+            assert_eq!(
+                client
+                    .request(
+                        method.clone(),
+                        format!("{base}/api/{route}?namespace=project/test")
+                    )
+                    .bearer_auth(CAPABILITY)
+                    .send()
+                    .await
+                    .unwrap()
+                    .status(),
+                StatusCode::METHOD_NOT_ALLOWED
+            );
+        }
+    }
+    let status: Value = get("status").send().await.unwrap().json().await.unwrap();
+    assert_eq!(status["tasks_available"], true);
+    // A damaged/older task schema is unavailable, never a fabricated empty task list.
+    let pool = sqlx::SqlitePool::connect(&database_url).await.unwrap();
+    sqlx::query("DROP TABLE task_requirements")
+        .execute(&pool)
+        .await
+        .unwrap();
+    for route in [
+        "tasks?namespace=project/test",
+        "tasks/task-1?namespace=project/test",
+    ] {
+        let response = get(route).send().await.unwrap();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(
+            response.json::<Value>().await.unwrap(),
+            json!({"error":"task records unavailable"})
+        );
+    }
+    pool.close().await;
 }

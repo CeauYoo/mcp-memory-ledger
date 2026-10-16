@@ -1,5 +1,12 @@
 # Windows 开发与接入指南
 
+## 任务续接与 Codex 接入
+
+新增任务工具与 CLI 见[任务账本](task-ledger.md)，原生配置预览、项目默认任务选择和宿主支持边界见[Codex 适配器](codex-task-context-adapter.md)。Schema 8 需要显式迁移，先备份，不能自动替换运行中的数据库。预览不改全局配置；未取得真实宿主注入证据，不将输出成功称为接入成功。Windows 核心/任务 CLI 与 Windows hook 自动配置支持分别记录。
+
+所有状态、构建与日志放在操作者确认的非同步目录；不改变现有部署。
+
+
 ## 2026-10-15 平台边界
 
 Windows 新增本机命名管道 `core`/`bridge` candidate；原 standalone `serve` 与[兼容配置](../examples/codex-mcp-config.toml)继续保留。此前 Windows native/PowerShell CI 只覆盖 legacy，不证明本轮新核心。当前源码须经精确提交 Windows CI 与解包烟测，不能把 Linux 云端编译称为 Windows 运行通过。

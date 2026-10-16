@@ -1057,6 +1057,144 @@ impl Server {
             .await;
         caller_budget::structured(result, decision)
     }
+    #[tool(description = "Create a workspace task with stable caller-reported requirements; source labels are not authenticated authority.", input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<crate::domain::task::CreateTaskRequest>>() )]
+    async fn create_task(&self, raw_params: JsonObject) -> Result<CallToolResult, McpError> {
+        let params = map_tool_error(
+            &self.runtime,
+            "create_task",
+            None,
+            None,
+            decode_tool_params::<crate::domain::task::CreateTaskRequest>(raw_params),
+        )
+        .await?;
+        let namespace = Some(params.namespace.clone());
+        let result = map_tool_error(
+            &self.runtime,
+            "create_task",
+            namespace,
+            None,
+            crate::application::task::create_task(&self.runtime.store, params).await,
+        )
+        .await?;
+        structured(result)
+    }
+
+    #[tool(description = "Append an immutable task revision using expected_version and explicit add/replace/withdraw changes. No execution authority.", input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<crate::domain::task::ReviseTaskRequest>>() )]
+    async fn revise_task(&self, raw_params: JsonObject) -> Result<CallToolResult, McpError> {
+        let params = map_tool_error(
+            &self.runtime,
+            "revise_task",
+            None,
+            None,
+            decode_tool_params::<crate::domain::task::ReviseTaskRequest>(raw_params),
+        )
+        .await?;
+        let namespace = Some(params.namespace.clone());
+        let result = map_tool_error(
+            &self.runtime,
+            "revise_task",
+            namespace,
+            None,
+            crate::application::task::revise_task(&self.runtime.store, params).await,
+        )
+        .await?;
+        structured(result)
+    }
+
+    #[tool(description = "Read a scoped task revision; omit version for current requirements.", input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<crate::domain::task::GetTaskRequest>>() )]
+    async fn get_task(&self, raw_params: JsonObject) -> Result<CallToolResult, McpError> {
+        let params = map_tool_error(
+            &self.runtime,
+            "get_task",
+            None,
+            None,
+            decode_tool_params::<crate::domain::task::GetTaskRequest>(raw_params),
+        )
+        .await?;
+        let namespace = Some(params.namespace.clone());
+        let result = map_tool_error(
+            &self.runtime,
+            "get_task",
+            namespace,
+            None,
+            crate::application::task::get_task(&self.runtime.store, params).await,
+        )
+        .await?;
+        structured(result)
+    }
+
+    #[tool(description = "List scoped task heads with bounded pagination; no workspace guessing.", input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<crate::domain::task::ListTasksRequest>>() )]
+    async fn list_tasks(&self, raw_params: JsonObject) -> Result<CallToolResult, McpError> {
+        let params = map_tool_error(
+            &self.runtime,
+            "list_tasks",
+            None,
+            None,
+            decode_tool_params::<crate::domain::task::ListTasksRequest>(raw_params),
+        )
+        .await?;
+        let namespace = Some(params.namespace.clone());
+        let result = map_tool_error(
+            &self.runtime,
+            "list_tasks",
+            namespace,
+            None,
+            crate::application::task::list_tasks(&self.runtime.store, params).await,
+        )
+        .await?;
+        structured(result)
+    }
+
+    #[tool(description = "Append a checkpoint with task-version and checkpoint-sequence CAS. Verification labels remain caller reports; artifacts are not revalidated.", input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<crate::domain::task::RecordTaskCheckpointRequest>>() )]
+    async fn record_task_checkpoint(
+        &self,
+        raw_params: JsonObject,
+    ) -> Result<CallToolResult, McpError> {
+        let params = map_tool_error(
+            &self.runtime,
+            "record_task_checkpoint",
+            None,
+            None,
+            decode_tool_params::<crate::domain::task::RecordTaskCheckpointRequest>(raw_params),
+        )
+        .await?;
+        let namespace = Some(params.namespace.clone());
+        let result = map_tool_error(
+            &self.runtime,
+            "record_task_checkpoint",
+            namespace,
+            None,
+            crate::application::task::record_task_checkpoint(&self.runtime.store, params).await,
+        )
+        .await?;
+        structured(result)
+    }
+
+    #[tool(description = "Load mandatory task requirements by ID before optional memory; incomplete or inactive tasks must not resume. Context ID is not delivery or authority proof.", input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<crate::domain::task::TaskContextRequest>>() )]
+    async fn build_task_resume_context(
+        &self,
+        raw_params: JsonObject,
+    ) -> Result<CallToolResult, McpError> {
+        let params = map_tool_error(
+            &self.runtime,
+            "build_task_resume_context",
+            None,
+            None,
+            decode_tool_params::<crate::domain::task::TaskContextRequest>(raw_params),
+        )
+        .await?;
+        let namespace = Some(params.namespace.clone());
+        let result = map_tool_error(
+            &self.runtime,
+            "build_task_resume_context",
+            namespace,
+            None,
+            crate::application::task::build_task_resume_context(&self.runtime.store, params).await,
+        )
+        .await?;
+        structured(result)
+    }
+
     #[tool(description = "Record a bounded, immutable scoped episode linked to existing same-scope events. Requires request_id for safe retry; observations and lessons are caller reports, not authenticated truth.",
         input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<crate::domain::experience::CreateEpisodeRequest>>()
     )]
@@ -1615,7 +1753,7 @@ mod audit_contract_tests {
     #[test]
     fn every_advertised_tool_has_an_explicit_audit_owner() {
         let tools = Server::tool_router().list_all();
-        assert_eq!(tools.len(), 32);
+        assert_eq!(tools.len(), 38);
         let mut counts = [0; 3];
         for tool in tools {
             match tool_audit_contract(&tool.name).expect("advertised tool needs an audit contract")
@@ -1631,7 +1769,7 @@ mod audit_contract_tests {
                 }
             }
         }
-        assert_eq!(counts, [11, 20, 1]);
+        assert_eq!(counts, [11, 26, 1]);
         assert_eq!(tool_audit_contract("untrusted caller tool name"), None);
     }
 

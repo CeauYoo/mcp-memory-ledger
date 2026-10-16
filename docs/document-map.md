@@ -1,5 +1,8 @@
 # 文档导航
 
+- [任务账本与 schema 8](task-ledger.md)
+- [Codex 任务上下文适配器](codex-task-context-adapter.md)
+
 [统一 README](../README.md)是项目首页。本页按读者目标组织阅读路径，避免把阶段日志当成当前教程。
 
 ## 我想先用起来

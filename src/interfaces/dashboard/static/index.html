@@ -31,6 +31,12 @@
   <div class="main-grid"><div class="content-col">
   <section class="metrics" data-i18n-aria="metrics"><div class="metric"><i aria-hidden="true">M</i><span data-i18n="total">Records</span><strong id="metric-total">—</strong></div><div class="metric"><i aria-hidden="true">C</i><span data-i18n="tools">Tool records</span><strong id="metric-tools">—</strong></div><div class="metric"><i aria-hidden="true">✦</i><span data-i18n="reflectionRecords">Reflections</span><strong id="metric-reflections">—</strong></div><div class="metric"><i aria-hidden="true">!</i><span data-i18n="failed">Failed</span><strong id="metric-failed">—</strong></div></section>
   <p id="scope" class="scope"></p>
+  <section id="task-panel" class="panel task-panel" hidden>
+    <div class="section-heading"><h2 data-i18n="tasks">Tasks</h2><span class="pill read-only" data-i18n="readOnly">Read only</span></div>
+    <form id="task-scope" class="task-controls"><label><span data-i18n="taskWorkspace">Workspace</span><input id="task-namespace" type="text" placeholder="project/…" autocomplete="off" required maxlength="512"></label><button id="task-load" data-i18n="taskLoad">Load</button><label><span data-i18n="taskSelect">Task</span><select id="task-select" disabled></select></label></form>
+    <p id="task-message" class="scope" role="status"></p>
+    <div id="task-content" hidden><dl id="task-fields" class="fields"></dl><details><summary id="task-requirement-heading"></summary><ul id="task-requirements"></ul></details><details id="task-checkpoint"><summary data-i18n="taskCheckpoint">Checkpoint</summary><dl id="task-checkpoint-fields" class="fields"></dl><ul id="task-steps"></ul></details></div>
+  </section>
   <section class="panel operations"><div class="section-heading"><h2 id="view-title">Live operations</h2><div class="actions"><button id="pause" data-i18n="pause">Pause</button><button id="refresh" class="primary" data-i18n="refresh">Refresh</button></div></div>
     <div id="filters" class="filters">
       <label><span data-i18n="source">Source</span><select id="source"><option value="live" data-i18n="liveSource">This process</option><option value="history" data-i18n="historySource">History</option></select></label>

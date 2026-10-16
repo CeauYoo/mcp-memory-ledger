@@ -1,5 +1,10 @@
 # MCP Memory Ledger 前沿调研与后续任务规划
 
+## 首批实现进度
+
+P0 文档发布完成。T01–T08 的任务核心、原生适配及只读界面已形成首批源码；真实性、宿主注入、Windows hook 预览等仍有限制，见[验证记录](../task-continuity-validation-2026-10-16.md)。后续动作检查与经验反馈继续推进，本文的计划条目不能当作已实现清单。
+
+
 日期：2026-10-16  
 状态：**active / 用户已批准实施 / implementation approved**。本提交先发布规划，新增功能尚未据此宣称完成。  
 实现基线：干净远程提交 `7448b02a7de8d5dd32c32a149fdd024f798bbf0f`，tree `28144a749bca0d853bb63af7dd872ecb74e709b1`；[PR #4](https://github.com/yooyui/mcp-memory-ledger/pull/4) 保持草稿。[精确基线 CI](https://github.com/yooyui/mcp-memory-ledger/actions/runs/38860968271) 三平台成功：Ubuntu/macOS 各 848 项 Rust、Windows 514 项 configured Rust，三平台候选包和 Windows named-pipe core 验证通过。本计划取代 2026-07-10 计划的执行入口；旧计划与历史证据保留，不构成第二份 active 队列。

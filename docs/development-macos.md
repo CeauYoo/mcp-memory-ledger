@@ -1,5 +1,12 @@
 # macOS 开发与接入指南
 
+## 任务续接与 Codex 接入
+
+新增任务工具与 CLI 见[任务账本](task-ledger.md)，原生配置预览、项目默认任务选择和宿主支持边界见[Codex 适配器](codex-task-context-adapter.md)。Schema 8 需要显式迁移，先备份，不能自动替换运行中的数据库。预览不改全局配置；未取得真实宿主注入证据，不将输出成功称为接入成功。Windows 核心/任务 CLI 与 Windows hook 自动配置支持分别记录。
+
+所有状态、构建与日志放在操作者确认的非同步目录；不改变现有部署。
+
+
 ## 2026-10-15 可选本机核心：隔离集成中
 
 旧`serve`仍是兼容入口；新Unix `core`＋`bridge`的[明确配置步骤](local-workspace-core.md)与[桥TOML](../examples/codex-workspace-bridge.toml)用于隔离目录，不替换当前正式d9e33d3部署。先注册真实canonical root，再用固定`--workspace-id`/`--workspace-root`连接，或按[全局桥样例](../examples/codex-workspace-bridge-global.toml)使用`--registry`精确解析启动cwd。固定cwd客户端须保留显式模式；移动会话不会自动重绑。核心与旧`serve`不要同时写同一正式库，已有库不得隐式init/migrate。

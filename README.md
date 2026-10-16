@@ -1,53 +1,10 @@
 # MCP Memory Ledger
 
-## 当前执行入口与已完成基线（2026-10-16）
+## 当前开发切片
 
-已批准按[完整唯一实施计划](docs/plans/2026-10-16-task-continuity-and-host-integration.md)分阶段推进，当前首批为 P0 与 T01–T08。任务要求/checkpoint/宿主接入仍为新增实现队列，批准不等于已完成。
+按[唯一实施计划](docs/plans/2026-10-16-task-continuity-and-host-integration.md)推进任务要求、进度续接与客户端接入。本轮新增[任务账本](docs/task-ledger.md)、[Codex 上下文适配器](docs/codex-task-context-adapter.md)及原监控界面的只读任务摘要；新增能力的验证状态见[当前状态](docs/project-status.md)。源码更新不等于已部署，真实宿主注入与模型采用须分别取得证据。
 
-基线 `7448b02a7de8d5dd32c32a149fdd024f798bbf0f` 的 [CI 38860968271](https://github.com/yooyui/mcp-memory-ledger/actions/runs/38860968271) 三平台全部成功：Ubuntu/macOS 各 848 项 Rust，Windows 514 项 configured Rust；三平台精确来源候选包通过，Windows named-pipe core 的 42 次 MCP 工具调用、隔离、确认写后重启/重放、备份恢复与清理通过。Ubuntu 真实 Chrome 检查通过。
-
-workspace 生命周期、只读配置生成、原生 DB-only 恢复、有界 reflection/experience 历史接入及 Windows 核心均已实现并获得上述范围验证；[独立审查](docs/independent-security-review-2026-10-16.md)及修复已完成限定范围。它们不再是待实现项目。仍非全面安全认证、真实用户安装、任意在途崩溃保证或正式发布；真实宿主注入与新增功能须获得新证据，用户机器安装另行确认。
-
-### 以下为历史阶段记录
-
-下文带日期的“待验证/未提交/Windows 未支持”仅保留当时事实，由上面精确基线结论更新；旧阶段路线不再拥有执行优先权，当前任务只由唯一实施计划管理。
-
-
-本轮整合已完成 Linux 云端普通检查与独立有界安全源码复核；Rust 834 项通过、12 项 IPC 环境阻断，Windows 原生与精确提交 CI 仍待完成。详见[当前状态](docs/project-status.md)和[独立审查](docs/independent-security-review-2026-10-16.md)。
-
-数据库生命周期隐私加固：Unix 新建库与迁移备份创建即 owner-only，排练使用私有临时目录；现有库权限不改，备份无覆盖发布。Windows 使用专用 ACL helper，原生执行验收仍待完成。详见[数据库操作](docs/database-operations.md)。
-
-## 2026-10-16 Windows 本机核心 candidate
-
-新增 Windows 本机命名管道 `core` + stdio `bridge` 实现，与 Unix 共用绑定、逐调用撤销、资源限额和关闭排空逻辑。新建 IPC/状态文件使用当前用户私有 DACL；已有文件/目录须当前用户所有，访问授权只接受当前用户、SYSTEM 和 Administrators。它不隔离同用户任意进程或特权管理员，也不是远端多租户服务。`serve` 兼容入口保留。
-
-当前为待精确提交 Windows 原生 CI 验证的 candidate，不能把 Linux 编译或此前 legacy Windows CI 当作本轮通过。验证包括真实桥多会话、范围拒绝、重连/恢复，以及解包二进制烟测；无用户电脑操作、生产 ACL 修改、凭据生成、服务安装或部署。入口与限制见 [Windows 指南](docs/development-windows.md)。
-
-
-旧项目事实及可归属的 reflection/experience/feedback/trigger 历史可先用 `workspace adopt-preview` 盘点，再显式 `adopt` 新建 UUID → 旧 namespace 映射；不改历史/receipt。双向来源闭包覆盖全部经验版本，无关联的其他项目历史不再全库阻断。unknown/mixed/缺失来源及 global self-model 后续版本仍拒绝，见[支持边界](docs/workspace-legacy-adoption.md)。
-
-## 2026-10-16 实用功能续建（未提交，待验证）
-
-本次优先补齐三项真实功能：
-
-- [工作空间生命周期](docs/local-workspace-core.md)：`workspace unbind` 解除指定旧 root；`disable` / `enable` 停用和恢复已有身份，保留记忆与个人授权，不删除用户数据。
-- [检查与客户端配置](docs/workspace-client-config.md)：`workspace inspect` / `status` 只读检查注册状态；`client-config --mode fixed|global --socket ...` 将桥配置 TOML 输出到 stdout，审阅后手动合并，不改客户端配置，也不代表核心运行健康。
-- [原生备份恢复](docs/database-operations.md)：`backup --db ... --output ...` / `restore --db ... --output ...` 使用 SQLite 一致快照，只接受 current schema、恢复到不存在的新路径；registry 独立保存，不自动切换部署。
-
-此前提交 `f8eb9ed` 的 [CI run 38709687717](https://github.com/yooyui/mcp-memory-ledger/actions/runs/38709687717) 已全绿：Ubuntu/macOS 各 794 项 Rust 测试、Windows 429 项，以及 Ubuntu 真实 Chromium 核心网页检查。该历史提交的 Windows 仅验证 legacy；这些结果不覆盖本次 Windows candidate。有界独立源码审查已完成；新核心真实客户端自然语言、fresh-machine 与发布门仍未通过；正式 Mac 部署未替换。下方带日期记录保留历史范围。
-
-## 2026-10-15 本机核心与验收进度
-
-已安装旧版 `d9e33d3` 的 Mac 验收完成 20 项直接 MCP 协议检查、11 项网页检查，以及一个真实用户自然语言主动 `recall_memory` → `get_memory`、后续更正样本；该样本也发现重复召回。原始记录保留本机，范围见[验收矩阵](docs/workspace-core-acceptance.md)。这不等于新架构、长期稳定性或模型效果通过。
-
-可选的[本机核心＋固定工作空间桥](docs/local-workspace-core.md)正在集成：核心统一持库和监控缓冲，桥固定绑定已注册 workspace，支持[一次全局配置](examples/codex-workspace-bridge-global.toml)在启动时按 cwd 精确解析；固定 cwd 客户端须用显式绑定，个人读写显式授权；25 个范围工具允许，7 个全局工具隐藏并拒绝，core ingest 禁用自动反思。核心默认关闭监控 HTTP，新增显式管理员 CLI 与标签页内存登录入口，尚待真实核心端到端验收。新路径首期为 macOS/Linux；Windows 保留旧 stdio，新核心暂不支持。完整集成与新架构真实客户端仍待验收，正式部署未替换。
-
-早期定向/全量体验工具、17 次无模型 app-server 调用及历史90轮的4个问题轮次仍见[当时验收记录](docs/acceptance-2026-10-15.md)；不改写历史结果。fresh-machine、真实模型/费用与发布门保持开放。
-
-## 2026-10-13 验收工具更新
-
-三协议验收器已覆盖 Chat、Responses、Anthropic；新增请求/输入/输出限制与失败用量记录。回环 fixture 与真实调用分层，未知价格不声明美元硬上限；真实模型与用户客户端仍待验收。候选包增加更正重放、跨 namespace 直接查询/历史隔离及恢复后的历史/证据比对。当前步骤和证据口径见[本轮验收记录](docs/acceptance-2026-10-13.md)。
-
+上一实现基线 `7448b02` 的[三平台 CI](https://github.com/yooyui/mcp-memory-ledger/actions/runs/38860968271)已通过，含 Windows 新核心及候选包、复杂历史接入和限定范围安全修复。本轮新增代码不能继承旧提交的绿灯。带日期的开发过程保留在[状态记录](docs/project-status.md)及[此前 README](https://github.com/CeauYoo/mcp-memory-ledger/blob/9656fe8fd6463c64688b72da74c22c41b16b8212/README.md)。
 
 让本地 AI 客户端记住有来源的信息，找回证据，并在纠错后保留历史。
 
@@ -56,6 +13,9 @@ workspace 生命周期、只读配置生成、原生 DB-only 恢复、有界 ref
 [文档导航](docs/document-map.md) · [快速开始](docs/quickstart.md) · [MCP 接入](docs/local-mcp-integration-2026-03-26.md) · [当前状态](docs/project-status.md) · [English](docs/README.en.md) · [日本語](docs/README.ja.md)
 
 ## 能做什么
+
+- **保存任务要求与续接状态**：任务修订、稳定要求 ID、候选隔离、checkpoint 与完整性诊断；内容是有来源的调用方报告，不授予执行权限。
+- **接入 Codex 上下文**：原生适配器提供显式任务选择、配置预览和生命周期 JSON；输出与真实宿主接受分开记录，支持范围见适配器合同。
 
 - **记录与追溯**：持久化 Event、Claim、丰富 Episode、Reflection 及证据关系；区分服务端记录时间和调用方观察时间，未知历史保持未知。
 - **按范围找回记忆**：显式 namespace 的浏览、稳定 ID 查询、修订历史，以及 FTS5 / 短中文精确字面召回。
@@ -66,7 +26,7 @@ workspace 生命周期、只读配置生成、原生 DB-only 恢复、有界 ref
 - **版本化全局 self-model**：identity/commitment 追加版本、同范围可见 diff、expected-version 冲突检测和显式组件补偿回滚；仍受既有 Claim、证据与全局写边界约束。详见[合同](docs/self-model-versions.md)。
 - **本地数据运维**：显式初始化/迁移、默认只读诊断、索引检查/重建、备份恢复，以及有界只读 scoped export。
 
-原 standalone `serve` 注册 **32 个 MCP 工具**；新核心工作空间会话按设计只开放其中 **25 个**，其余7个全局入口拒绝，集成验收仍进行中。工具用途见[工具与合同索引](docs/tool-reference.md)，模式差异见[本机核心合同](docs/local-workspace-core.md)。二进制/crate 兼容名称仍是 `agent_llm_mm`，脚本和配置前缀仍是 `agent-llm-mm`。
+当前 standalone `serve` 注册 **38 个 MCP 工具**；核心工作空间会话开放其中 **31 个**，其余 7 个全局入口拒绝。新增 6 个任务工具沿用逐调用范围与撤销检查，验证状态以本提交结果为准。工具用途见[工具与合同索引](docs/tool-reference.md)，模式差异见[本机核心合同](docs/local-workspace-core.md)。二进制/crate 兼容名称仍是 `agent_llm_mm`，脚本和配置前缀仍是 `agent-llm-mm`。
 
 ## 从这里开始
 

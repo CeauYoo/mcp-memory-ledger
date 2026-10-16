@@ -43,7 +43,9 @@ async fn server_exposes_expected_tools_over_stdio() {
         vec![
             "build_self_snapshot".to_string(),
             "build_task_context".to_string(),
+            "build_task_resume_context".to_string(),
             "commit_feedback_candidate".to_string(),
+            "create_task".to_string(),
             "decide_with_snapshot".to_string(),
             "export_memory".to_string(),
             "get_episode_detail".to_string(),
@@ -55,18 +57,22 @@ async fn server_exposes_expected_tools_over_stdio() {
             "get_reflection_history".to_string(),
             "get_self_model_history".to_string(),
             "get_self_model_versions".to_string(),
+            "get_task".to_string(),
             "ingest_interaction".to_string(),
             "inspect_retrieval_index".to_string(),
             "list_episode_details".to_string(),
             "list_experience_candidates".to_string(),
+            "list_tasks".to_string(),
             "propose_experience_candidate".to_string(),
             "propose_feedback_candidate".to_string(),
             "rebuild_retrieval_index".to_string(),
             "recall_experience_candidates".to_string(),
             "recall_memory".to_string(),
             "record_episode".to_string(),
+            "record_task_checkpoint".to_string(),
             "reject_feedback_candidate".to_string(),
             "revise_experience_candidate".to_string(),
+            "revise_task".to_string(),
             "rollback_experience_candidate".to_string(),
             "run_reflection".to_string(),
             "search_memory".to_string(),
@@ -5144,7 +5150,20 @@ required = true
         .expect("client");
 
     let tools = client.list_all_tools().await.expect("list tools");
-    assert_eq!(tools.len(), 32);
+    assert_eq!(tools.len(), 38);
+    for name in [
+        "create_task",
+        "revise_task",
+        "get_task",
+        "list_tasks",
+        "record_task_checkpoint",
+        "build_task_resume_context",
+    ] {
+        assert!(
+            tools.iter().any(|tool| tool.name.as_str() == name),
+            "missing task tool {name}"
+        );
+    }
 
     let health: serde_json::Value = reqwest::get(format!("http://127.0.0.1:{port}/api/health"))
         .await
@@ -5223,7 +5242,20 @@ max_concurrent_tasks = 1
             .await
             .unwrap();
     let tools = client.list_all_tools().await.unwrap();
-    assert_eq!(tools.len(), 32);
+    assert_eq!(tools.len(), 38);
+    for name in [
+        "create_task",
+        "revise_task",
+        "get_task",
+        "list_tasks",
+        "record_task_checkpoint",
+        "build_task_resume_context",
+    ] {
+        assert!(
+            tools.iter().any(|tool| tool.name.as_str() == name),
+            "missing task tool {name}"
+        );
+    }
 
     client
         .call_tool(

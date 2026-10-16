@@ -1,11 +1,13 @@
 import {applyLocale, chooseLocale} from './i18n.mjs';
 import {initialState, latestFirst, validRecords, WINDOW_LIMIT} from './state.mjs';
 import {requestJson, singleFlight, setCapability, clearCapability, openEventStream} from './transport.mjs';
+import {validTaskList, validTaskSnapshot} from './tasks.mjs';
 import {render} from './render.mjs';
 const $ = id => document.getElementById(id), base = new URL('../', import.meta.url);
 let saved; try { saved = localStorage.getItem('memory-ledger-locale'); } catch { /* Private mode still works. */ }
 const state = initialState(chooseLocale(saved,navigator.languages));
 let authEpoch = 0, authController;
+let taskEpoch = 0, taskController;
 let epoch = 0, detailEpoch = 0, controller, detailController, stream, streamTimer, pollTimer, manualRefresh = false;
 const draw = () => render(state);
 const api = path => new URL(path,base);
@@ -45,7 +47,7 @@ const refresh = singleFlight(async () => {
       get(`api/events?limit=${WINDOW_LIMIT}`,validRecords), get('api/health',validHealth)
     ]);
     if (generation !== epoch) return;
-    if (state.metadata && state.metadata.instance_id !== metadata.instance_id) { clearSelection(); state.history = null; closeStream(); }
+    if (state.metadata && state.metadata.instance_id !== metadata.instance_id) { clearSelection(); state.history = null; clearTasks(); closeStream(); }
     Object.assign(state,{metadata,summary,live:latestFirst(live),health,healthChecked:Date.now()});
     if (source === 'history' && !healthView && metadata.history_available) {
       const history = await get(`api/operation-log?limit=${WINDOW_LIMIT}`,validRecords);
@@ -53,6 +55,7 @@ const refresh = singleFlight(async () => {
       state.history = latestFirst(history);
     } else if (!metadata.history_available) state.history = null;
     state.lastSuccess = Date.now(); state.error = null; syncStream();
+    await refreshTasks();
   } catch (error) {
     if (generation !== epoch) return;
     if (error.status === 401) lock();
@@ -86,6 +89,39 @@ async function selectRecord(id) {
   draw();
   if (document.activeElement === $('detail') && matchMedia('(max-width:1200px)').matches) $('detail').scrollIntoView({block:'start'});
 }
+function clearTasks() {
+  taskEpoch++; taskController?.abort();
+  Object.assign(state,{tasks:null,taskId:'',taskSnapshot:null,taskError:null,taskBusy:false});
+}
+async function refreshTasks() {
+  const generation=++taskEpoch; taskController?.abort();
+  if (!state.metadata?.tasks_available || !state.taskNamespace) { clearTasks(); return; }
+  taskController=new AbortController(); const signal=taskController.signal;
+  const namespace=state.taskNamespace, selected=state.taskId;
+  state.taskBusy=true; state.taskError=null; draw();
+  try {
+    const list=await requestJson(api(`api/tasks?${new URLSearchParams({namespace})}`),{signal,validate:validTaskList});
+    if(generation!==taskEpoch)return;
+    if(list.tasks.some(task=>task.namespace!==namespace))throw Object.assign(new Error(),{code:'invalid'});
+    state.tasks=list.tasks;
+    if(selected) {
+      const value=await requestJson(api(`api/tasks/${encodeURIComponent(selected)}?${new URLSearchParams({namespace})}`),{signal,validate:validTaskSnapshot});
+      if(generation!==taskEpoch)return;
+      if(value.snapshot.task.namespace!==namespace || value.snapshot.task.task_id!==selected)throw Object.assign(new Error(),{code:'invalid'});
+      state.taskSnapshot=value.snapshot;
+    }
+  } catch(error) {
+    if(generation!==taskEpoch)return;
+    if(error.status===401){lock();return;}
+    state.taskSnapshot=null; state.taskError={code:error.code,status:error.status};
+  } finally { if(generation===taskEpoch){state.taskBusy=false;draw();} }
+}
+$('task-scope').addEventListener('submit',event=>{
+  event.preventDefault();clearTasks();state.taskNamespace=$('task-namespace').value.trim();draw();void refreshTasks();
+});
+$('task-select').addEventListener('change',event=>{
+  state.taskId=event.target.value;state.taskSnapshot=null;draw();void refreshTasks();
+});
 $('navigation').addEventListener('click', event => {
   const view = event.target.closest('button[data-view]')?.dataset.view;
   if (!view) return;
@@ -112,18 +148,18 @@ $('locale').addEventListener('change', event => {
 });
 $('pause').addEventListener('click', () => {
   state.paused = !state.paused;
-  if (state.paused) { epoch++; controller?.abort(); state.busy = false; clearTimeout(pollTimer); closeStream(); }
+  if (state.paused) { epoch++; controller?.abort(); taskEpoch++; taskController?.abort(); state.taskBusy = false; state.busy = false; clearTimeout(pollTimer); closeStream(); }
   else { syncStream(); void refresh(); }
   draw();
 });
 $('refresh').addEventListener('click', () => { manualRefresh = true; void refresh(); });
 window.addEventListener('online', () => { if (!state.paused) void refresh(); });
-window.addEventListener('pagehide', () => { if (!$('owner-logout').hidden) lock(); authEpoch++; authController?.abort(); clearCapability(); state.paused = true; epoch++; controller?.abort(); detailController?.abort(); closeStream(); clearTimeout(pollTimer); });
+window.addEventListener('pagehide', () => { if (!$('owner-logout').hidden) lock(); authEpoch++; authController?.abort(); clearTasks(); clearCapability(); state.paused = true; epoch++; controller?.abort(); detailController?.abort(); closeStream(); clearTimeout(pollTimer); });
 window.addEventListener('pageshow', event => { if (event.persisted) void start(); });
 function lock() {
   authEpoch++; authController?.abort();
   epoch++; detailEpoch++; controller?.abort(); detailController?.abort(); closeStream(); clearTimeout(pollTimer);
-  clearCapability(); state.paused = true;
+  clearTasks(); state.taskNamespace = ''; $('task-namespace').value = ''; clearCapability(); state.paused = true;
   Object.assign(state, {live:[],history:null,summary:null,metadata:null,selected:null,detail:null,detailState:"idle",lastSuccess:0,health:null,healthChecked:0,busy:false,error:null});
   $('detail-fields').replaceChildren(); $('payload').textContent = ''; $('health-fields').replaceChildren();
   draw(); if (!$('owner-auth').open) $('owner-auth').showModal(); $('owner-token').focus();

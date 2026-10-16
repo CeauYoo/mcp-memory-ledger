@@ -9,8 +9,9 @@ requested_output_dir="${1:-${project_root}/target/reports/self-revision-demo/$(d
 cd "${project_root}"
 
 cargo build --bins
-"${project_root}/target/debug/run_self_revision_demo" \
+build_dir="${CARGO_TARGET_DIR:-${project_root}/target}"
+"${build_dir}/debug/run_self_revision_demo" \
   --output-dir "${requested_output_dir}" \
-  --server-bin "${project_root}/target/debug/agent_llm_mm"
+  --server-bin "${build_dir}/debug/agent_llm_mm"
 
 printf 'self-revision demo artifacts: %s\n' "${requested_output_dir}"

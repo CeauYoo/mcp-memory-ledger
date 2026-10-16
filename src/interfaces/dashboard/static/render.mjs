@@ -1,3 +1,4 @@
+import {renderTasks} from './tasks.mjs';
 import {translator} from './i18n.mjs';
 import {connectionState, filterRecords, WINDOW_LIMIT} from './state.mjs';
 import {errorText} from './transport.mjs';
@@ -48,6 +49,7 @@ function renderRecords(records, state, t) {
 }
 let detailSignature = '';
 export function render(state) {
+  renderTasks(state);
   const t = translator(state.locale), meta = state.metadata, summary = state.summary;
   const connection = connectionState(state);
   text('connection', connection === 'connected' ? t('connected', {mode:t(state.stream ? 'streaming' : 'polling')}) : t(connection));

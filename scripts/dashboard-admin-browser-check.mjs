@@ -65,14 +65,17 @@ async function check(name,run) { await run(); checks.push(name); console.log(`PA
 
 const capability = 'synthetic-admin-browser-fixture-only';
 const assets = path.resolve('src/interfaces/dashboard/static');
+const taskSource={kind:'caller_reported'};
+const syntheticTask={namespace:'project/synthetic',task_id:'browser-task',version:2,title:'Synthetic continuity task',status:'paused',source:taskSource,requirements:[{requirement_id:'goal',kind:'goal',state:'reported',text:'Original browser goal',source:taskSource},{requirement_id:'keep',kind:'requirement',state:'reported',text:'<script>window.taskInjected=true</script>'+'長い要件 '.repeat(20),source:taskSource},{requirement_id:'candidate',kind:'requirement',state:'candidate',text:'Unconfirmed replacement',source:{kind:'model_asserted'}}]};
+const syntheticCheckpoint={namespace:'project/synthetic',task_id:'browser-task',task_version:1,sequence:1,recorded_at:'2026-10-16T00:00:00Z',source:taskSource,steps:[{step_id:'plan',text:'Plan only',mode:'Draft',verification:'not_performed',evidence_refs:[]}],blockers:['Awaiting result'],next_steps:['Check output'],artifacts:[]};
 const row = {id:'fixture',operation:'recall_memory',namespace:'project/synthetic',kind:'tool',status:'ok',summary:'Synthetic owner record',timestamp:'2026-10-15T00:00:00Z',payload:{},read_only:true};
 try {
-  let url;
+  let url, taskNamespace='project/synthetic';
   if (options['--binary']) {
     child=spawn(options['--python']??'python3',['-B','scripts/dashboard-admin-browser-fixture.py',path.resolve(options['--binary']),path.join(output,'fixture')],{stdio:['pipe','pipe','pipe']});
     child.stderr.pipe(createWriteStream(path.join(output,'fixture.stderr.log')));
     createInterface({input:child.stdout}).on('line',line=>{const value=JSON.parse(line);const waiter=fixtureWaiters.shift();if(waiter)waiter(value);else fixtureQueue.push(value);});
-    const fixture=await nextFixture(); url=fixture.url;
+    const fixture=await nextFixture(); url=fixture.url; taskNamespace=fixture.task_namespace;
   } else {
   proxy=createServer(async(req,res)=>{
     requests.push({method:req.method,path:req.url,authorized:req.headers.authorization===`Bearer ${capability}`});
@@ -82,12 +85,18 @@ try {
       if(req.headers.authorization!==`Bearer ${capability}`) {res.writeHead(401);res.end('{}');return;}
       if(req.url.endsWith('/stream')) {res.writeHead(200,{'Content-Type':'text/event-stream'});res.write('data: {}\n\n');return;}
       const name=req.url.split('/api/')[1].split('?')[0];
-      const value=name==='health'?{status:'ok',read_only:true}:name==='status'?{instance_id:'synthetic',process_id:1,event_capacity:32,history_available:false,sse_enabled:true}:name==='summary'?{runtime:{provider:'mock',transport:'local-core'},total_events:1,tool_events:1,reflection_events:0,failed_events:0}:name==='events'?[row]:row;
+      const value=name==='health'?{status:'ok',read_only:true}:name==='status'?{instance_id:'synthetic',process_id:1,event_capacity:32,history_available:false,tasks_available:true,sse_enabled:true}:name==='summary'?{runtime:{provider:'mock',transport:'local-core'},total_events:1,tool_events:1,reflection_events:0,failed_events:0}:name==='events'?[row]:row;
+      if(name==='tasks' || name.startsWith('tasks/')) {
+        const namespace=new URL(req.url,'http://localhost').searchParams.get('namespace');
+        const present=namespace===taskNamespace;
+        res.writeHead(name==='tasks' || present ? 200 : 404,{'Content-Type':'application/json'});
+        res.end(JSON.stringify(name==='tasks'?{tasks:present?[syntheticTask]:[],limit:100,read_only:true}:present?{snapshot:{task:syntheticTask,checkpoint:syntheticCheckpoint},read_only:true}:{error:'task not found'}));return;
+      }
       res.writeHead(200,{'Content-Type':'application/json'});res.end(JSON.stringify(value));return;
     }
     const pathname=new URL(req.url,'http://localhost').pathname;
     const filename=pathname==='/qa/desk/'?'index.html':pathname.startsWith('/qa/desk/assets/')?pathname.slice('/qa/desk/assets/'.length):'';
-    if(!['index.html','app.mjs','transport.mjs','state.mjs','render.mjs','i18n.mjs','dashboard.css','memory_chan_hero.png','memory_chan_sidebar.png'].includes(filename)){res.writeHead(404);res.end();return;}
+    if(!['index.html','app.mjs','transport.mjs','state.mjs','render.mjs','i18n.mjs','tasks.mjs','dashboard.css','memory_chan_hero.png','memory_chan_sidebar.png'].includes(filename)){res.writeHead(404);res.end();return;}
     const types={html:'text/html',mjs:'text/javascript',css:'text/css',png:'image/png'};
     res.writeHead(200,{'Content-Type':types[filename.split('.').at(-1)]});res.end(await readFile(path.join(assets,filename)));
   });
@@ -128,10 +137,40 @@ try {
     assert.ok(requests.some(r=>r.path.endsWith('/stream')&&r.authorized));
     await screenshot('owner-unlocked');
   });
+  await check('owner task summary preserves requirements, pending candidates and stale checkpoint',async()=>{
+    await until("!document.querySelector('#task-panel').hidden");
+    await evaluate(`document.querySelector('#task-namespace').value=${JSON.stringify(taskNamespace)};document.querySelector('#task-scope').requestSubmit()`);
+    await until("document.querySelector('#task-select').options.length===2");
+    await choose('#task-select','browser-task');await until("!document.querySelector('#task-content').hidden");
+    const content=await evaluate("document.querySelector('#task-content').textContent");
+    assert.ok(content.includes('Original browser goal'));assert.ok(content.includes('Paused'));
+    assert.ok(content.includes('Earlier task revision'));assert.ok(content.includes('Not performed'));
+    assert.equal(await evaluate("document.querySelectorAll('#task-requirements li').length"),1);
+    assert.equal(await evaluate("Boolean(window.taskInjected)"),false);
+    await evaluate("document.querySelector('#task-content details').open=true;document.querySelector('#task-checkpoint').open=true");
+    for(const [locale,label] of [['zh-CN','已暂停'],['ja','一時停止'],['en','Paused']]) {
+      await choose('#locale',locale);
+      assert.ok((await evaluate("document.querySelector('#task-fields').textContent")).includes(label));
+    }
+    await screenshot('owner-task-summary');
+    await call('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+    await evaluate("document.querySelector('#task-panel').scrollIntoView({block:'start'})");
+    assert.ok(await evaluate("document.documentElement.scrollWidth<=innerWidth+1"));
+    await screenshot('owner-task-mobile');
+    await call('Emulation.setDeviceMetricsOverride',{width:1440,height:1050,deviceScaleFactor:1,mobile:false});
+    await evaluate("document.querySelector('#task-namespace').value='project/empty-browser-fixture';document.querySelector('#task-scope').requestSubmit()");
+    await until("document.querySelector('#task-message').textContent.includes('No tasks')");
+    assert.equal(await evaluate("document.querySelector('#task-fields').textContent"),'');
+    await evaluate(`document.querySelector('#task-namespace').value=${JSON.stringify(taskNamespace)};document.querySelector('#task-scope').requestSubmit()`);
+    await until("document.querySelector('#task-select').options.length===2");
+    await choose('#task-select','browser-task');await until("!document.querySelector('#task-content').hidden");
+  });
   await check('lock clears records and detail DOM then allows repeated login',async()=>{
     await click('#records button');await until("!document.querySelector('#detail-content').hidden");
     await click('#owner-logout');await until("document.querySelector('#owner-auth').open");
     assert.equal(await evaluate("document.querySelector('#payload').textContent"),'');
+    assert.equal(await evaluate("document.querySelector('#task-fields').textContent"),'');
+    assert.equal(await evaluate("document.querySelector('#task-namespace').value"),'');
     assert.equal(await evaluate("document.querySelectorAll('#records button').length"),0);
     await login(capability);await until("!document.querySelector('#owner-auth').open && document.querySelectorAll('#records button').length>=1");
   });

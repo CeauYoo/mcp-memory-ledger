@@ -295,6 +295,12 @@ async fn clients_share_core_without_sharing_project_scopes_or_global_tools() {
     let mut b = fixture.bridge(&fixture.b, "client-b");
     let tools = a.tools().await;
     let expected = [
+        "create_task",
+        "revise_task",
+        "get_task",
+        "list_tasks",
+        "record_task_checkpoint",
+        "build_task_resume_context",
         "ingest_interaction",
         "recall_memory",
         "build_task_context",
@@ -508,7 +514,7 @@ async fn unknown_or_mismatched_workspace_bindings_cannot_initialize() {
         assert!(!bridge.close().await.success());
     }
     let mut valid = fixture.bridge(&fixture.a, "still-valid");
-    assert_eq!(valid.tools().await.len(), 25);
+    assert_eq!(valid.tools().await.len(), 31);
     assert!(valid.close().await.success());
     core.stop().await;
 }
@@ -553,7 +559,7 @@ async fn only_one_core_can_own_a_socket_or_database() {
         "another database must not bypass ownership of the endpoint"
     );
     let mut bridge = fixture.bridge(&fixture.a, "original-core");
-    assert_eq!(bridge.tools().await.len(), 25);
+    assert_eq!(bridge.tools().await.len(), 31);
     assert!(bridge.close().await.success());
     core.stop().await;
     let restarted = fixture.start().await;
@@ -1018,7 +1024,7 @@ async fn disable_and_unbind_revoke_live_sessions_before_receipt_replay() {
     set_workspace_active(&fixture.registry, &fixture.a.id, false).unwrap();
     denied(&a.request("tools/list", json!({})).await.unwrap());
     denied(&a.call("ingest_interaction", write.clone()).await);
-    assert_eq!(b.tools().await.len(), 25);
+    assert_eq!(b.tools().await.len(), 31);
     set_workspace_active(&fixture.registry, &fixture.a.id, true).unwrap();
     let replay = a.call("ingest_interaction", write.clone()).await;
     assert_eq!(content(&replay)["event_id"], content(&original)["event_id"]);
@@ -1039,5 +1045,231 @@ async fn disable_and_unbind_revoke_live_sessions_before_receipt_replay() {
     assert_eq!(content(&recalled)["records"].as_array().unwrap().len(), 1);
     assert!(a.close().await.success());
     assert!(b.close().await.success());
+    core.stop().await;
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn task_tools_use_live_scope_binding_and_revoke_before_receipt_replay() {
+    let fixture = Fixture::new().await;
+    let core = fixture.start().await;
+    let mut a = fixture.bridge(&fixture.a, "task-client-a");
+    let mut b = fixture.bridge(&fixture.b, "task-client-b");
+    let request = json!({"task_id":"scoped-task","request_id":"scoped-task-create","title":"Synthetic task continuity","source":{"kind":"caller_reported","reference":null},"reason":"Test session-bound task creation","requirements":[{"requirement_id":"keep-scope","kind":"prohibition","text":"Do not leave the selected workspace","state":"reported","source":{"kind":"caller_reported","reference":null},"replaces":null}]});
+    let created = a.call("create_task", request.clone()).await;
+    assert_eq!(content(&created)["record"]["version"], 1);
+    let scope = content(&created)["record"]["namespace"].clone();
+    let built = a
+        .call(
+            "build_task_resume_context",
+            json!({"task_id":"scoped-task","max_bytes":16384}),
+        )
+        .await;
+    assert_eq!(content(&built)["mandatory_requirement_count"], 1);
+    assert_eq!(content(&built)["can_resume"], true);
+    let other = b.call("get_task", json!({"task_id":"scoped-task"})).await;
+    assert!(content(&other).is_null());
+    denied(
+        &b.call(
+            "get_task",
+            json!({"namespace":scope,"task_id":"scoped-task"}),
+        )
+        .await,
+    );
+    set_workspace_active(&fixture.registry, &fixture.a.id, false).unwrap();
+    for name in [
+        "create_task",
+        "revise_task",
+        "get_task",
+        "list_tasks",
+        "record_task_checkpoint",
+        "build_task_resume_context",
+    ] {
+        let args = if name == "create_task" {
+            request.clone()
+        } else {
+            json!({"task_id":"scoped-task"})
+        };
+        denied(&a.call(name, args).await);
+    }
+    set_workspace_active(&fixture.registry, &fixture.a.id, true).unwrap();
+    assert_eq!(
+        content(&a.call("create_task", request).await)["replayed"],
+        true
+    );
+    assert!(a.close().await.success());
+    assert!(b.close().await.success());
+    core.stop().await;
+}
+
+/// Real native adapter -> spawned stdio bridge -> live scoped core. This does not
+/// assert that Codex itself received or understood stdout, and uses no model.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn native_context_adapter_reads_live_task_and_stops_output_after_pause_or_revocation() {
+    let fixture = Fixture::new().await;
+    let core = fixture.start().await;
+    let mut bridge = fixture.bridge(&fixture.a, "adapter-task-seed");
+    let created = bridge.call("create_task", json!({
+        "task_id":"adapter-task", "request_id":"adapter-task-create",
+        "title":"Synthetic adapter continuity", "reason":"Exercise real native transport",
+        "source":{"kind":"caller_reported","reference":null},
+        "requirements":[{"requirement_id":"required-scope","kind":"prohibition",
+            "text":"SYNTHETIC_REQUIRED_CONSTRAINT: retain the selected workspace scope",
+            "state":"reported","source":{"kind":"caller_reported","reference":null},"replaces":null}]
+    })).await;
+    let namespace = content(&created)["record"]["namespace"].clone();
+    let state = fixture.directory.path().join("adapter-state.sqlite");
+    let root = fixture.a.roots[0].canonicalize().unwrap();
+    // Follow the harness's existing child-process isolation. A deliberately absent
+    // provider config also checks that this path remains independent of model setup.
+    let adapter = |action: &str, extra: &[(&str, &std::ffi::OsStr)], input: Option<&Value>| {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_agent_llm_mm"));
+        command.env_clear();
+        #[cfg(windows)]
+        if let Some(system_root) = std::env::var_os("SystemRoot") {
+            command.env("SystemRoot", system_root);
+        }
+        command
+            .args(["codex-context", action, "--state"])
+            .arg(&state)
+            .env(
+                "AGENT_LLM_MM_CONFIG",
+                fixture.directory.path().join("synthetic-no-provider.toml"),
+            )
+            .env("TMPDIR", fixture.directory.path())
+            .env("TMP", fixture.directory.path())
+            .env("TEMP", fixture.directory.path())
+            .env("TOKIO_WORKER_THREADS", "2")
+            .current_dir(&root)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        for (name, value) in extra {
+            command.arg(name).arg(value);
+        }
+        let mut child = command.spawn().unwrap();
+        let mut stdin = child.stdin.take().unwrap();
+        if let Some(input) = input {
+            stdin
+                .write_all(&serde_json::to_vec(input).unwrap())
+                .unwrap();
+        }
+        drop(stdin);
+        let output = child.wait_with_output().unwrap();
+        assert!(
+            output.status.success(),
+            "native adapter {action} failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        serde_json::from_slice::<Value>(&output.stdout).unwrap_or_else(|error| {
+            panic!("native adapter {action} emitted invalid stdout: {error}")
+        })
+    };
+    assert_eq!(adapter("init", &[], None)["schema_version"], 1);
+    let selected = adapter(
+        "select-default",
+        &[
+            ("--registry", fixture.registry.as_os_str()),
+            ("--socket", fixture.socket.as_os_str()),
+            ("--root", root.as_os_str()),
+            ("--workspace-id", std::ffi::OsStr::new(&fixture.a.id)),
+            ("--task-id", std::ffi::OsStr::new("adapter-task")),
+        ],
+        None,
+    );
+    assert_eq!(selected["selected"]["task_id"], "adapter-task");
+    assert_eq!(selected["delivery"], "unverified");
+    let hook_flags = [
+        ("--registry", fixture.registry.as_os_str()),
+        ("--socket", fixture.socket.as_os_str()),
+    ];
+    let input = json!({"session_id":"synthetic-native-session","cwd":root,"hook_event_name":"SessionStart","source":"startup"});
+    let output = adapter("hook", &hook_flags, Some(&input));
+    assert_eq!(
+        output["hookSpecificOutput"]["hookEventName"],
+        "SessionStart"
+    );
+    let text = output["hookSpecificOutput"]["additionalContext"]
+        .as_str()
+        .unwrap();
+    assert!(text.contains("SYNTHETIC_REQUIRED_CONSTRAINT"));
+    let envelope: Value = serde_json::from_str(text.split_once('\n').unwrap().1).unwrap();
+    assert_eq!(
+        envelope["binding"]["host_session_id"],
+        "synthetic-native-session"
+    );
+    assert_eq!(envelope["binding"]["workspace_id"], fixture.a.id);
+    let context = &envelope["context"];
+    assert_eq!(context["namespace"], namespace);
+    assert_eq!(context["task_id"], "adapter-task");
+    assert_eq!(context["task_version"], 1);
+    assert_eq!(context["complete"], true);
+    assert_eq!(context["can_resume"], true);
+    assert_eq!(context["mandatory_snapshot_consistent"], true);
+    assert_eq!(context["mandatory_requirement_count"], 1);
+    assert_eq!(
+        context["mandatory_requirements"][0]["requirement_id"],
+        "required-scope"
+    );
+    let inspect_flags = [(
+        "--session-id",
+        std::ffi::OsStr::new("synthetic-native-session"),
+    )];
+    let receipt = adapter("inspect", &inspect_flags, None);
+    assert_eq!(receipt["delivery"], "unverified");
+    assert_eq!(receipt["model_adoption"], "unknown");
+    assert_eq!(receipt["result_effect"], "unknown");
+    assert_eq!(receipt["receipts"].as_array().unwrap().len(), 1);
+    assert_eq!(receipt["receipts"][0]["stage"], "output_written");
+    assert_eq!(receipt["receipts"][0]["context_id"], context["context_id"]);
+    assert_eq!(
+        receipt["receipts"][0]["task_version"],
+        context["task_version"]
+    );
+    let paused = bridge.call("revise_task", json!({"task_id":"adapter-task","request_id":"pause-adapter-task",
+        "expected_version":1,"changes":[],"status":"paused","source":{"kind":"caller_reported","reference":null},"reason":"Pause before resuming"})).await;
+    assert_eq!(content(&paused)["record"]["status"], "paused");
+    let resume = json!({"session_id":"synthetic-native-session","cwd":root,"hook_event_name":"SessionStart","source":"resume"});
+    let paused_output = adapter("hook", &hook_flags, Some(&resume));
+    assert!(paused_output.get("systemMessage").is_some());
+    assert!(paused_output.get("hookSpecificOutput").is_none());
+    assert!(
+        !paused_output
+            .to_string()
+            .contains("SYNTHETIC_REQUIRED_CONSTRAINT")
+    );
+    let paused_receipt = adapter("inspect", &inspect_flags, None);
+    assert_eq!(paused_receipt["minimum_task_version_seen"], 2);
+    let paused_receipts = paused_receipt["receipts"].as_array().unwrap();
+    assert_eq!(paused_receipts.len(), 2);
+    let observed_pause = paused_receipts
+        .iter()
+        .find(|r| r["task_version"] == 2)
+        .unwrap();
+    assert_eq!(observed_pause["stage"], "core_built");
+    assert!(
+        paused_receipts
+            .iter()
+            .all(|r| r["task_version"] == 1 || r["stage"] != "output_written")
+    );
+    let active = bridge.call("revise_task", json!({"task_id":"adapter-task","request_id":"reactivate-adapter-task",
+        "expected_version":2,"changes":[],"status":"active","source":{"kind":"caller_reported","reference":null},"reason":"Test independent registry revocation"})).await;
+    assert_eq!(content(&active)["record"]["status"], "active");
+    set_workspace_active(&fixture.registry, &fixture.a.id, false).unwrap();
+    let revoked_output = adapter("hook", &hook_flags, Some(&resume));
+    assert!(revoked_output.get("systemMessage").is_some());
+    assert!(revoked_output.get("hookSpecificOutput").is_none());
+    assert!(
+        !revoked_output
+            .to_string()
+            .contains("SYNTHETIC_REQUIRED_CONSTRAINT")
+    );
+    // A received pause raises the version floor but is never marked output-written.
+    // Registry revocation occurs before core access and adds no further receipt.
+    let final_receipt = adapter("inspect", &inspect_flags, None);
+    assert_eq!(final_receipt["receipts"].as_array().unwrap().len(), 2);
+    assert_eq!(final_receipt["minimum_task_version_seen"], 2);
+    assert_eq!(final_receipt["receipts"][0]["stage"], "core_built");
+    assert_eq!(final_receipt["delivery"], "unverified");
+    assert!(bridge.close().await.success());
     core.stop().await;
 }

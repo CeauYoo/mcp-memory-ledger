@@ -1,10 +1,12 @@
 # MCP Memory Ledger
 
+Task continuity: [task ledger](task-ledger.md) and [Codex context adapter](codex-task-context-adapter.md) add versioned requirements and checkpoint-based context. Host injection remains unverified; source metadata does not grant authority.
+
 A local-first Rust + SQLite MCP `stdio` memory service. It records evidence-linked memories, retrieves scoped records, corrects Claims with retained history, and manages inert versioned experience candidates.
 
 The [Chinese repository README](../README.md) is the single maintained front door. Use the [documentation map](document-map.md), [quickstart](quickstart.md), [client configuration](local-mcp-integration-2026-03-26.md), [runnable workflow](runnable-memory-workflow.md), and [tool index](tool-reference.md).
 
-Current runtime: 32 MCP tools, schema 7, rebuildable FTS5 with literal short-CJK fallback, bounded complete-JSON context, explicit migrations and backup/recovery. Runtime binary name: `agent_llm_mm`.
+Current runtime: 38 standalone MCP tools (31 scoped core tools), schema 8, rebuildable FTS5 with literal short-CJK fallback, bounded complete-JSON context, explicit migrations and backup/recovery. Runtime binary name: `agent_llm_mm`.
 
 This remains a technical MVP. Lexical retrieval is not semantic search; bytes are not model tokens; namespaces, caller budgets and feedback labels are not authentication. Experience activation changes recall eligibility, never action authority. Export is interchange, not backup. Legacy global self-governance is experimental.
 

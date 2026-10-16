@@ -11,6 +11,12 @@ async fn main() -> Result<()> {
     if agent_llm_mm::support::database_backup::try_run_cli(&args).await? {
         return Ok(());
     }
+    if agent_llm_mm::support::task_cli::try_run_cli(&args).await? {
+        return Ok(());
+    }
+    if agent_llm_mm::adapters::codex_context::try_run_cli(&args).await? {
+        return Ok(());
+    }
     if let Some(command) = agent_llm_mm::interfaces::local_core::cli::parse_args(std::env::args())?
     {
         return agent_llm_mm::interfaces::local_core::run_command(command).await;

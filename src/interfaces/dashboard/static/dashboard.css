@@ -1160,3 +1160,5 @@ footer{
 }
 
 #owner-auth{border:1px solid #e8dce2;border-radius:20px;padding:28px;max-width:min(420px,90vw);background:#fffaf9;color:#473842}#owner-auth::backdrop{background:rgba(60,40,50,.45);backdrop-filter:blur(4px)}#owner-login{display:grid;gap:18px}#owner-login label{display:grid;gap:8px}#owner-token{width:100%;min-width:0}#owner-error{color:#9d3147}
+
+.task-panel{padding:18px;min-width:0}.task-controls{display:flex;gap:10px;align-items:end;flex-wrap:wrap}.task-controls label{display:grid;gap:6px;flex:1 1 150px;min-width:0;font-size:.75rem;color:var(--muted)}.task-controls input,.task-controls select{width:100%;min-width:0;max-width:100%}.task-panel details{margin-top:10px;font-size:.8rem;overflow-wrap:anywhere}.task-panel summary{cursor:pointer;color:var(--muted)}.task-panel ul{padding-left:20px;max-height:220px;overflow:auto}.task-panel li{margin:7px 0;white-space:pre-wrap}.task-panel .fields{margin:8px 0}.task-panel dd{white-space:pre-wrap;overflow-wrap:anywhere}

@@ -1,3 +1,4 @@
+use agent_llm_mm::adapters::sqlite::CURRENT_DATABASE_SCHEMA_VERSION;
 use agent_llm_mm::{
     adapters::sqlite::initialize_database,
     support::database_backup::{transfer_database, try_run_cli},
@@ -102,7 +103,10 @@ async fn refuses_existing_paths_sidecars_corruption_and_incompatible_versions() 
             .is_err()
     );
     assert!(!output.exists());
-    for version in [6, 8] {
+    for version in [
+        CURRENT_DATABASE_SCHEMA_VERSION - 1,
+        CURRENT_DATABASE_SCHEMA_VERSION + 1,
+    ] {
         let mut connection = connect(&source).await;
         sqlx::query(&format!("PRAGMA user_version={version}"))
             .execute(&mut connection)

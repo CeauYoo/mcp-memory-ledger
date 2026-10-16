@@ -19,7 +19,8 @@ async fn remove_v7(connection: &mut SqliteConnection) {
         DROP TRIGGER self_model_versions_no_update;
         DROP TRIGGER self_model_versions_no_delete;
         DROP TABLE self_model_versions;
-        DELETE FROM schema_migrations WHERE version = 7;
+        DROP TABLE task_checkpoint_sources; DROP TABLE task_checkpoints; DROP TABLE task_requirements; DROP TABLE task_revisions; DROP TABLE task_heads;
+        DELETE FROM schema_migrations WHERE version >= 7;
         PRAGMA user_version = 6;",
     )
     .execute(connection)
@@ -33,7 +34,10 @@ async fn fresh_baseline_is_effective_and_reads_never_add_versions() {
     let path = dir.path().join("fresh.sqlite");
     let db = url(&path);
     let report = initialize_database(&db).await.unwrap();
-    assert_eq!(report.schema_version, Some(7));
+    assert_eq!(
+        report.schema_version,
+        Some(agent_llm_mm::adapters::sqlite::CURRENT_DATABASE_SCHEMA_VERSION)
+    );
     let store = open_current_database(&db).await.unwrap();
     let mut transaction = store.begin_reflection_transaction().await.unwrap();
     let baseline = transaction.load_current_self_model_version().await.unwrap();
@@ -92,7 +96,10 @@ async fn v6_migration_snapshots_actual_projections_and_preserves_receipt_bytes()
     assert_eq!(inspect_database(&db).await.unwrap().schema_version, Some(6));
     assert_eq!(before, fs::read(&path).unwrap());
     let migrated = migrate_database(&db).await.unwrap();
-    assert_eq!(migrated.schema_version, Some(7));
+    assert_eq!(
+        migrated.schema_version,
+        Some(agent_llm_mm::adapters::sqlite::CURRENT_DATABASE_SCHEMA_VERSION)
+    );
     assert_eq!(migrated.restore_rehearsal, "passed_before_original_write");
     assert!(migrated.preserved_row_counts && migrated.schema_structure_valid);
     assert_eq!(migrated.foreign_key_violations, 0);

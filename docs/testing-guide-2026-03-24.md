@@ -1,5 +1,24 @@
 # Self-Agent MCP 测试指南（2026-03-24，按 2026-07-15 fresh 验证更新）
 
+## 任务账本与上下文适配验证
+
+本轮合同与命令分别见[任务账本](task-ledger.md)、[Codex 适配器](codex-task-context-adapter.md)和[网页任务摘要](dashboard-live-desk.md)。仓库根目录可执行：
+
+```sh
+cargo test --test task_ledger --test codex_context_adapter --test mcp_session_policy
+cargo test --test dashboard_http --test dashboard_admin --test workspace_adoption
+cargo test --test sqlite_lifecycle --test schema7_migration
+cargo test --lib adapters::codex_context
+node --test tests/dashboard/frontend.test.mjs
+cargo fmt --all -- --check
+cargo clippy --all-targets --all-features -- -D warnings
+```
+
+实际核心/桥与 Chromium 沿用现有 CI 流程并增加任务场景。无模型宿主探针 `scripts/probe-codex-context-host.py` 只读取公开协议，配置解析、hook 信任和真实注入分开报告；不得把环境阻断改成 passed。Windows 显式 Rust 清单包含两个新测试目标。最终通过范围必须绑定新的提交，不继承先前 CI。
+
+以下历史命令中的路径仅为可替换示例，不代表可访问的用户机器或真实部署位置；本轮不会执行历史的用户环境操作。
+
+
 旧域接入定向回归：`cargo test --test workspace_adoption` 与 `cargo test --lib interfaces::local_core::session::tests`。只使用隔离合成库，核对只读 preview、复杂 reflection/experience 全版本/feedback/trigger 的双向来源闭包、无关多项目正例、缺失/混域/未知载荷和资源上限拒绝、预览后历史变化、锁冲突、旧数据/receipt 不变与固定握手 namespace；详见[合同](workspace-legacy-adoption.md)。
 
 ## 2026-10-16 新功能的必要验证入口
@@ -100,7 +119,7 @@ git diff --check
 
 当前工作目录（按实际环境替换）：
 
-`~/code/agent-llm-mm`
+`${REPO_ROOT}`
 
 命令执行环境要求：
 
@@ -152,7 +171,7 @@ format、all-feature Clippy、`full` 与 status-sync 门禁。`tests/ci_contract
 ### 3.2 建议进入工作目录
 
 ```zsh
-cd ~/code/agent-llm-mm
+cd ${REPO_ROOT}
 ```
 
 ### 3.3 数据库隔离建议
@@ -1141,7 +1160,7 @@ cargo test --features release-tools --test local_alpha_release_evidence release_
 ### 7.1 使用独立数据库启动服务
 
 ```zsh
-cd ~/code/agent-llm-mm
+cd ${REPO_ROOT}
 cp examples/agent-llm-mm.example.toml agent-llm-mm.local.toml
 ./scripts/agent-llm-mm.sh serve
 ```
@@ -1153,7 +1172,7 @@ cp examples/agent-llm-mm.example.toml agent-llm-mm.local.toml
 另开一个终端，直接跑现有 E2E：
 
 ```zsh
-cd ~/code/agent-llm-mm
+cd ${REPO_ROOT}
 cargo test --test mcp_stdio -- --nocapture
 ```
 

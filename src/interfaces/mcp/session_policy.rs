@@ -60,6 +60,12 @@ pub enum PolicyError {
 }
 
 const ALLOWED_TOOL_NAMES: &[&str] = &[
+    "create_task",
+    "revise_task",
+    "get_task",
+    "list_tasks",
+    "record_task_checkpoint",
+    "build_task_resume_context",
     "ingest_interaction",
     "recall_memory",
     "build_task_context",
@@ -107,6 +113,52 @@ struct ToolRule {
 fn rule(name: &str) -> Result<ToolRule, PolicyError> {
     use ToolAccess::{Read, Write};
     let (access, fields): (_, &[&str]) = match name {
+        "create_task" => (
+            Write,
+            &[
+                "namespace",
+                "task_id",
+                "request_id",
+                "title",
+                "requirements",
+                "source",
+                "reason",
+            ],
+        ),
+        "revise_task" => (
+            Write,
+            &[
+                "namespace",
+                "task_id",
+                "request_id",
+                "expected_version",
+                "changes",
+                "status",
+                "source",
+                "reason",
+            ],
+        ),
+        "get_task" => (Read, &["namespace", "task_id", "version"]),
+        "list_tasks" => (Read, &["namespace", "limit", "after_id"]),
+        "record_task_checkpoint" => (
+            Write,
+            &[
+                "namespace",
+                "task_id",
+                "request_id",
+                "checkpoint_id",
+                "expected_version",
+                "expected_checkpoint_sequence",
+                "steps",
+                "blockers",
+                "next_steps",
+                "environment",
+                "repository_revision",
+                "artifacts",
+                "source",
+            ],
+        ),
+        "build_task_resume_context" => (Read, &["namespace", "task_id", "max_bytes"]),
         "ingest_interaction" => (
             Write,
             &[

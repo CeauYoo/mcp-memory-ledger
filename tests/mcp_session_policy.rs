@@ -9,6 +9,9 @@ const PROJECT: &str = "project/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const PERSONAL: &str = "user/default";
 const FOREIGN: &str = "project/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const WRITES: &[&str] = &[
+    "create_task",
+    "revise_task",
+    "record_task_checkpoint",
     "ingest_interaction",
     "supersede_memory",
     "record_episode",
@@ -44,6 +47,12 @@ fn object(value: Value) -> Map<String, Value> {
 }
 fn fixture(name: &str) -> Map<String, Value> {
     object(match name {
+        "create_task"
+        | "revise_task"
+        | "record_task_checkpoint"
+        | "get_task"
+        | "build_task_resume_context" => json!({"task_id":"synthetic"}),
+        "list_tasks" => json!({}),
         "ingest_interaction" => json!({
             "event":{"owner":"World","kind":"Conversation","summary":"synthetic"},
             "claim_drafts":[{"owner":"World","subject":"fixture","predicate":"is","object":"synthetic","mode":"Said"}],
@@ -121,12 +130,12 @@ fn with_scope(name: &str, scope: &str) -> Map<String, Value> {
 }
 
 #[test]
-fn explicit_inventory_covers_all_32_existing_tools_and_defaults_are_materialized() {
-    assert_eq!(allowed_tool_names().len() + DENIED.len(), 32);
+fn explicit_inventory_covers_all_38_existing_tools_and_defaults_are_materialized() {
+    assert_eq!(allowed_tool_names().len() + DENIED.len(), 38);
     let mut unique = allowed_tool_names().to_vec();
     unique.sort_unstable();
     unique.dedup();
-    assert_eq!(unique.len(), 25);
+    assert_eq!(unique.len(), 31);
     for name in allowed_tool_names() {
         let args = fixture(name);
         let before = args.clone();
@@ -570,4 +579,29 @@ fn global_legacy_episode_labels_cannot_link_workspace_ingest_records() {
     args.insert("episode_reference".into(), Value::Null);
     assert!(authorize_tool_call(&grant(), "ingest_interaction", &args).is_ok());
     assert!(authorize_tool_call(&grant(), "record_episode", &fixture("record_episode")).is_ok());
+}
+
+#[test]
+fn task_tools_are_bound_to_project_and_revocation_is_checked_on_each_call() {
+    for name in [
+        "create_task",
+        "revise_task",
+        "get_task",
+        "list_tasks",
+        "record_task_checkpoint",
+        "build_task_resume_context",
+    ] {
+        assert!(authorize_tool_call(&grant(), name, &fixture(name)).is_ok());
+        assert_eq!(
+            authorize_tool_call(&grant(), name, &with_scope(name, FOREIGN)).unwrap_err(),
+            PolicyError::ScopeDenied
+        );
+        let mut revoked = grant();
+        revoked.readable_namespaces.clear();
+        revoked.writable_namespaces.clear();
+        assert_eq!(
+            authorize_tool_call(&revoked, name, &fixture(name)).unwrap_err(),
+            PolicyError::ScopeDenied
+        );
+    }
 }

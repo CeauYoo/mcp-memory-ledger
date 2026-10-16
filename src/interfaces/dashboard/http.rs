@@ -19,6 +19,9 @@ use tokio_stream::{Stream, StreamExt, wrappers::BroadcastStream};
 
 use crate::{
     adapters::sqlite::SqliteStore,
+    application::task::{get_task_snapshot, list_tasks},
+    domain::task::ListTasksRequest,
+    error::AppError,
     ports::{OperationLogQuery, OperationLogStore},
     support::config::DashboardConfig,
 };
@@ -39,6 +42,7 @@ struct DashboardState {
     recorder: OperationRecorder,
     runtime: DashboardRuntimeInfo,
     operation_log: Option<SqliteStore>,
+    task_read_enabled: bool,
     instance_id: String,
     started_at: chrono::DateTime<chrono::Utc>,
     sse_enabled: bool,
@@ -142,6 +146,7 @@ async fn start_service(
     let state = DashboardState {
         recorder,
         runtime,
+        task_read_enabled: gate.is_some() && operation_log.is_some(),
         operation_log,
         instance_id: uuid::Uuid::new_v4().to_string(),
         started_at: chrono::Utc::now(),
@@ -181,7 +186,9 @@ fn router(state: DashboardState, base_path: &str, sse_enabled: bool) -> Router {
         .route("/api/events/{id}", get(event_detail))
         .route("/api/operation-log", get(operation_log_history))
         .route("/api/operation-log/{id}", get(operation_log_detail))
-        .route("/api/health", get(health));
+        .route("/api/health", get(health))
+        .route("/api/tasks", get(task_list))
+        .route("/api/tasks/{id}", get(task_snapshot));
 
     if sse_enabled {
         routes = routes.route("/api/events/stream", get(event_stream));
@@ -231,6 +238,7 @@ async fn status(State(state): State<Arc<DashboardState>>) -> Json<serde_json::Va
         "server_time": chrono::Utc::now(),
         "event_capacity": state.recorder.capacity(),
         "history_available": state.operation_log.is_some(),
+        "tasks_available": state.task_read_enabled,
         "sse_enabled": state.sse_enabled,
         "poll_interval_ms": 2500,
         "read_only": true,
@@ -384,4 +392,80 @@ async fn event_stream(
 
 async fn health() -> Json<serde_json::Value> {
     Json(json!({ "status": "ok", "read_only": true }))
+}
+
+// Task requirements are owner data, never exposed through the legacy observer.
+#[derive(Debug, Deserialize)]
+struct TasksQuery {
+    namespace: String,
+}
+
+fn task_read_error(error: AppError) -> axum::response::Response {
+    let (status, message) = match error {
+        AppError::InvalidParams(_) => (StatusCode::BAD_REQUEST, "invalid task query"),
+        _ => (StatusCode::SERVICE_UNAVAILABLE, "task records unavailable"),
+    };
+    // Never return database/provider errors that could contain task text or paths.
+    (status, Json(json!({ "error": message }))).into_response()
+}
+
+async fn task_list(
+    State(state): State<Arc<DashboardState>>,
+    Query(query): Query<TasksQuery>,
+) -> axum::response::Response {
+    let Some(store) = state
+        .operation_log
+        .as_ref()
+        .filter(|_| state.task_read_enabled)
+    else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({ "error": "task records unavailable" })),
+        )
+            .into_response();
+    };
+    match list_tasks(
+        store,
+        ListTasksRequest {
+            namespace: query.namespace,
+            limit: 100,
+            after_id: None,
+        },
+    )
+    .await
+    {
+        Ok(tasks) => {
+            Json(json!({ "tasks": tasks, "limit": 100, "read_only": true })).into_response()
+        }
+        Err(error) => task_read_error(error),
+    }
+}
+
+async fn task_snapshot(
+    State(state): State<Arc<DashboardState>>,
+    Path(id): Path<String>,
+    Query(query): Query<TasksQuery>,
+) -> axum::response::Response {
+    let Some(store) = state
+        .operation_log
+        .as_ref()
+        .filter(|_| state.task_read_enabled)
+    else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({ "error": "task records unavailable" })),
+        )
+            .into_response();
+    };
+    match get_task_snapshot(store, &query.namespace, &id).await {
+        Ok(Some(snapshot)) => {
+            Json(json!({ "snapshot": snapshot, "read_only": true })).into_response()
+        }
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({ "error": "task not found" })),
+        )
+            .into_response(),
+        Err(error) => task_read_error(error),
+    }
 }

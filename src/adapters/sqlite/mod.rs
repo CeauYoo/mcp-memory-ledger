@@ -28,3 +28,5 @@ mod self_model_versions;
 
 pub(crate) mod namespace_adoption;
 pub use namespace_adoption::AdoptionInventory;
+
+mod task;

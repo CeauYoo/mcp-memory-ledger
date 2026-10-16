@@ -15,6 +15,7 @@ pub fn frontend_asset(name: &str) -> Option<(&'static str, &'static str)> {
         "state.mjs" => include_str!("static/state.mjs"),
         "transport.mjs" => include_str!("static/transport.mjs"),
         "render.mjs" => include_str!("static/render.mjs"),
+        "tasks.mjs" => include_str!("static/tasks.mjs"),
         "app.mjs" => include_str!("static/app.mjs"),
         _ => return None,
     };

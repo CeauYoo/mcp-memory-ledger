@@ -80,3 +80,27 @@ test('SSE fetch carries Bearer, parses split events and closes without reconnect
   assert.equal(options.headers.Authorization,'Bearer synthetic-sse-capability'); assert.equal(options.signal.aborted,true);
   clearCapability();
 });
+
+import {validTaskList, validTaskSnapshot, taskPresentation} from '../../src/interfaces/dashboard/static/tasks.mjs';
+const requirement = (overrides={}) => ({requirement_id:'r1',kind:'requirement',state:'reported',text:'Keep the original requirement',...overrides});
+const task = (overrides={}) => ({namespace:'project/test',task_id:'task-1',version:2,title:'Task',source:{kind:'caller_reported'},status:'paused',requirements:[requirement()],...overrides});
+const checkpoint = (overrides={}) => ({namespace:'project/test',task_id:'task-1',task_version:1,sequence:1,source:{kind:'caller_reported'},artifacts:[],recorded_at:'2026-10-16T00:00:00Z',steps:[{text:'Plan only',mode:'Draft',verification:'not_performed',evidence_refs:[]}],blockers:[],next_steps:['Ask about the result'],...overrides});
+test('task snapshots reject malformed and cross-scope data rather than inventing status', () => {
+  assert.ok(validTaskList({read_only:true,limit:100,tasks:[task()]}));
+  assert.ok(validTaskSnapshot({read_only:true,snapshot:{task:task(),checkpoint:checkpoint()}}));
+  assert.ok(validTaskSnapshot({read_only:true,snapshot:{task:task(),checkpoint:null}}));
+  for(const bad of [task({status:'authorized'}),task({requirements:[requirement({state:'approved'})]}),task({version:0})]) {
+    assert.equal(validTaskList({read_only:true,limit:100,tasks:[bad]}),false);
+  }
+  for(const bad of [checkpoint({namespace:'project/other'}),checkpoint({steps:[{text:'Invented success',mode:'done',verification:'passed',evidence_refs:[]}]}),undefined]) {
+    assert.equal(validTaskSnapshot({read_only:true,snapshot:{task:task(),checkpoint:bad}}),false);
+  }
+});
+test('task summary preserves reported requirements, separates candidates and marks stale checkpoints', () => {
+  const snapshot={task:task({requirements:[requirement(),requirement({kind:'goal',text:'Original goal'}),requirement({state:'candidate',text:'Unconfirmed replacement'}),requirement({state:'withdrawn',text:'Old requirement'})]}),checkpoint:checkpoint()};
+  const before=structuredClone(snapshot), view=taskPresentation(snapshot);
+  assert.deepEqual(view.goals,['Original goal']);assert.equal(view.requirements.length,1);
+  assert.equal(view.pending,1);assert.equal(view.checkpointStale,true);assert.deepEqual(snapshot,before);
+  assert.equal(taskPresentation({task:task(),checkpoint:checkpoint({task_version:2})}).checkpointStale,false);
+  for(const locale of ['en','zh-CN','ja']) for(const key of ['taskStatus_active','taskStatus_paused','taskStatus_completed','taskStatus_cancelled','taskCallerReported','taskCheckpointStale']) assert.ok(messages[locale][key]);
+});

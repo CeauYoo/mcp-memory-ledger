@@ -44,6 +44,12 @@ pub(super) fn tool_audit_contract(name: &str) -> Option<ToolAuditContract> {
         | "decide_with_snapshot"
         | "supersede_memory"
         | "run_reflection" => Detailed,
+        "create_task" => Fallback("create_task"),
+        "revise_task" => Fallback("revise_task"),
+        "get_task" => Fallback("get_task"),
+        "list_tasks" => Fallback("list_tasks"),
+        "record_task_checkpoint" => Fallback("record_task_checkpoint"),
+        "build_task_resume_context" => Fallback("build_task_resume_context"),
         "recall_memory" => Fallback("recall_memory"),
         "build_task_context" => Fallback("build_task_context"),
         "record_episode" => Fallback("record_episode"),

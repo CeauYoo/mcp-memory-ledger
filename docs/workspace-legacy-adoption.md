@@ -1,5 +1,10 @@
 # 旧项目事实与可归属历史的显式接入（MVP）
 
+## Schema 8 task-history boundary
+
+Legacy adoption currently rejects a database containing task history because this provenance closure does not yet include task revisions/checkpoints. It does not silently ignore or rewrite that data. Existing registered workspaces and ordinary task operations continue unchanged. Full database backup/restore includes tasks; scoped memory export is not a task backup. See [task ledger](task-ledger.md).
+
+
 此功能把既有数据库中的一个 `project/legacy` 域绑定到**新** workspace UUID；不是导入器、复制器、清洗器或通用旧库迁移。它不改数据库中的 namespace、事实 ID、来源、历史或 receipt，不修改既有 workspace 的默认 namespace，不调用 provider / reflection，也不写客户端配置。
 
 ## 先预览，再显式执行

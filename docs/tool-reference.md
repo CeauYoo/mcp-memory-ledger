@@ -1,5 +1,10 @@
 # MCP 工具与合同索引
 
+## Task continuity tools
+
+Schema 8 adds `create_task`, `revise_task`, `get_task`, `list_tasks`, `record_task_checkpoint`, and `build_task_resume_context`. Standalone has 38 tools; a bound core session permits 31 and denies the same 7 global tools. The six task tools require the current project scope and do not provide personal/global task access. See [task contract](task-ledger.md) for DTOs, reported-source limits, immutable history, CAS, receipts and full-context rules.
+
+
 当前注册 **32 个工具**。本页按用途导航；精确 required/optional 字段与枚举以正在运行的 `tools/list` schema 和 [DTO](../src/interfaces/mcp/dto.rs) / [server 注册](../src/interfaces/mcp/server.rs)为准。CLI 命令和 MCP 工具是不同入口。
 
 ## 1. 日常记忆与任务上下文（6）

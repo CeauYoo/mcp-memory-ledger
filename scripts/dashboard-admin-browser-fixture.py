@@ -55,7 +55,28 @@ def main():
         client = verify.McpClient(bridge, output, evidence)
         client.initialize()
         client.tool('recall_memory', {'query': 'SYNTHETIC_BROWSER_PROBE', 'limit': 10})
-        print(json.dumps({'url': url, 'pid': core.process.pid}), flush=True)
+        namespace = workspace['project_namespace']
+        source = {'kind': 'caller_reported'}
+        client.tool('create_task', {
+            'namespace': namespace, 'task_id': 'browser-task', 'request_id': 'browser-create',
+            'title': 'Synthetic continuity task', 'source': source, 'reason': 'Isolated browser verification',
+            'requirements': [
+                {'requirement_id': 'goal', 'kind': 'goal', 'text': 'Original browser goal', 'state': 'reported', 'source': source},
+                {'requirement_id': 'keep', 'kind': 'requirement', 'text': '<script>window.taskInjected=true</script>' + '長い要件 ' * 20, 'state': 'reported', 'source': source},
+                {'requirement_id': 'candidate', 'kind': 'requirement', 'text': 'Unconfirmed replacement', 'state': 'candidate', 'source': {'kind': 'model_asserted'}},
+            ],
+        })
+        client.tool('record_task_checkpoint', {
+            'namespace': namespace, 'task_id': 'browser-task', 'request_id': 'browser-checkpoint',
+            'checkpoint_id': 'browser-cp', 'expected_version': 1, 'expected_checkpoint_sequence': 0,
+            'steps': [{'step_id': 'plan', 'text': 'Plan only', 'mode': 'Draft', 'verification': 'not_performed', 'evidence_refs': []}],
+            'blockers': ['Awaiting result'], 'next_steps': ['Check output'], 'artifacts': [], 'source': source,
+        })
+        client.tool('revise_task', {
+            'namespace': namespace, 'task_id': 'browser-task', 'request_id': 'browser-pause',
+            'expected_version': 1, 'changes': [], 'status': 'paused', 'source': source, 'reason': 'Explicit synthetic pause',
+        })
+        print(json.dumps({'url': url, 'pid': core.process.pid, 'task_namespace': namespace}), flush=True)
         for line in sys.stdin:
             if json.loads(line).get('action') == 'stop':
                 break

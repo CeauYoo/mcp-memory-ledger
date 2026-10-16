@@ -82,3 +82,17 @@ node scripts/dashboard-browser-check.mjs \
 ## 更新已安装运行时
 
 仓库构建和 CI 通过不会更新已安装的运行中二进制。当前进程仍会提供旧版内嵌资源，刷新浏览器不能加载新代码。更新需要在用户认可的维护时段让 MCP 客户端停止该服务、校验并替换候选二进制、重新启动，再确认 `/api/status`、页面版本行为和工具重连；这会短暂中断 MCP 连接，应预留原二进制作为回退。未获运行时切换许可前，不停止用户进程、不改数据库路径或客户端配置。
+
+## 任务摘要（首批）
+
+仅 owner 管理面接入任务摘要；旧 standalone observer 不展示任务控件，任务 GET 返回不可用。没有新增监听或后台服务。新增接口继承原有 Bearer、Host、同源与只读方法限制：
+
+- `GET /api/tasks?namespace=project/...`：精确项目范围内前 100 个任务，包含真实当前修订；不猜测 cwd，不合并其他项目。
+- `GET /api/tasks/{id}?namespace=project/...`：同一 SQLite 读取快照内的任务修订和最近 checkpoint。没有模型调用、关联记忆检索或写入。
+- `GET /api/status` 的 `tasks_available` 仅表示 owner 任务读取入口已配置；数据库/旧 schema 读取失败仍返回通用 503，不将错误包装成空集合，也不返回内部数据库路径或任务文本。
+
+在原版横幅、侧栏、密度基础上新增紧凑任务块，先输入项目 namespace，再明确选择任务。三语言展示当前目标、reported 有效要求、candidate 待确认数量及 active / paused / completed / cancelled 生命周期；候选和 withdrawn 条目不混入有效要求。来源标签与生命周期均为记录，不证明执行授权或真实宿主正在运行。
+
+checkpoint 保留步骤的认识状态、报告的验证结果及证据引用，显示阻塞、建议下一步、环境/仓库版本与产物标识；较早任务版本标为过期，产物始终标记尚未重新核验。不会把草稿或已尝试步骤画成已验证完成。任务数据只以文本渲染，切换项目/任务、锁定或服务实例变化会清除旧选择；暂停停止自动任务刷新，显式加载仍可读取。
+
+基础验证仍使用上述 Rust dashboard suites 与 Node 前端测试。新增覆盖 owner 验证、legacy 拒绝、空库、精确项目隔离、只读方法、暂停状态、checkpoint 版本不一致、候选隔离及三语言键值。既有 `dashboard-admin-browser-check.mjs --binary ...` 增量创建合成任务，检查原目标、候选隔离、较早 checkpoint、空项目切换、锁定清数据、三语言与 390px 窄屏，并输出 `owner-task-summary.png` / `owner-task-mobile.png`。本云执行仍因 Chrome socket `EPERM` 未能进入浏览器，未宣称交互通过；需在允许该隔离流程的 CI 验证。浏览器截图/交互和真实用户部署需要分别验证，不以这些单元/API 测试代替。

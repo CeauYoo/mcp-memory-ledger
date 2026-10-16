@@ -57,6 +57,14 @@ pub(crate) async fn inventory(
         ));
         return Ok(report);
     }
+    // Tasks and their receipts have no legacy adoption closure contract yet.
+    let task_count: i64 = sqlx::query_scalar("SELECT count(*) FROM task_heads")
+        .fetch_one(&mut *conn)
+        .await
+        .map_err(db)?;
+    if task_count > 0 {
+        report.block("workspace task history is not supported by legacy adoption; use a full database backup");
+    }
     // An unknown extension table could carry provenance we cannot inventory.
     let names: Vec<String> = sqlx::query_scalar(
         "SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%'",

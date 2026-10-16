@@ -1,5 +1,12 @@
 # 本机 MCP 接入
 
+## 任务续接与 Codex 接入
+
+新增任务工具与 CLI 见[任务账本](task-ledger.md)，原生配置预览、项目默认任务选择和宿主支持边界见[Codex 适配器](codex-task-context-adapter.md)。Schema 8 需要显式迁移，先备份，不能自动替换运行中的数据库。预览不改全局配置；未取得真实宿主注入证据，不将输出成功称为接入成功。Windows 核心/任务 CLI 与 Windows hook 自动配置支持分别记录。
+
+所有状态、构建与日志放在操作者确认的非同步目录；不改变现有部署。
+
+
 旧 namespace 接入必须显式预览与 adopt，不能把现有 workspace 默认域改名。新 core 应使用 registry 实际返回的 project namespace（普通注册为 UUID 域，v2 adopted workspace 保留旧域）；参见[首片支持合同](workspace-legacy-adoption.md)。
 
 ## 2026-10-15 先选连接模式

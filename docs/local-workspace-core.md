@@ -1,5 +1,10 @@
 # 本机核心与固定工作空间桥
 
+## Task continuity increment
+
+The current source adds six scoped task tools (31 allowed / 7 global denied). They use the same per-call namespace binding, grant refresh and revocation checks, including receipt replay. [Task data](task-ledger.md) is knowledge, not execution authority. The [Codex adapter](codex-task-context-adapter.md) uses the bridge and does not open the ledger directly; adapter state is separate from registry and DB backup.
+
+
 旧 project namespace 不会通过 register 自动接入。基础事实首片支持先 `adopt-preview` 再 `adopt` 创建新 UUID 映射；v2 registry 允许保留旧域，握手与逐调用固定核验 namespace。高级历史支持范围、锁与 standalone 后续写入边界见[旧域显式接入](workspace-legacy-adoption.md)。
 
 状态：2026-10-15 开发切片，隔离验收进行中。它是 technical MVP 的可选入口，不替换现有部署，也不安装开机服务。完整证据见[验收矩阵](workspace-core-acceptance.md)。

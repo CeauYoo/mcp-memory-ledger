@@ -31,6 +31,7 @@ export function validRecords(value) {
 }
 export function initialState(locale) {
   return {locale, view:'all', source:'live', status:'', namespace:'', search:'', paused:false,
+    tasks:null, taskNamespace:'', taskId:'', taskSnapshot:null, taskError:null, taskBusy:false,
     busy:false, lastSuccess:0, error:null, stream:false, metadata:null, summary:null,
     live:null, history:null, health:null, healthChecked:0, selected:null, detail:null, detailState:'idle'};
 }
