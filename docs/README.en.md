@@ -8,6 +8,6 @@ Current runtime: 32 MCP tools, schema 7, rebuildable FTS5 with literal short-CJK
 
 This remains a technical MVP. Lexical retrieval is not semantic search; bytes are not model tokens; namespaces, caller budgets and feedback labels are not authentication. Experience activation changes recall eligibility, never action authority. Export is interchange, not backup. Legacy global self-governance is experimental.
 
-[Current status and evidence](project-status.md) distinguish exact-commit CI from actual user-client/fresh-machine installation, real-model efficacy and human release approval. [The active plan](plans/2026-07-10-product-replan.md) remains the only execution queue; dated reports are historical evidence.
+[Current status and evidence](project-status.md) distinguish exact-commit CI from actual user-client/fresh-machine installation, real-model efficacy and human release approval. [The active plan](plans/README.md) remains the only execution queue; dated reports are historical evidence.
 
 Bounded global identity/commitment versioning and explicit same-scope compensation: [contract](self-model-versions.md). Historical migration effective time stays unknown; this remains an experimental local MVP.

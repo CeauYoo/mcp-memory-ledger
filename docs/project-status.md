@@ -1,5 +1,18 @@
 # 当前实现状态
 
+## 当前执行入口与已完成基线（2026-10-16）
+
+已批准按[完整唯一实施计划](plans/2026-10-16-task-continuity-and-host-integration.md)分阶段推进，当前首批为 P0 与 T01–T08。任务要求/checkpoint/宿主接入仍为新增实现队列，批准不等于已完成。
+
+基线 `7448b02a7de8d5dd32c32a149fdd024f798bbf0f` 的 [CI 38860968271](https://github.com/yooyui/mcp-memory-ledger/actions/runs/38860968271) 三平台全部成功：Ubuntu/macOS 各 848 项 Rust，Windows 514 项 configured Rust；三平台精确来源候选包通过，Windows named-pipe core 的 42 次 MCP 工具调用、隔离、确认写后重启/重放、备份恢复与清理通过。Ubuntu 真实 Chrome 检查通过。
+
+workspace 生命周期、只读配置生成、原生 DB-only 恢复、有界 reflection/experience 历史接入及 Windows 核心均已实现并获得上述范围验证；[独立审查](independent-security-review-2026-10-16.md)及修复已完成限定范围。它们不再是待实现项目。仍非全面安全认证、真实用户安装、任意在途崩溃保证或正式发布；真实宿主注入与新增功能须获得新证据，用户机器安装另行确认。
+
+### 以下为历史阶段记录
+
+下文带日期的“待验证/未提交/Windows 未支持”仅保留当时事实，由上面精确基线结论更新；旧阶段路线不再拥有执行优先权，当前任务只由唯一实施计划管理。
+
+
 ## 2026-10-16 跨平台与历史整合检查
 
 本轮候选源码已合并复杂历史接入、Windows 本机核心和生命周期隐私修复。Linux 云端全套 Rust 846 项去重结果为 **834 通过、12 项 AF_UNIX `EPERM` 环境阻断**；不是全套通过。严格 all-feature Clippy、格式、diff、status-sync 33 项、Python 125 项和 Node 9 项通过。初轮构建目录符号链接造成的 fixture 拒绝已通过调整忽略的构建布局解决，产品源码未因此修改；具体复现与原始失败见[测试指南](testing-guide-2026-03-24.md#integrated-candidate-2026-10-16)。
@@ -33,11 +46,11 @@
 
 ## 2026-10-15 当前切片：工作空间核心（进行中）
 
-[本机核心与固定桥](local-workspace-core.md)纳入[唯一 active plan](plans/2026-07-10-product-replan.md)。Unix 核心统一持有数据库和 observer；桥按 `--workspace-id`/`--workspace-root` 显式固定绑定，或通过 `--registry` 在启动时按真实 cwd 精确解析；后者可全局配置一次，但固定 cwd 客户端须用显式模式，连接不会跟随项目移动。registry 每次调用刷新个人读写授权。25 个范围工具允许，7 个全局工具隐藏/拒绝；core ingest 关闭自动反思。核心默认不开监控 HTTP，管理员 CLI 与标签页内存登录入口已接入，公开静态壳不含运行数据，API/SSE 继续独立 Bearer；真实核心端到端尚待验收，未配置生产凭据。
+[本机核心与固定桥](local-workspace-core.md)纳入[唯一 active plan](plans/README.md)。Unix 核心统一持有数据库和 observer；桥按 `--workspace-id`/`--workspace-root` 显式固定绑定，或通过 `--registry` 在启动时按真实 cwd 精确解析；后者可全局配置一次，但固定 cwd 客户端须用显式模式，连接不会跟随项目移动。registry 每次调用刷新个人读写授权。25 个范围工具允许，7 个全局工具隐藏/拒绝；core ingest 关闭自动反思。核心默认不开监控 HTTP，管理员 CLI 与标签页内存登录入口已接入，公开静态壳不含运行数据，API/SSE 继续独立 Bearer；真实核心端到端尚待验收，未配置生产凭据。
 
 当前只取得定向证据：registry 11 项、实际 Codex roots 67 条断言、管理员监控 7 项及 legacy HTTP 6 项。历史首轮完整集成有 3 项失败；云端续建已修补相关路径，最终同源回归仍待完成，**不能报告全套通过**。设计上限为64会话、共享32个业务执行；每连接8个待完成请求和4 MiB有界输出的传输保护正在实现，仍待背压/取消/超限验收。具体合同与最终同源结果以[验收矩阵](workspace-core-acceptance.md)为准。
 
-正式 Mac 仍运行 `d9e33d3`：20项协议、11项浏览器检查及一个真实自然语言主动召回/来源/更正样本已有证据，重复召回问题保留。协议直接调用与自然语言样本分别记账；这些结果不认证新核心。新路径首期macOS/Linux，Windows继续支持原stdio，新核心暂不支持。新架构真实客户端、fresh-machine、完整精确提交CI和发布门仍开；本轮未替换部署、改全局配置或安装开机服务。
+历史客户端验证基线 `d9e33d3`：20项协议、11项浏览器检查及一个真实自然语言主动召回/来源/更正样本已有证据，重复召回问题保留。协议直接调用与自然语言样本分别记账；这些结果不认证新核心。新路径首期macOS/Linux，Windows继续支持原stdio，新核心暂不支持。新架构真实客户端、fresh-machine、完整精确提交CI和发布门仍开；本轮未替换部署、改全局配置或安装开机服务。
 
 ## dashboard 会话生命周期补丁（2026-10-15）
 
@@ -49,7 +62,7 @@
 
 ## 2026-10-15 体验与客户端验收
 
-此前体验复测工具及实时网页已纳入仓库；实际 Codex app-server 在独立 HOME/mock 库完成 3 进程、2 次重连、17 次 MCP 工具调用、0 模型轮次。历史真实 90 轮的人工复核有 4 个问题轮次。此后旧部署的桌面自然语言样本证据见顶部当前切片；修复后的付费复测和 fresh-machine 仍未验证。详见[本轮验收记录](acceptance-2026-10-15.md)。下方带日期段落保留历史证据。
+此前体验复测工具及实时网页已纳入仓库；实际 Codex app-server 在独立 HOME/mock 库完成 3 进程、2 次重连、17 次 MCP 工具调用、0 模型轮次。历史真实 90 轮的人工复核有 4 个问题轮次。此后历史桌面自然语言样本证据见顶部当前切片；修复后的付费复测和 fresh-machine 仍未验证。详见[本轮验收记录](acceptance-2026-10-15.md)。下方带日期段落保留历史证据。
 
 ## 2026-10-13 验收工具更新
 
@@ -140,6 +153,6 @@
 
 ## 文档权威与历史
 
-[路线图](roadmap.md)回答先后顺序，[唯一 active plan](plans/2026-07-10-product-replan.md)管理执行，[reality gates](product/follow-up-reality-gates.md)约束完成声明。
+[路线图](roadmap.md)回答先后顺序，[唯一 active plan](plans/README.md)管理执行，[reality gates](product/follow-up-reality-gates.md)约束完成声明。
 
 旧 schema、工具数、验证基线和分支状态已完整保留在[带日期的历史状态](project-status-history-2026-10-09.md)。历史 70 项 baseline、schema5 / schema6 阶段报告都是当时证据；以最终核对解释其增量，不覆盖或美化旧结果。

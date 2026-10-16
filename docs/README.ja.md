@@ -8,6 +8,6 @@ Rust + SQLite によるローカル優先の MCP `stdio` メモリサービス�
 
 技術 MVP であり、正式な Local Alpha や本番品質を保証するものではありません。検索は字面一致で、意味検索ではありません。JSON バイト数はモデルのトークン数ではなく、namespace・呼び出し側の予算・フィードバックのラベルは認証ではありません。経験候補の有効化は検索対象を変えるだけで、手順の実行や権限の付与は行いません。export はバックアップではありません。
 
-[現在の状態と検証範囲](project-status.md)および[唯一の active plan](plans/2026-07-10-product-replan.md)を確認してください。過去のテスト件数や計画を現在の状態と混同しないでください。
+[現在の状態と検証範囲](project-status.md)および[唯一の active plan](plans/README.md)を確認してください。過去のテスト件数や計画を現在の状態と混同しないでください。
 
 Bounded global identity/commitment versioning and explicit same-scope compensation: [contract](self-model-versions.md). Historical migration effective time stays unknown; this remains an experimental local MVP.

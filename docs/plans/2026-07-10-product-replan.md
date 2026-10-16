@@ -1,3 +1,7 @@
+# 历史计划（已被取代）
+
+状态：`superseded / historical evidence only`。唯一执行入口为 [2026-10-16-task-continuity-and-host-integration.md](2026-10-16-task-continuity-and-host-integration.md)。以下 active、进行中、未提交或平台未支持措辞是当时快照，不是当前状态，也不授予执行权限。已完成基线见[当前状态](../project-status.md)。未关闭的真实客户端/部署等外部证据门仍由新计划保留。
+
 ## 2026-10-16 当前执行切片：先补齐工作空间与恢复功能
 
 旧项目基础事实显式接入首片补充 `adopt-preview` / `adopt`、registry v2 namespace 映射与旧连接 fail-closed。高级历史全闭包接入仍开放；不得把保守首片当作任意旧库迁移。见[限定合同](../workspace-legacy-adoption.md)。

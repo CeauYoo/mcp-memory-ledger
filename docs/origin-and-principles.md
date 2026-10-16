@@ -60,7 +60,7 @@ Identity 和 commitments 只允许通过带证据的治理路径改变；automat
 3. **Local Product Alpha**：可运行 artifact、fresh-machine、backup / restore 和人工 release decision。
 4. **Retrieval Quality**：在真实评测集上优化检索与生命周期。
 
-具体任务、证据门和停止条件见[当前 active plan](plans/2026-07-10-product-replan.md)。
+具体任务、证据门和停止条件见[当前 active plan](plans/README.md)。
 
 ## 不再作为主线的内容
 

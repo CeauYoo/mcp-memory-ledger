@@ -6,7 +6,7 @@ MCP Memory Ledger 的 Local Product Alpha 是 validated local MVP 之后的第�
 
 当前仓库的 MVP release gate 已经通过，项目可以表述为“已验证本地 MVP，进入正式产品化路线”。但 Local Product Alpha 仍需按本 PRD 和后续 product alpha gate 完成；在该 gate 通过前，不能声明 GA、生产级完整自治、远程团队服务或完整 self-governance agent。
 
-自 `2026-07-10` 起，具体执行顺序以 [全新项目规划](../plans/2026-07-10-product-replan.md) 为准：先完成 Truth and Safety 与 Trustworthy Recall，再进入本 PRD 的真实 Local Alpha evidence gate。
+自 `2026-07-10` 起，具体执行顺序以 [全新项目规划](../plans/README.md) 为准：先完成 Truth and Safety 与 Trustworthy Recall，再进入本 PRD 的真实 Local Alpha evidence gate。
 
 Local Product Alpha 的目标是让一个真实本机用户能够安装、配置、运行、检查、备份并排查这个本地 MCP `stdio` memory 服务，同时继续保持 `run_reflection` 作为 identity / commitments 的唯一 durable write path。
 
@@ -124,4 +124,4 @@ Local Product Alpha 后续完整 gate 应在 `docs/product/release-gate-local-al
 - 文档总览：[`docs/document-map.md`](../document-map.md)
 - 当前实现状态：[`docs/project-status.md`](../project-status.md)
 - 当前路线图：[`docs/roadmap.md`](../roadmap.md)
-- 唯一 active plan：[`docs/plans/2026-07-10-product-replan.md`](../plans/2026-07-10-product-replan.md)
+- 唯一 active plan：[`docs/plans/README.md`](../plans/README.md)

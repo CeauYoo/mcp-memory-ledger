@@ -43,7 +43,7 @@
 
 ## 我想贡献或理解设计
 
-- [项目起点与原则](origin-and-principles.md) → [路线图](roadmap.md) → [唯一 active plan](plans/2026-07-10-product-replan.md)。
+- [项目起点与原则](origin-and-principles.md) → [路线图](roadmap.md) → [唯一 active plan](plans/README.md)。
 - [贡献指南](../CONTRIBUTING.md)、[工具链政策](toolchain-policy.md)、[私有模块边界](implementation-module-boundaries.md)。
 - [支持与合成复现](../SUPPORT.md)、[安全私密报告渠道](../SECURITY.md)、[拟定协作准则](../CODE_OF_CONDUCT.md)、[Unreleased变更记录](../CHANGELOG.md)；表单链接在贡献指南中。
 - [项目定位](positioning.md)、[FAQ](faq.md)、项目说明 [中文](project-overview.zh-CN.md) / [English](project-overview.en.md) / [日本語](project-overview.ja.md)。

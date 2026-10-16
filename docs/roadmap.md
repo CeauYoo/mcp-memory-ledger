@@ -1,5 +1,18 @@
 # MCP Memory Ledger 路线图
 
+## 当前执行入口与已完成基线（2026-10-16）
+
+已批准按[完整唯一实施计划](plans/2026-10-16-task-continuity-and-host-integration.md)分阶段推进，当前首批为 P0 与 T01–T08。任务要求/checkpoint/宿主接入仍为新增实现队列，批准不等于已完成。
+
+基线 `7448b02a7de8d5dd32c32a149fdd024f798bbf0f` 的 [CI 38860968271](https://github.com/yooyui/mcp-memory-ledger/actions/runs/38860968271) 三平台全部成功：Ubuntu/macOS 各 848 项 Rust，Windows 514 项 configured Rust；三平台精确来源候选包通过，Windows named-pipe core 的 42 次 MCP 工具调用、隔离、确认写后重启/重放、备份恢复与清理通过。Ubuntu 真实 Chrome 检查通过。
+
+workspace 生命周期、只读配置生成、原生 DB-only 恢复、有界 reflection/experience 历史接入及 Windows 核心均已实现并获得上述范围验证；[独立审查](independent-security-review-2026-10-16.md)及修复已完成限定范围。它们不再是待实现项目。仍非全面安全认证、真实用户安装、任意在途崩溃保证或正式发布；真实宿主注入与新增功能须获得新证据，用户机器安装另行确认。
+
+### 以下为历史阶段记录
+
+下文带日期的“待验证/未提交/Windows 未支持”仅保留当时事实，由上面精确基线结论更新；旧阶段路线不再拥有执行优先权，当前任务只由唯一实施计划管理。
+
+
 ## 2026-10-16 Windows 本机核心 candidate
 
 新增 Windows 本机命名管道 `core` + stdio `bridge` 实现，与 Unix 共用绑定、逐调用撤销、资源限额和关闭排空逻辑。新建 IPC/状态文件使用当前用户私有 DACL；已有文件/目录须当前用户所有，访问授权只接受当前用户、SYSTEM 和 Administrators。它不隔离同用户任意进程或特权管理员，也不是远端多租户服务。`serve` 兼容入口保留。
@@ -17,7 +30,7 @@
 
 ## 2026-10-15 本机核心与工作空间方向
 
-用户已批准在本地主线补齐单核心服务、轻量 stdio 桥、稳定 workspace 绑定、服务端范围授权、个人记忆显式共享与统一监控。当前 **M1.W1 进行中，新核心/桥待验收、未部署**；具体顺序只由[唯一 active plan](plans/2026-07-10-product-replan.md)管理，[验收矩阵](workspace-core-acceptance.md)记录证据与未测边界。
+用户已批准在本地主线补齐单核心服务、轻量 stdio 桥、稳定 workspace 绑定、服务端范围授权、个人记忆显式共享与统一监控。当前 **M1.W1 进行中，新核心/桥待验收、未部署**；具体顺序只由[唯一 active plan](plans/README.md)管理，[验收矩阵](workspace-core-acceptance.md)记录证据与未测边界。
 
 旧版 d9e33d3 的正式 Mac 已有直接 MCP、网页及一个真实自然语言召回/更正样本；不能再笼统说真实客户端完全未测，也不能把它们当作新架构通过。当前 Codex roots 实测67条断言通过，但未提供自动跟随项目的依据：连接固定绑定，移动会话不会自动重绑。新核心首期为 macOS/Linux Unix sockets；Windows 保持现有 stdio，新核心暂不支持。正式部署与现有配置保持不变。
 
@@ -30,7 +43,7 @@
 
 状态：`active summary` · 更新：2026-10-15
 
-目标是可信、可检索、可审计、可恢复的本地记忆。当前仍为 technical MVP；[状态页](project-status.md)列实际能力，[唯一 active plan](plans/2026-07-10-product-replan.md)列任务、依赖、证据门与停止条件。本页不是第二份任务队列。
+目标是可信、可检索、可审计、可恢复的本地记忆。当前仍为 technical MVP；[状态页](project-status.md)列实际能力，[唯一 active plan](plans/README.md)列任务、依赖、证据门与停止条件。本页不是第二份任务队列。
 
 ## 已完成：M0 与原方案的有限实现
 

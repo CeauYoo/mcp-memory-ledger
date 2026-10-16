@@ -17,7 +17,7 @@ Windows transport 新增本机命名管道，原生配置输出、核心数据�
 
 以下 2026-10-15 矩阵与云端 EPERM 记录是历史阶段快照；其“平台 CI 待验收”已由上述 f8eb9ed 更新，但未关闭真实客户端或当前增量门。
 
-历史快照：2026-10-15。该时点总体状态：**进行中，尚未完成新核心/桥验收，未部署**。本页仅记录[唯一 active plan](plans/2026-07-10-product-replan.md)的 M1.W1–W4 证据、缺口和退出条件，不另设执行队列。当前正式 Mac 二进制仍为 `d9e33d38c73c66cf7e13bb7e843b7c8283be1fb4`；本轮不替换它，不改全局客户端/API 配置，不安装开机服务，不停止用户正常进程。
+历史快照：2026-10-15。该时点总体状态：**进行中，尚未完成新核心/桥验收，未部署**。本页仅记录[唯一 active plan](plans/README.md)的 M1.W1–W4 证据、缺口和退出条件，不另设执行队列。当前正式 Mac 二进制仍为 `d9e33d38c73c66cf7e13bb7e843b7c8283be1fb4`；本轮不替换它，不改全局客户端/API 配置，不安装开机服务，不停止用户正常进程。
 
 ## 范围与设计合同
 
@@ -44,7 +44,7 @@ Windows transport 新增本机命名管道，原生配置输出、核心数据�
 原始记录仅保存在本机，不把原始用户记忆、客户端轨迹或截图复制到仓库。当前本地证据入口：
 
 - 仓库 `target/workspace-core/client-roots/REPORT.md`、`run-20261015-03/evidence.json` 与 `verification.json`。失败的早期探针尝试保留，67 条断言针对最终第三次记录。
-- 部署目录 `verification/live-20261015/REPORT.md` 及其协议、浏览器、自然语言和问题清单摘要；部署目录位于 `/Users/yooyui/code/memory-ledger-deployment`。
+- 部署目录 `verification/live-20261015/REPORT.md` 及其协议、浏览器、自然语言和问题清单摘要；部署目录位于 `<LOCAL_DEPLOYMENT_ROOT>`。
 - 仓库 `target/workspace-core/plan-audit.md`、`authorization-audit.md` 是本次只读审计，记录当时源码基线及待实现合同，不是新实现通过证据。
 
 ### Codex roots 结论
@@ -71,7 +71,7 @@ initialize 未声明 roots；16 次诊断 `roots/list` 都返回空 roots，工�
 | W10 / M1.W3 用户客户端 | **待验收** | 实际客户端固定workspace连接完成写入→重连→召回→来源→更正→旧/新历史→外域拒绝；个人授予/撤销；自然语言样本另记 | roots探针仅协议；旧d9e33d3自然语言样本不是新核心验收。正式切换需另确认 |
 | W11 / M1.W4 文档与支持 | **文档/模板已补，最终核对待完成** | 最小安装/注册说明、workspace移动/撤销、兼容矩阵、数据/日志边界、安全支持与变更说明；不猜责任人/SLA | SECURITY/SUPPORT/CHANGELOG/协作与Issue/PR模板、workspace接入/切换边界已补；CODEOWNERS和私密报告渠道无已确认负责人，不编造支持SLA，不新增服务安装、SBOM或发布动作 |
 
-此前 Mac 隔离证据限定在 `/Users/yooyui/code` 下。本次续建只在助手云端 `/workspace/shared/mcp-memory-ledger` 工作，不访问或修改 Mac；使用隔离数据库、非正式端口和 mock，不访问现有凭据、不发收费请求、不重启或停止正常用户进程。云端 Linux 结果不能替代 Mac/Windows 或正式部署证据。任何scope泄漏、串响应、隐式模型调用、破坏历史/回执或恢复失败均阻断该切片继续扩张。
+此前 Mac 隔离证据限定在 `<LOCAL_WORK_ROOT>` 下。本次续建只在助手云端 `<CLOUD_CHECKOUT>` 工作，不访问或修改 Mac；使用隔离数据库、非正式端口和 mock，不访问现有凭据、不发收费请求、不重启或停止正常用户进程。云端 Linux 结果不能替代 Mac/Windows 或正式部署证据。任何scope泄漏、串响应、隐式模型调用、破坏历史/回执或恢复失败均阻断该切片继续扩张。
 
 ## 云端续建的定向证据
 
