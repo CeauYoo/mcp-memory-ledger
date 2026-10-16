@@ -56,13 +56,18 @@ class WindowsVerifierTests(unittest.TestCase):
     def test_child_environment_keeps_only_windows_loader_essentials(self):
         source = {"SystemRoot": "SYNTHETIC_WINDOWS", "WINDIR": "SYNTHETIC_WINDOWS",
                   "OPENAI_API_KEY": "SYNTHETIC_SECRET", "AGENT_LLM_MM_CONFIG": "USER_CONFIG",
-                  "PATH": "USER_TOOLCHAIN_PATH", "PYTHONPATH": "USER_CODE"}
+                  "PATH": "USER_TOOLCHAIN_PATH", "PYTHONPATH": "USER_CODE",
+                  "openai_api_key": "SYNTHETIC_SECRET", "pSmOdUlEpAtH": "USER_MODULES"}
         with patch.dict(os.environ, source, clear=True), patch.object(verifier.shared.os, "name", "nt"):
             env = verifier.shared.make_environment(self.root)
-        self.assertEqual(env["SystemRoot"], "SYNTHETIC_WINDOWS")
+        # os.environ uppercases keys on Windows; child env dict casing on a
+        # mocked Unix host is incidental. Assert the Windows key semantics.
+        env = {key.upper(): value for key, value in env.items()}
+        self.assertEqual(env["SYSTEMROOT"], "SYNTHETIC_WINDOWS")
+        self.assertEqual(env["WINDIR"], "SYNTHETIC_WINDOWS")
         self.assertEqual(env["PATH"], str(self.root / "bin"))
         self.assertEqual(env["USERPROFILE"], str(self.root / "home"))
-        for key in ("OPENAI_API_KEY", "AGENT_LLM_MM_CONFIG", "PYTHONPATH"):
+        for key in ("OPENAI_API_KEY", "AGENT_LLM_MM_CONFIG", "PYTHONPATH", "PSMODULEPATH"):
             self.assertNotIn(key, env)
 
     def test_existing_output_cannot_be_overwritten(self):
@@ -92,7 +97,7 @@ class WindowsVerifierTests(unittest.TestCase):
         self.assertIn("[System.IO.Directory]::SetAccessControl(", run.call_args.args[0][-1])
         self.assertIn("$PSModuleAutoLoadingPreference = 'None'", run.call_args.args[0][-1])
         self.assertNotIn("Set-Acl", run.call_args.args[0][-1])
-        self.assertNotIn("PSModulePath", run.call_args.kwargs["env"])
+        self.assertNotIn("PSMODULEPATH", {key.upper() for key in run.call_args.kwargs["env"]})
         self.assertEqual(run.call_args.kwargs["env"]["LEDGER_SYNTHETIC_PRIVATE_DIRECTORY"], str(output))
         self.assertNotIn("OPENAI_API_KEY", run.call_args.kwargs["env"])
         self.assertEqual(run.call_args.kwargs["env"]["PATH"], "")
