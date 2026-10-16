@@ -10,10 +10,13 @@ pub fn private_directory(path: &Path) {
     assert!(fs::read_dir(path).unwrap().next().is_none());
     let system_root = std::env::var_os("SystemRoot").expect("Windows system directory");
     let powershell = Path::new(&system_root).join("System32/WindowsPowerShell/v1.0/powershell.exe");
+    // Use Framework ACL APIs directly; inherited pwsh modules cannot be loaded
+    // into the fixed Windows PowerShell 5.1 executable.
     let output = Command::new(powershell)
         .args(["-NoLogo", "-NoProfile", "-NonInteractive", "-Command"])
         .arg(
             r#"$ErrorActionPreference = 'Stop';
+$PSModuleAutoLoadingPreference = 'None';
 $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User;
 $acl = [System.Security.AccessControl.DirectorySecurity]::new();
 $acl.SetOwner($sid);
@@ -21,8 +24,9 @@ $acl.SetAccessRuleProtection($true, $false);
 $rule = [System.Security.AccessControl.FileSystemAccessRule]::new(
     $sid, 'FullControl', 'ContainerInherit, ObjectInherit', 'None', 'Allow');
 $acl.AddAccessRule($rule);
-Set-Acl -LiteralPath $env:LEDGER_SYNTHETIC_PRIVATE_DIRECTORY -AclObject $acl;"#,
+[System.IO.Directory]::SetAccessControl($env:LEDGER_SYNTHETIC_PRIVATE_DIRECTORY, $acl);"#,
         )
+        .env_remove("PSModulePath")
         .env("LEDGER_SYNTHETIC_PRIVATE_DIRECTORY", path)
         .output()
         .unwrap();

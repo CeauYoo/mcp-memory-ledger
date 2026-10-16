@@ -80,7 +80,8 @@ class WindowsVerifierTests(unittest.TestCase):
         powershell.parent.mkdir(parents=True)
         powershell.write_bytes(b"inert fixture")
         output = self.root / "new"
-        with patch.dict(os.environ, {"SystemRoot": str(self.root), "OPENAI_API_KEY": "SYNTHETIC_SECRET"}, clear=True), \
+        with patch.dict(os.environ, {"SystemRoot": str(self.root), "OPENAI_API_KEY": "SYNTHETIC_SECRET",
+                                     "PSModulePath": "SYNTHETIC_INCOMPATIBLE_PWSH_MODULES"}, clear=True), \
              patch.object(verifier.subprocess, "run", return_value=SimpleNamespace(returncode=0)) as run:
             verifier.prepare_private_output(output)
         self.assertTrue(output.is_dir())
@@ -88,6 +89,10 @@ class WindowsVerifierTests(unittest.TestCase):
         self.assertEqual(run.call_args.args[0][0], str(powershell))
         self.assertIn("-NoProfile", run.call_args.args[0])
         self.assertIn("SetAccessRuleProtection($true, $false)", run.call_args.args[0][-1])
+        self.assertIn("[System.IO.Directory]::SetAccessControl(", run.call_args.args[0][-1])
+        self.assertIn("$PSModuleAutoLoadingPreference = 'None'", run.call_args.args[0][-1])
+        self.assertNotIn("Set-Acl", run.call_args.args[0][-1])
+        self.assertNotIn("PSModulePath", run.call_args.kwargs["env"])
         self.assertEqual(run.call_args.kwargs["env"]["LEDGER_SYNTHETIC_PRIVATE_DIRECTORY"], str(output))
         self.assertNotIn("OPENAI_API_KEY", run.call_args.kwargs["env"])
         self.assertEqual(run.call_args.kwargs["env"]["PATH"], "")

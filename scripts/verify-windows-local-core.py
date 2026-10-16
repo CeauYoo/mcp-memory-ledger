@@ -68,6 +68,7 @@ def prepare_private_output(output):
            if key.upper() in ("SYSTEMROOT", "WINDIR", "SYSTEMDRIVE")}
     env.update({"PATH": "", "LEDGER_SYNTHETIC_PRIVATE_DIRECTORY": str(output)})
     script = """$ErrorActionPreference = 'Stop';
+$PSModuleAutoLoadingPreference = 'None';
 $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User;
 $acl = [System.Security.AccessControl.DirectorySecurity]::new();
 $acl.SetOwner($sid);
@@ -75,7 +76,7 @@ $acl.SetAccessRuleProtection($true, $false);
 $rule = [System.Security.AccessControl.FileSystemAccessRule]::new(
     $sid, 'FullControl', 'ContainerInherit, ObjectInherit', 'None', 'Allow');
 $acl.AddAccessRule($rule);
-Set-Acl -LiteralPath $env:LEDGER_SYNTHETIC_PRIVATE_DIRECTORY -AclObject $acl;
+[System.IO.Directory]::SetAccessControl($env:LEDGER_SYNTHETIC_PRIVATE_DIRECTORY, $acl);
 """
     result = subprocess.run([str(powershell), "-NoLogo", "-NoProfile", "-NonInteractive",
                              "-Command", script], env=env, capture_output=True,
