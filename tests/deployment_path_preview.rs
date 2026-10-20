@@ -172,7 +172,8 @@ fn cli_reports_json_without_creating_directories() {
         "codex-actions",
         "deployment-path-preview",
         "--target-platform",
-        "linux",
+        // TempDir supplies host-native paths, not synthetic Linux paths.
+        if cfg!(windows) { "windows" } else { "linux" },
     ]);
     for (flag, path) in [
         "--config-dir",

@@ -421,7 +421,9 @@ mod tests {
     fn fixture(script: &str) -> (tempfile::TempDir, Binding, std::path::PathBuf) {
         use std::os::unix::fs::PermissionsExt;
         let dir = tempfile::tempdir().unwrap();
-        let executable = dir.path().join("bridge-fixture");
+        // macOS temporary roots may use /var, while the child reports /private/var.
+        let root = dir.path().canonicalize().unwrap();
+        let executable = root.join("bridge-fixture");
         std::fs::write(&executable, format!("#!/bin/sh\n{script}\n")).unwrap();
         std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
         let binding = Binding {
@@ -429,7 +431,7 @@ mod tests {
             workspace_id: "workspace".into(),
             namespace: "project/test".into(),
             task_id: "task".into(),
-            workspace_root: dir.path().to_path_buf(),
+            workspace_root: root,
         };
         (dir, binding, executable)
     }
@@ -462,7 +464,7 @@ printf '%s\n' '{"jsonrpc":"2.0","id":2,"result":{"structuredContent":{"ok":true}
 while IFS= read -r ignored; do :; done
 "#,
         );
-        let socket = dir.path().join("core.sock");
+        let socket = binding.workspace_root.join("core.sock");
         assert_eq!(
             call(&executable, &socket, &binding, "get_task", json!({})),
             Ok(json!({"ok":true}))
@@ -475,7 +477,7 @@ while IFS= read -r ignored; do :; done
             "--workspace-id",
             "workspace",
             "--workspace-root",
-            dir.path().to_str().unwrap(),
+            binding.workspace_root.to_str().unwrap(),
             "--client-label",
             "codex-results",
         ];
@@ -484,7 +486,7 @@ while IFS= read -r ignored; do :; done
             std::fs::read_to_string(dir.path().join("cwd"))
                 .unwrap()
                 .trim(),
-            dir.path().to_str().unwrap()
+            binding.workspace_root.to_str().unwrap()
         );
         assert_reaped(&std::fs::read_to_string(dir.path().join("pid")).unwrap());
     }
@@ -498,7 +500,7 @@ while IFS= read -r ignored; do :; done
         assert_eq!(
             call_with_timeout(
                 &executable,
-                &dir.path().join("core.sock"),
+                &binding.workspace_root.join("core.sock"),
                 &binding,
                 "get_task",
                 json!({}),
@@ -524,7 +526,7 @@ while :; do :; done
         assert_eq!(
             call_with_timeout(
                 &executable,
-                &dir.path().join("core.sock"),
+                &binding.workspace_root.join("core.sock"),
                 &binding,
                 "ingest_interaction",
                 json!({"fixture": "x".repeat(FRAME_LIMIT / 2)}),
