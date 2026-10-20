@@ -1,4 +1,8 @@
 //! Entirely synthetic: no model, credentials, network or external inference.
+#[cfg(windows)]
+#[path = "support/windows_private.rs"]
+mod windows_private;
+
 use agent_llm_mm::{
     adapters::{
         local_embedding::LocalEmbeddingConfig,
@@ -79,6 +83,8 @@ struct Fixture {
 impl Fixture {
     async fn new() -> Self {
         let dir = tempfile::tempdir().unwrap();
+        #[cfg(windows)]
+        windows_private::private_directory(dir.path());
         let root = std::fs::canonicalize(dir.path()).unwrap();
         let url = agent_llm_mm::support::sqlite_url::sqlite_file_url(&root.join("semantic.sqlite"));
         let store = SqliteStore::bootstrap(&url).await.unwrap();
