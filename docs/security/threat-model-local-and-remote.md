@@ -158,3 +158,8 @@ only when the release gate has fresh evidence. It must not claim:
 The safe default remains local-only operation, separate SQLite databases for
 formal/test/demo data, support bundles without secrets or full databases, and
 semantic writes governed by `run_reflection`.
+
+
+## Local owner-channel attestation boundary
+
+`task-owner-attest` is a distinct explicit local CLI, absent MCP, bridge routes, source enums and read-only dashboard/admin capabilities. It preserves operator-supplied exact changes/evidence but does not authenticate a human, verify evidence authorship, or isolate hostile processes under the same OS account. Same-user shell invocation is possible. Imported requirements remain knowledge only; they never grant execution authority. Server-owned event/provenance and shared transactional guards prevent ordinary task clients from withdrawing/relabeling imports or using lifecycle deactivation to bypass live imports. Configured-host signed imports are future work, not implemented by this local MVP slice.

@@ -5,7 +5,7 @@ mod store;
 pub use lifecycle::{
     CURRENT_DATABASE_SCHEMA_VERSION, DatabaseLifecycleReport, DatabaseTableCount,
     UnknownOwnerInventory, initialize_database, inspect_database, migrate_database,
-    open_current_database, open_read_only_current_database,
+    open_current_database, open_read_only_current_database, reset_semantic_index,
 };
 pub use store::SqliteStore;
 
@@ -41,3 +41,9 @@ mod recall_applicability;
 mod enhanced_reads;
 
 mod embedding_cache;
+
+pub mod semantic_index;
+
+mod owner_attestation;
+
+pub mod selection_reads;

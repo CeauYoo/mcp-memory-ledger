@@ -58,3 +58,11 @@ Codex 官方合同参见 [hooks](https://learn.chatgpt.com/docs/hooks)，2026-10
 ## 整合验收
 
 源码中包含领域、wire、patch、私有回执、preview/CAS 和候选写入测试。云端已运行整合编译、领域及适配模块单测、严格 Clippy；另补参数冲突与满回执时保留任务版本下限、并发版本不回退的测试。精确提交三平台和固定版本真实 host 故障试验单独记录。未完成这些证据前只能称“候选实现”，不能称“已部署的自动动作保护”。
+
+## Windows hook preview safety correction (2026-10-20)
+
+Context preview now returns `hooks_json: null` and `configuration_candidate_available: false` on Windows/unknown targets, preserving diagnostic argv only. Action preview still rejects these targets before producing a candidate bundle. See the [pinned contract and verification scope](windows-hook-preview-assessment-2026-10-20.md). Run `cargo test --lib preview_tests`, `cargo test --lib windows_and_unknown_platforms_are_unsupported`, and `cargo test --test codex_context_adapter`; existing Windows CI includes both `--lib` and this integration target. Linux tests do not establish Windows runtime or host acceptance.
+
+## Result feedback remains separate
+
+The [T14 result-feedback candidate](codex-result-feedback.md) has its own explicit action/use links and bounded outbox. It never upgrades these action-check receipts from `unknown`, changes operator policy, issues permission, or treats pass-through as proof of execution/success. Its generated hooks are previews only; its acceptance gate is separate from action checks.

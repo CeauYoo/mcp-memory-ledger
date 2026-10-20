@@ -1,3 +1,13 @@
+## Typed environment matching (2026-10-20 local slice)
+
+Enhanced recall accepts an optional `reported_environment` object. Applicability declarations may include `typed_environment`. Both maps allow at most 16 exact keys (ASCII letters, digits, `.`, `_`, `-`; 1–64 bytes), with string (1–256 bytes, no controls), boolean, or signed 64-bit integer values. Matching is case-sensitive and type-sensitive; no coercion, substring, semantic interpretation, version ranges, or inferred system facts are used.
+
+All declared keys are conjunctive. A known unequal value excludes the hit and increments `applicability_omissions`; missing values retain the hit with `environment_match: unknown`. Exact equality reports `matches_reported_values`, not authenticated environment verification or permission. Free-text conditions and environment declarations remain unevaluated, and explicit validity intervals still apply. Results bind declarations to the current content digest; stale declarations cannot filter changed content. Both lexical and hybrid candidates are checked before optional embedding and again after hydration.
+
+Example: declaration `typed_environment: {"os":"linux","offline":true}` and request `reported_environment: {"os":"linux","offline":true}` match; `"true"` is not the boolean `true`. Omission is backward compatible: old declarations serialize without the new empty field, preserving idempotent replay. Task-resume integration currently supplies no environment facts, so typed conditions remain unknown there. This is an opt-in exact-match slice of T20, not completion of the remaining plan or independent host attestation.
+
+Verification: `cargo test --test enhanced_recall --test task_resume_enhanced` and `cargo test --lib typed_environment`. New-slice validation results are recorded separately; previous CI does not certify this change.
+
 # Enhanced recall and task continuation (partial MVP)
 
 `recall_memory` retains its literal whitespace-separated substring contract. The separate `recall_memory_enhanced` operation retains the original query and exposes deterministic Jieba 0.11.0 tokens, exact-namespace single-hop host-configured aliases, per-route ranks, RRF score and omission counts. Query tokens and expanded terms are bounded. Aliases expand original tokens only; alias chains and other namespaces are never followed.

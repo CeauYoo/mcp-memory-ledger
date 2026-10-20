@@ -54,6 +54,12 @@ jobs:
           python3 -m unittest discover -s tests/fixtures/memory-evaluation -p 'test_*.py'
           python3 scripts/temporal-scope-export-smoke.py --binary target/debug/agent_llm_mm --output target/reports/temporal-scope-export
 
+      - name: Verify synthetic tool-result feedback through scoped core
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        timeout-minutes: 3
+        run: LEDGER_BIN="$(pwd)/target/debug/agent_llm_mm" python3 -B tests/test_codex_result_feedback.py -v
+
       - name: Test synthetic native-host probe contracts offline
         run: python -B -m unittest discover -s tests -p 'test_codex_native_host_probe.py' -v
 
@@ -152,7 +158,7 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Test native memory and lifecycle runtime
-        run: cargo test --lib --test task_ledger --test task_continuity_scenarios --test experience_draft --test local_embedding --test embedding_cache --test enhanced_recall --test task_resume_enhanced --test codex_context_adapter --test workspace_registry --test workspace_client_config --test workspace_adoption --test mcp_session_policy --test local_core_cli --test local_core --test sqlite_lifecycle --test database_backup --test sqlite_store --test correction_atomicity --test feedback_provenance --test feedback_candidates --test experience_workflow --test experience_use_feedback --test dashboard_admin --test indexed_text_recall --test temporal_metadata --test sqlite_temporal_store --test reflection_scope_history --test scoped_ledger_export --test schema6_migration --test schema7_migration --test self_model_versions --test version_api --test context_diagnostics --test caller_operation_budget --test mcp_stdio --test native_model_protocols --test openai_compatible_model --test provider_config --test dashboard_config --test dashboard_recorder --test dashboard_projection --test dashboard_http
+        run: cargo test --lib --test owner_attestation --test owner_semantic_compatibility --test selection_source_reads --test unified_selection --test unified_final_task_recheck --test semantic_index --test deployment_path_preview --test task_ledger --test task_continuity_scenarios --test experience_draft --test local_embedding --test embedding_cache --test enhanced_recall --test task_resume_enhanced --test codex_context_adapter --test workspace_registry --test workspace_client_config --test workspace_adoption --test mcp_session_policy --test local_core_cli --test local_core --test sqlite_lifecycle --test database_backup --test sqlite_store --test correction_atomicity --test feedback_provenance --test feedback_candidates --test experience_workflow --test experience_use_feedback --test dashboard_admin --test indexed_text_recall --test temporal_metadata --test sqlite_temporal_store --test reflection_scope_history --test scoped_ledger_export --test schema6_migration --test schema7_migration --test self_model_versions --test version_api --test context_diagnostics --test caller_operation_budget --test mcp_stdio --test native_model_protocols --test openai_compatible_model --test provider_config --test dashboard_config --test dashboard_recorder --test dashboard_projection --test dashboard_http
       - name: Test bounded provider certification with offline fixtures
         run: cargo test --features release-tools --test provider_live_certification
       - name: Verify installed-binary offline memory workflow

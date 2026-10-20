@@ -1,5 +1,9 @@
 # MCP 工具与合同索引
 
+## Deployment-path lexical preview
+
+`codex-actions deployment-path-preview --target-platform macos|windows|linux --config-dir ABS --dependencies-dir ABS --database-dir ABS --logs-dir ABS --build-dir ABS` prints a read-only placement report. All five arguments are directories. Results are rejected/unknown only; no filesystem or sync verification, installation or deployment occurs. See [contract](deployment-path-preview.md).
+
 ## Task continuity tools
 
 Schema 8 adds `create_task`, `revise_task`, `get_task`, `list_tasks`, `record_task_checkpoint`, and `build_task_resume_context`. Standalone has 43 tools; a bound core session permits 36 and denies the same 7 global tools. The six task tools require the current project scope and do not provide personal/global task access. See [task contract](task-ledger.md) for DTOs, reported-source limits, immutable history, CAS, receipts and full-context rules.
@@ -105,3 +109,7 @@ CLI equivalents: `experience-use record --json '<request JSON>'` and `experience
 `recall_memory_enhanced` 是只读、逐调用范围授权的独立入口。Schema 10 适用性声明通过库级显式 API 写入，不由模型或宿主自动生成；适用条件仍是声明，未自动认证。向量只覆盖有界候选窗口，失败保留字面结果；[Ollama](local-embeddings.md) 默认关闭、显式同域白名单与本地声明，不借用聊天凭据。
 
 T12 由宿主配置 `retrieval.task_context_mode = "literal" | "enhanced" | "hybrid"`，MCP 请求不能覆盖；必需任务要求先按精确版本读取，可选检索共用 deadline，超时保留必需内容并报告缺项。持久派生缓存仍在实现/验证中，不提前标记通过。见[增强召回合同](enhanced-recall.md)。
+
+## Explicit semantic-index CLI maintenance
+
+`retrieval index-start`, `index-status`, `index-resume`, and `index-search` take bounded `--json` requests; `retrieval index-reset` removes all known derived semantic-index objects. These are CLI-only, not additional MCP tools. Reuse host local-embedding permission/profile; never accept provider settings in tool JSON. Resume explicitly performs one inference batch; search explicitly embeds a query. See [request examples and exact coverage](rebuildable-semantic-index.md).

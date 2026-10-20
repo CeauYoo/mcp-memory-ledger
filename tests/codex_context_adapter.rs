@@ -114,10 +114,20 @@ fn preview_is_bounded_and_does_not_create_state_or_config() {
     let output: Value = serde_json::from_slice(&result.stdout).unwrap();
     assert_eq!(output["preview_only"], true);
     assert_eq!(output["max_context_bytes"], 8192);
-    assert_eq!(
-        output["hooks_json"]["hooks"]["SessionStart"][0]["hooks"][0]["additionalContextLimit"],
-        0
-    );
+    assert_eq!(output["platform_preview_supported"], cfg!(unix));
+    assert_eq!(output["configuration_candidate_available"], cfg!(unix));
+    if cfg!(unix) {
+        assert_eq!(
+            output["hooks_json"]["hooks"]["SessionStart"][0]["hooks"][0]["additionalContextLimit"],
+            0
+        );
+    } else {
+        assert!(output["hooks_json"].is_null());
+        assert_eq!(
+            output["unsupported_reason"],
+            "target_shell_contract_and_argument_roundtrip_unverified"
+        );
+    }
     assert!(!state.exists());
     assert_eq!(root.path().read_dir().unwrap().count(), 0);
 }
@@ -211,4 +221,119 @@ fn artifact_observation_uses_canonical_binding_with_aliased_parent() {
         observe(&bound_root, &data)[0]["observation"]["result"],
         "passed"
     );
+}
+
+#[test]
+fn refresh_is_content_based_not_random_context_id_or_task_version_only() {
+    let original = context();
+    let first = protocol::render_refresh(&binding(), &original, 8192, 1, None).unwrap();
+    assert_eq!(first["changed"], true);
+    assert_eq!(
+        first["context"]["mandatory_requirements"],
+        original["mandatory_requirements"]
+    );
+    let known = first["context_fingerprint"].as_str().unwrap();
+    let mut fresh = original.clone();
+    fresh["context_id"] = json!("new-random-core-context");
+    let same = protocol::render_refresh(&binding(), &fresh, 8192, 1, Some(known)).unwrap();
+    assert_eq!(same["changed"], false);
+    assert!(same["context"].is_null());
+    assert_eq!(same["context_id"], "new-random-core-context");
+    assert_eq!(same["delivery"], "unverified");
+    assert_eq!(same["execution_authorization"], false);
+    // Checkpoints/selection can change without changing the task revision.
+    for (key, value) in [
+        ("checkpoint", json!({"next_steps":["recheck build"]})),
+        ("experiences", json!([{"version_id":"new"}])),
+        (
+            "mandatory_requirements",
+            json!([{"id":"r1","text":"New constraint"}]),
+        ),
+        ("task_version", json!(3)),
+    ] {
+        let mut changed = fresh.clone();
+        changed[key] = value;
+        assert_eq!(
+            protocol::render_refresh(&binding(), &changed, 8192, 1, Some(known)).unwrap()["changed"],
+            true,
+            "{key}"
+        );
+    }
+}
+
+#[test]
+fn refresh_fingerprint_is_scoped_and_artifact_results_invalidate_it() {
+    let mut data = context();
+    data["adapter_artifact_observations"] =
+        json!([{"observed_at":"time-one","observation":{"result":"passed"}}]);
+    let first = protocol::context_fingerprint(&binding(), &data).unwrap();
+    data["adapter_artifact_observations"][0]["observed_at"] = json!("time-two");
+    assert_eq!(
+        first,
+        protocol::context_fingerprint(&binding(), &data).unwrap()
+    );
+    data["adapter_artifact_observations"][0]["observation"]["result"] = json!("failed");
+    assert_ne!(
+        first,
+        protocol::context_fingerprint(&binding(), &data).unwrap()
+    );
+    let mut other = binding();
+    other.host_session_id = "other-session".into();
+    assert_ne!(
+        protocol::context_fingerprint(&binding(), &data).unwrap(),
+        protocol::context_fingerprint(&other, &data).unwrap()
+    );
+}
+
+#[test]
+fn refresh_cache_hits_never_bypass_freshness_status_scope_or_budget() {
+    for (key, value) in [
+        ("complete", json!(false)),
+        ("status", json!("paused")),
+        ("can_resume", json!(false)),
+        ("mandatory_snapshot_consistent", json!(false)),
+        ("diagnostics", json!(["stale_checkpoint"])),
+        ("task_version_after_selection", json!(3)),
+    ] {
+        let mut data = context();
+        data[key] = value;
+        let known = protocol::context_fingerprint(&binding(), &data).unwrap();
+        assert!(
+            protocol::render_refresh(&binding(), &data, 8192, 1, Some(&known)).is_err(),
+            "{key}"
+        );
+    }
+    let mut data = context();
+    data["mandatory_requirements"][0]["text"] = json!("large".repeat(5000));
+    let known = protocol::context_fingerprint(&binding(), &data).unwrap();
+    assert!(protocol::render_refresh(&binding(), &data, 8192, 1, Some(&known)).is_err());
+    assert!(protocol::render_refresh(&binding(), &context(), 8192, 3, None).is_err());
+    for bad in ["", "abc", &"A".repeat(64), &"g".repeat(64)] {
+        assert!(protocol::render_refresh(&binding(), &context(), 8192, 1, Some(bad)).is_err());
+    }
+}
+
+#[test]
+fn explicit_refresh_is_not_a_new_automatically_enabled_hook() {
+    let event = json!({"session_id":"s","cwd":binding().workspace_root,"hook_event_name":"ControllerRefresh"});
+    assert!(HookInput::parse(&serde_json::to_vec(&event).unwrap()).is_err());
+    let root = tempfile::tempdir().unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_agent_llm_mm"))
+        .args(["codex-context", "refresh", "--state"])
+        .arg(root.path().join("absent.sqlite"))
+        .arg("--registry")
+        .arg(root.path().join("registry.json"))
+        .arg("--socket")
+        .arg(root.path().join("socket"))
+        .args([
+            "--session-id",
+            "s",
+            "--known-context-fingerprint",
+            "invalid",
+        ])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    assert_eq!(root.path().read_dir().unwrap().count(), 0);
 }

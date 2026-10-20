@@ -1,15 +1,29 @@
+2026-10-20 T11 安全修正：Windows/未知平台上下文预览不再输出可安装的占位命令，明确返回无候选；Windows hook 预览与 checked writes 仍未支持。见[固定版本合同核验](windows-hook-preview-assessment-2026-10-20.md)。
+
+本批三项增量与 macOS fixture 修复已完成云端整合验证；原生三平台仍须按新提交复验。见[精确验证与未完成边界](follow-on-validation-2026-10-20.md)。
+
+> 2026-10-20 local follow-on: optional typed environment equality/mismatch filtering is implemented in enhanced recall, with caller-reported facts and unknown preservation. Host attestation and automatic task-resume environment facts remain unsupported. Validation/publication of this slice is separate from third-batch CI. See [contract](enhanced-recall.md).
+
 # MCP Memory Ledger 路线图
+
+## T24 新增有界切片（2026-10-20）
+
+[部署路径只读预览](deployment-path-preview.md)已提供目标平台词法检查和常见同步目录标记拒绝，T24 仍为 partial。真实目标的符号链接/重解析点、同步归属、权限、空间及目录冲突仍须另行核验；本切片不安装、不部署。
+
+## 任务续接增量（2026-10-20，云端本地）
+
+新增显式 controller refresh 与按内容校验的缓存响应；每次重新核验任务版本、状态、范围和产物。适配器独立 Schema 2 持久化精确 stdout 摘要，旧 Schema 1 仅显式迁移，不补造历史证据。T07/T08 仍为部分完成：没有后台主动推送或独立宿主接受回执，送达继续标记 unverified。原 UI、中英日文及原生权限不变。见[使用合同](codex-task-context-adapter.md)。
 
 ## 当前恢复切片（2026-10-19）
 
-第三片源码已恢复，正在重新验证：
+第三片恢复源码已作为 `4ac6cfca1a7c69327d8186957c191aa9ed243e93` 发布；后续本地增量另行验证。第三片范围如下：
 
 - T16：显式模型草稿、同范围证据、持久化单次尝试和 pending 候选恢复；不自动激活或学习。见[草稿合同](experience-model-drafts.md)。
-- P4 / Schema 10：中文分词、同域别名、RRF、适用性声明与可选本地 Ollama；T12 由宿主选择 literal/enhanced/hybrid 续接检索模式。见[增强召回](enhanced-recall.md)和[本地向量](local-embeddings.md)。持久派生缓存仍在实现中，尚未验收。
+- P4 / Schema 10：中文分词、同域别名、RRF、适用性声明与可选本地 Ollama；T12 由宿主选择 literal/enhanced/hybrid 续接检索模式。见[增强召回](enhanced-recall.md)和[本地向量](local-embeddings.md)。持久派生缓存已恢复并完成本地验证；它仍不等于全量语义索引。
 - 当前工具为 43 个 standalone、36 个 scoped、7 个全局入口拒绝；范围与撤销检查保持不变。原界面不新增冗长文字或写权限。
 - 新增 30 组合成场景共 756 轮，其中两段历史为 20,478 / 19,738 个 whitespace words；这不是 token 数、真实对话或模型效果证据。旧 578 轮及此前未保存切片的结果不用于本次验收。
 
-已发布基线 `8f87a813` 的 Ubuntu / Windows CI 全部成功，Ubuntu 原生 Codex startup/resume 合成 gate 已通过；只证明该版本的宿主送达路径，不证明模型理解或动作授权。macOS 当时在 `/var` fixture 路径检查失败，当前源码已补修，仍待新提交原生复验。见[宿主探针范围](codex-native-host-verification.md)。当前恢复代码不继承旧 CI、旧 990 项等结果；未操作用户机器、安装或部署。
+恢复前基线 `8f87a813` 的 Ubuntu / Windows CI 全部成功，Ubuntu 原生 Codex startup/resume 合成 gate 已通过；只证明该版本的宿主送达路径，不证明模型理解或动作授权。macOS 当时在 `/var` fixture 路径检查失败，当前源码已补修，仍待新提交原生复验。见[宿主探针范围](codex-native-host-verification.md)。当前恢复代码不继承旧 CI、旧 990 项等结果；未操作用户机器、安装或部署。
 
 ## 历史阶段记录（以下保留原时点结论）
 
@@ -146,3 +160,16 @@ Streamable HTTP、远程/团队认证授权与多租户、remote dashboard、wri
 - [项目起点与主线原则](origin-and-principles.md)
 - [Reality gates](product/follow-up-reality-gates.md)
 - [阶段历史](project-status-history-2026-10-09.md) / [计划索引](plans/README.md) / [历史归档](archive.md)
+
+### T18 后续边界
+
+第一独立切片提供全来源分批索引、可恢复游标、派生状态失效与分页向量读取，见 [说明](rebuildable-semantic-index.md)。后续仍需将已完成索引作为可选召回 route 接入现有 RRF/适用性流程，设计完整遍历或明确有界的全局候选选择预算，并以漏召回证据评估 ANN。不可将当前分页的局部排序表述为全库 top-k。
+
+
+## Partial T03: explicit local owner channel
+
+The local `task-owner-attest` append/withdraw slice is implemented with schema11, exact input evidence, durable event replay and ordinary task mutation/lifecycle guards. T03 remains partial: configured-host identity/signature policy, trustworthy human-event ingestion, replacement review UX and end-to-end host validation are future decisions. Do not equate local shell invocation with authenticated human approval. See [scope and protocol](local-owner-task-attestation.md).
+
+T14 follow-on: the local `codex-results` candidate provides explicit pre-action use linkage and metadata-only result-to-Event/related-use delivery. It does not infer experience selection, success or causality. Remaining gates include exact-commit pinned-native-host PostToolUse delivery and separately authorized configuration review/deployment; startup/resume evidence cannot satisfy that gate. See [result feedback](codex-result-feedback.md).
+
+Unified-selection update: the opt-in local T12 slice now reuses semantic-index v2 for facts, persisted Episodes and current active experiences under one bounded task-context selection pass. Mandatory constraints, applicability unknowns and no-execution-authority boundaries remain intact. Cross-slice integration, real host acceptance and live-model quality remain separate gates; see [unified task selection](unified-task-selection.md).

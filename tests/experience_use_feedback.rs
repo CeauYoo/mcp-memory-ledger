@@ -283,6 +283,7 @@ async fn withdrawal_invalidates_reuse_without_rewriting_results() {
     let ctx = task::build_task_resume_context(
         &f.store,
         TaskContextRequest {
+            reported_environment: Default::default(),
             namespace: "project/p".into(),
             task_id: "t".into(),
             max_bytes: 16384,

@@ -15,7 +15,7 @@ fn url(path: &Path) -> String {
 // Build the exact historical v6 shape without changing its DDL, rows, or ledger.
 async fn remove_v7(connection: &mut SqliteConnection) {
     sqlx::raw_sql(
-        "DROP TABLE recall_applicability;
+        "DROP TABLE task_owner_provenance; DROP TABLE task_owner_events; DROP TABLE recall_applicability;
         DROP TABLE experience_use_events; DROP TABLE experience_uses;
         DROP TRIGGER self_model_versions_append;
         DROP TRIGGER self_model_versions_no_update;

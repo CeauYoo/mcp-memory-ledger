@@ -1,6 +1,6 @@
 # MCP Memory Ledger
 
-本批恢复与精确验证：[2026-10-19 记录](docs/restored-feature-validation-2026-10-19.md)。
+本地整合验证：1117 项 Rust 测试通过，14 项因云端 AF_UNIX 限制失败；Node 13 / Python 87 通过，严格 Clippy 通过。这不是原生全绿，详见[整合验证](docs/final-local-integration-validation-2026-10-20.md)。
 
 让本地 AI 客户端记住有来源的信息，找回证据，并在纠错后保留历史。
 
@@ -8,11 +8,18 @@
 
 [文档导航](docs/document-map.md) · [快速开始](docs/quickstart.md) · [MCP 接入](docs/local-mcp-integration-2026-03-26.md) · [当前状态](docs/project-status.md) · [English](docs/README.en.md) · [日本語](docs/README.ja.md)
 
-## 当前恢复切片
+## 当前本地候选（2026-10-20，未发布）
 
-按[唯一计划](docs/plans/2026-10-16-task-continuity-and-host-integration.md)恢复第三片：T16 [显式模型草稿](docs/experience-model-drafts.md)、P4 / Schema 10 [增强召回](docs/enhanced-recall.md)及 T12 宿主检索模式已进入重新验证；可选 [Ollama](docs/local-embeddings.md) 默认关闭，持久派生缓存仍在实现。没有安装、部署或修改用户机器。
+已发布源码基线仍为 `4ac6cfc`。以下是其后的本地候选能力，不是完整 24 项计划完成声明、原生验收或部署批准。原 UI、中英日文与既有权限边界保留；没有安装、部署或修改用户机器。
 
-`8f87a813` 的 Ubuntu / Windows CI 与 Ubuntu 原生 Codex startup/resume 合成 gate 已通过，仅适用于该版本；macOS 的 `/var` fixture 问题已在当前源码补修，待新提交复验。本次代码不继承旧结果。30 组合成场景共 756 轮，两段长历史为 20,478 / 19,738 个 whitespace words，均非 token 或真实模型收益。详见[当前状态](docs/project-status.md)。
+- **Schema 11 本地所有者声明**：显式 `task-owner-attest` 保留精确要求、证据和逐要求来源；普通任务修改不能删除仍受保护的要求。须显式备份/排练迁移。这不是认证人类身份、同用户进程隔离或执行权限；签名宿主导入未实现。[合同](docs/local-owner-task-attestation.md)
+- **显式上下文刷新与回执**：controller refresh 重新核验任务、范围、状态与产物；适配器 Schema 2 记录精确输出摘要，旧状态须显式迁移。输出回执不是宿主接受或模型采用证明，没有后台推送。[合同](docs/codex-task-context-adapter.md)
+- **可选 v2 语义索引与统一选择**：显式构建/恢复/重置同域 claims、events、持久 Episodes 与当前活动经验索引；宿主 opt-in `unified` 模式先保留强制任务要求，再按共享预算选择知识。按来源种类报告有界覆盖与省略，不承诺全库 top-k，不自动重建；默认字面及既有增强模式不变。[索引](docs/rebuildable-semantic-index.md) · [统一选择](docs/unified-task-selection.md)
+- **类型化环境报告**：`reported_environment` 仅是调用方未认证事实；类型和值不符可排除来源，缺失保持 unknown，不能更改宿主策略、模型或范围白名单。[增强召回](docs/enhanced-recall.md)
+- **T14 最小结果 outbox 候选**：`codex-results` 只处理显式关联的历史 use，保存有界输出元数据和持久分阶段投递/重试；不是成功、因果收益或执行授权。原生宿主结果接受仍待验收。[合同](docs/codex-result-feedback.md)
+- **部署预览**：只做目标平台路径词法检查，不证明同步归属或可部署；不安装。Windows hook 预览与 checked writes 仍 unsupported，不输出可安装占位命令。[路径预览](docs/deployment-path-preview.md) · [Windows 边界](docs/windows-hook-preview-assessment-2026-10-20.md)
+
+已发布基线中的[显式模型草稿](docs/experience-model-drafts.md)、[增强召回](docs/enhanced-recall.md)和[本地 embedding / 派生缓存](docs/local-embeddings.md)继续保留；模型能力默认关闭或使用 mock，启用须遵守对应合同。
 
 ## 能做什么
 
@@ -60,14 +67,12 @@
 
 ## 验证到了哪里
 
-实现基线 `9ba0050` 的[精确提交 CI](https://github.com/yooyui/mcp-memory-ledger/actions/runs/37930021202) 已通过：Linux/macOS 各 633 项 Rust 测试，Windows 247 项 native 测试；三平台均通过 9 项 Python 测试及实际二进制离线工作流。Windows native 覆盖不等于全部 shell wrapper parity。
+已发布源码仍为 `4ac6cfc`；本地候选不是已发布版本，也不继承旧提交 CI。最终本地整合结果仍在核验，精确新提交的 Ubuntu / macOS / Windows 原生 CI 尚待完成；云端 AF_UNIX 限制、真实宿主接受、fresh-machine 安装和真实模型收益分别记账。24 项计划尚未全部完成。
 
-固定离线检索/更正代理指标为 8/10，保留两个语义改写未命中；不能据此声称真实模型任务收益或 token 节省。容量测量包含速度与存储代价，不承诺生产 SLA。最新文档提交是否绿色，以它自己的 checks 为准。
+历史测试数字和合成场景仅属于各自记录版本，不是当前候选的全量通过证明。固定离线检索/更正代理指标 8/10 也不代表真实模型任务收益、token 节省或生产 SLA。
 
-[验证方法与复现](docs/testing-guide-2026-03-24.md) · [当前事实与剩余门禁](docs/project-status.md) · [70 项最终核对](docs/plans/2026-10-09-original-plan-final-reconciliation.md)
+[验证方法与复现](docs/testing-guide-2026-03-24.md) · [当前事实与剩余门禁](docs/project-status.md) · [恢复版本记录](docs/restored-feature-validation-2026-10-19.md) · [后续切片记录](docs/follow-on-validation-2026-10-20.md) · [历史 70 项核对](docs/plans/2026-10-09-original-plan-final-reconciliation.md)
 
 ## 参与开发
 
 阅读 [CONTRIBUTING](CONTRIBUTING.md)、[项目起点与原则](docs/origin-and-principles.md) 和[路线图](docs/roadmap.md)。报告问题见 [SUPPORT](SUPPORT.md)，安全问题先核实 [SECURITY](SECURITY.md) 所述私密渠道；[协作准则](CODE_OF_CONDUCT.md)仍是拟定稿，[CHANGELOG](CHANGELOG.md)不构成发布批准。唯一执行队列是 [active plan](docs/plans/README.md)；历史计划、阶段证据和发布草案不能替代它。
-
-See [experience-use contract](docs/experience-use-feedback.md) for schema 9, caller-report boundaries, read-time invalidation, recoverable pending derivation, and explicit partial status of T12/T14–T16.

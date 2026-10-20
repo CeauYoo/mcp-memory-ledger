@@ -26,7 +26,9 @@ use super::{
 
 pub const CURRENT_DATABASE_SCHEMA_VERSION: i64 = CURRENT_SCHEMA_VERSION;
 
-const REQUIRED_TABLES: [&str; 27] = [
+const REQUIRED_TABLES: [&str; 29] = [
+    "task_owner_events",
+    "task_owner_provenance",
     "recall_applicability",
     "events",
     "claims",
@@ -56,7 +58,9 @@ const REQUIRED_TABLES: [&str; 27] = [
     "schema_migrations",
 ];
 
-const PRESERVED_DATA_TABLES: [&str; 24] = [
+const PRESERVED_DATA_TABLES: [&str; 26] = [
+    "task_owner_events",
+    "task_owner_provenance",
     "recall_applicability",
     "events",
     "claims",
@@ -374,6 +378,31 @@ pub async fn open_current_database(database_url: &str) -> Result<SqliteStore, Ap
     Ok(SqliteStore { pool })
 }
 
+/// Explicit disposable semantic-extension teardown, including interrupted or
+/// corrupt installations. Validate authority after teardown inside the same
+/// transaction; no lazy repair or new database creation is permitted.
+pub async fn reset_semantic_index(database_url: &str) -> Result<(), AppError> {
+    let mut connection = begin_migration(database_url, false).await?;
+    let result = async {
+        super::semantic_index::teardown(&mut connection).await?;
+        let report =
+            inspect_connection(&mut connection, "semantic_index_reset", true, None).await?;
+        if !report.is_current() {
+            return Err(AppError::Message(
+                "semantic index reset refused: remaining authoritative schema is not current"
+                    .into(),
+            ));
+        }
+        execute(&mut connection, "COMMIT").await
+    }
+    .await;
+    if result.is_err() {
+        let _ = execute(&mut connection, "ROLLBACK").await;
+    }
+    connection.close().await.map_err(sqlite_error)?;
+    result
+}
+
 pub async fn open_read_only_current_database(
     database_url: &str,
 ) -> Result<Option<SqliteStore>, AppError> {
@@ -515,6 +544,7 @@ async fn run_migration_steps(
             8 => super::task::install(connection).await?,
             9 => super::experience_use::install(connection).await?,
             10 => super::recall_applicability::install(connection).await?,
+            11 => super::owner_attestation::install(connection).await?,
             _ => {
                 return Err(AppError::Message(format!(
                     "missing migration implementation for version {version}"
@@ -831,7 +861,16 @@ pub(super) async fn inspect_connection(
     } else {
         None
     };
-    let (status, migration_required, message) = if let Some(error) = self_model_error {
+    let owner_attestation_error = if version == CURRENT_SCHEMA_VERSION && schema_structure_valid {
+        super::owner_attestation::validate_all(connection)
+            .await
+            .err()
+    } else {
+        None
+    };
+    let (status, migration_required, message) = if let Some(error) = owner_attestation_error {
+        ("owner_attestation_invalid", false, error.to_string())
+    } else if let Some(error) = self_model_error {
         ("self_model_ledger_invalid", false, error.to_string())
     } else if version > CURRENT_SCHEMA_VERSION {
         (
@@ -1254,6 +1293,7 @@ async fn schema_structure_issues(
     super::task::install(&mut reference).await?;
     super::experience_use::install(&mut reference).await?;
     super::recall_applicability::install(&mut reference).await?;
+    super::owner_attestation::install(&mut reference).await?;
     let mut issues = Vec::new();
     for table in REQUIRED_TABLES {
         let expected = table_structure(&mut reference, table).await?;
@@ -1291,6 +1331,7 @@ async fn schema_structure_issues(
             issues.push(format!("{name}: self-model append-only trigger differs"));
         }
     }
+    issues.extend(super::semantic_index::structure_issues(connection).await?);
     reference.close().await.map_err(sqlite_error)?;
     Ok(issues)
 }
@@ -1364,7 +1405,15 @@ async fn table_structure(
         let name = row.get::<String, _>("name");
         // Retrieval performance objects are checked separately and explicitly
         // rebuildable; their absence must not make the durable ledger unusable.
-        if name.starts_with("idx_recall_") {
+        if name.starts_with("idx_recall_")
+            || matches!(
+                name.as_str(),
+                "derived_semantic_claims_scope"
+                    | "derived_semantic_events_scope"
+                    | "derived_semantic_episodes_scope"
+                    | "derived_semantic_candidates_scope"
+            )
+        {
             continue;
         }
         let mut index = format!(

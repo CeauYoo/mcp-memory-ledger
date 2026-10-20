@@ -1,21 +1,48 @@
 # 当前实现状态
 
-本批恢复与精确验证：[2026-10-19 记录](restored-feature-validation-2026-10-19.md)。
+更新：2026-10-20。定位为 **local-first technical MVP**，不是正式 Alpha/Beta/GA 或 production-ready 服务。
 
-## 当前恢复切片（2026-10-19）
+## 版本与验收边界
 
-第三片源码已恢复，正在重新验证：
+- 已发布源码仍为 `4ac6cfca1a7c69327d8186957c191aa9ed243e93`（`4ac6cfc`）；其后的整合工作是**尚未发布的本地候选**。同源全量测试 1117 通过、14 项在 AF_UNIX 环境限制下失败，另有 Node 13 / Python 87 通过及严格 Clippy 通过；不是全绿或原生验收。精确新提交的三平台原生 CI 尚待完成，不能继承旧提交绿灯。见[整合验证](final-local-integration-validation-2026-10-20.md)。
+- [24 项唯一实施计划](plans/2026-10-16-task-continuity-and-host-integration.md)尚未全部完成。T03、T07/T08、T12、T14、T18、T20、T24 的本地能力与真实宿主/产品验收分开记录。
+- 云端 AF_UNIX 运行限制不是原生测试通过；真实宿主接受、模型采用、fresh-machine、真实模型收益及正式发布仍须各自证据。没有操作用户机器、安装或部署。
+- 现有 UI 与中英日文支持保持不变，不新增普通记忆、dashboard 或管理端的所有者声明写权限。
 
-- T16：显式模型草稿、同范围证据、持久化单次尝试和 pending 候选恢复；不自动激活或学习。见[草稿合同](experience-model-drafts.md)。
-- P4 / Schema 10：中文分词、同域别名、RRF、适用性声明与可选本地 Ollama；T12 由宿主选择 literal/enhanced/hybrid 续接检索模式。见[增强召回](enhanced-recall.md)和[本地向量](local-embeddings.md)。持久派生缓存仍在实现中，尚未验收。
-- 当前工具为 43 个 standalone、36 个 scoped、7 个全局入口拒绝；范围与撤销检查保持不变。原界面不新增冗长文字或写权限。
-- 新增 30 组合成场景共 756 轮，其中两段历史为 20,478 / 19,738 个 whitespace words；这不是 token 数、真实对话或模型效果证据。旧 578 轮及此前未保存切片的结果不用于本次验收。
+## 当前能力摘要
 
-已发布基线 `8f87a813` 的 Ubuntu / Windows CI 全部成功，Ubuntu 原生 Codex startup/resume 合成 gate 已通过；只证明该版本的宿主送达路径，不证明模型理解或动作授权。macOS 当时在 `/var` fixture 路径检查失败，当前源码已补修，仍待新提交原生复验。见[宿主探针范围](codex-native-host-verification.md)。当前恢复代码不继承旧 CI、旧 990 项等结果；未操作用户机器、安装或部署。
+| 范围 | 本地实现与剩余边界 |
+| --- | --- |
+| Schema 11 / 部分 T03 | 显式本地 `task-owner-attest` 追加或撤回精确要求，保存事件回放、逐要求来源与 CAS；普通任务修改及生命周期变更不能抹去受保护要求。须显式备份/排练迁移。同用户 shell 可调用，不认证人类身份，也不授予执行权限；签名宿主导入未实现。[合同](local-owner-task-attestation.md) |
+| 任务续接 / 部分 T07–T08 | 显式 controller refresh、内容指纹与适配器 Schema 2 输出回执；旧状态仅显式迁移，不补造历史。最终任务/checkpoint 重查与预算保留强制要求，不声称跨存储原子快照。回执不是宿主接受、模型采用或后台主动送达。[合同](codex-task-context-adapter.md) |
+| 索引与统一选择 / 部分 T12、T18 | opt-in v2 索引覆盖同域 claims、events、持久 Episodes、当前活动经验；显式构建/恢复/重置，读取不自动重建。按种类有界遍历并报告覆盖/省略，不承诺全库 top-k；强制要求优先，共享时间/字节预算。默认字面及 enhanced/hybrid 模式不变。[索引](rebuildable-semantic-index.md) · [统一选择](unified-task-selection.md) |
+| 环境报告 / 部分 T20 | 类型化 `reported_environment` 是未认证调用方事实；精确不匹配可排除来源，缺失保留 unknown。不能修改宿主权限、模型配置或命名空间白名单；没有自动宿主事实认证。[合同](enhanced-recall.md) |
+| 结果反馈 / 部分 T14 | 独立 `codex-results` 只收集显式关联 use 的有界、最小输出元数据；保留历史任务/候选版本，持久分阶段 Event/related-use 投递与 inspect/retry。拒绝和不确定结果区分处理，不自动激活候选或提升权限；原生宿主接受尚未验收。[合同](codex-result-feedback.md) |
+| 动作与部署预览 / 部分 T09–T11、T24 | deny-only 参数检查、独立 policy epoch 与私有回执不是授权 token。部署路径仅词法预览，不验证真实文件系统或同步归属；不安装。Windows hook 预览与 checked writes 仍 unsupported，未知平台不输出可安装占位命令。[动作合同](codex-action-checks.md) · [路径预览](deployment-path-preview.md) · [Windows 核验](windows-hook-preview-assessment-2026-10-20.md) |
 
-## 历史阶段记录（以下保留原时点结论）
+已发布基线保留 Schema 8/9 任务与经验采用账本、Schema 10 增强召回、显式模型草稿、可选本地 Ollama 与持久派生缓存。当前 standalone 为 **43 个 MCP 工具**，核心工作空间允许 **36 个 scoped 工具**，拒绝其余 **7 个全局入口**；逐调用范围与撤销检查保持不变。[工具索引](tool-reference.md) · [经验反馈](experience-use-feedback.md) · [模型草稿](experience-model-drafts.md) · [本地 embedding](local-embeddings.md)
 
-以下件数、待验证项与基线仅描述当时版本；当前状态以上方恢复切片为准。
+## 尚未关闭的门禁
+
+1. 新精确提交的 Ubuntu/macOS/Windows 原生 CI，以及受云端 AF_UNIX 限制未通过的真实运行路径；本地结果见[整合验证](final-local-integration-validation-2026-10-20.md)，此前数字只属于各自记录。
+2. 新增刷新、动作检查、结果反馈在真实宿主中的接受与恢复语义，以及新架构自然语言闭环；输出或协议直调不是模型理解/采用证明。
+3. 真实 fresh-machine 安装、用户机器支持范围与回滚说明、正式发行包和人工 release approval。
+4. 经单独授权和预算约束的真实模型成功率、token 与成本实验；合成轮次/whitespace words 不等于 token 或真实收益。
+
+namespace 不是多用户认证；来源标签不证明真实性；全局 self-model 仍是 experimental，`experimental_non_authoritative` 结果不是完整 policy verdict。历史与成功回执 retain-all，未实现自动 retention/compaction。远程团队服务、后台自主写入及生产 SLA 不在当前声明内。
+
+## 验证记录与文档入口
+
+- [恢复版本（2026-10-19）](restored-feature-validation-2026-10-19.md)、[后续增量](follow-on-validation-2026-10-20.md)、[刷新](continuity-refresh-validation-2026-10-20.md)、[类型化环境](typed-environment-validation-2026-10-20.md)、[索引整合](index-integration-validation-2026-10-20.md)、[所有者/索引整合](owner-index-integration-validation-2026-10-20.md)：保留各自版本、范围与当时结论，不替代当前候选最终结果。
+- [测试指南](testing-guide-2026-03-24.md)、[原生宿主证据边界](codex-native-host-verification.md)、[评估方法](evaluation-methodology.md)。历史固定离线代理指标 8/10，不是当前真实模型效果证据。
+- [路线图](roadmap.md)、[唯一执行队列](plans/README.md)、[产品完成门](product/follow-up-reality-gates.md)、[早期历史状态](project-status-history-2026-10-09.md)。
+
+## 历史阶段记录
+
+以下折叠内容原样保留阶段叙述与链接，仅描述当时版本。里面的“当前”“待验证”和旧工具/schema 数量不覆盖上方当前状态，也不恢复旧阶段的执行优先权。独立历史验证文件未改写。
+
+<details>
+<summary>展开 2026-10-10 至 2026-10-16 的历史阶段证据</summary>
 
 本切片云端全量 929 项通过、14 项 AF_UNIX 环境阻断，无其他失败；精确提交 CI 待运行。详细范围见[第二切片验证记录](task-experience-validation-2026-10-16.md)。
 
@@ -187,26 +214,5 @@ workspace 生命周期、只读配置生成、原生 DB-only 恢复、有界 ref
 
 固定离线代理指标 8/10，两个语义改写 miss 原样保留；50 个额外 query variants 单独计数，不能算作 60 项独立任务。测量同时记录延迟退化、额外上下文字节和存储成本；shared-host 合成数据不是生产容量保证。真实模型任务成功率、token 和费用收益尚未测量。详见[评估方法](evaluation-methodology.md)。原始运行输出保留本地；已发布历史证据不改写身份或数值。
 
-## 部分实现 / 仍有限制
 
-- 显式 scoped snapshot 已实现；省略 namespace 的旧接口兼容路径仍未统一隔离。namespace 不是 authn/authz。
-- legacy 全局 self-model 治理仍是 experimental。`decide_with_snapshot` 只执行服务端 commitment gate，结果标记 `experimental_non_authoritative`，不是完整 policy verdict。
-- identity/commitment 已有有界追加版本、记录边界 effective-time、同范围来源 diff 与显式补偿回滚；迁移前有效时间保持 unknown，不提供回溯调度或跨范围全局快照。
-- 诊断是有界且不完整的可观察样本；缺失诊断不证明没有冲突，记录年龄不代表过期。
-- 索引损坏可触发字面读取 fallback，但不保证受损 trigger 下写入仍健康；检查与重建是全库工具。
-- 所有历史与成功回执 retain-all；没有自动 retention、tombstone 或 compaction。
-
-## 尚未关闭的产品与研究门
-
-1. 原M1冻结故事的完整对齐、新架构真实MCP客户端/自然语言闭环及fresh-machine安装证据；旧部署已有上方有限真实客户端样本，不再视为完全未测。
-2. 正式发行包与人工 release approval、实际用户机器支持范围及 rollback note；本地构建器和 CI wrapper 验证属于实现基础。
-3. 经单独授权和预算约束的真实同模型效果 / token / 成本实验。
-4. 更广泛 self-model 生命周期政策、语义检索，以及需独立需求和权限的 remote/team/autonomy。
-
-当前没有正式 Alpha/Beta/GA 或 production-ready 声明。启用 dashboard 仍只允许 loopback，daemon 仍 observe-only。
-
-## 文档权威与历史
-
-[路线图](roadmap.md)回答先后顺序，[唯一 active plan](plans/README.md)管理执行，[reality gates](product/follow-up-reality-gates.md)约束完成声明。
-
-旧 schema、工具数、验证基线和分支状态已完整保留在[带日期的历史状态](project-status-history-2026-10-09.md)。历史 70 项 baseline、schema5 / schema6 阶段报告都是当时证据；以最终核对解释其增量，不覆盖或美化旧结果。
+</details>

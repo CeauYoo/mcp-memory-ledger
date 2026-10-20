@@ -44,7 +44,8 @@ async fn read(
     if meta.try_get::<&str, _>("it").map_err(|_| corrupt())? != "text"
         || meta.try_get::<&str, _>("ft").map_err(|_| corrupt())? != "text"
         || !(1..=128).contains(&meta.try_get::<i64, _>("il").map_err(|_| corrupt())?)
-        || !(1..=256).contains(&meta.try_get::<i64, _>("fl").map_err(|_| corrupt())?)
+        || !(1..=MAX_REFERENCE_BYTES as i64)
+            .contains(&meta.try_get::<i64, _>("fl").map_err(|_| corrupt())?)
     {
         return Err(corrupt());
     }
@@ -154,27 +155,26 @@ impl SqliteStore {
                 "applicability revision conflict".into(),
             ));
         }
-        let (table, column, id) = if let Some(id) = d.reference.strip_prefix("claim:") {
-            ("claims", "claim_id", id)
-        } else {
-            (
-                "events",
-                "event_id",
-                d.reference.strip_prefix("event:").ok_or_else(corrupt)?,
-            )
+        let namespace =
+            crate::domain::types::Namespace::parse(d.namespace.clone()).map_err(|_| corrupt())?;
+        let owner = super::store::rows::owner_as_str(namespace.derived_owner());
+        let (prefix, id) = d.reference.split_once(':').ok_or_else(corrupt)?;
+        let sql = match prefix {
+            "claim" => {
+                "SELECT count(*) FROM claims WHERE namespace=?1 AND claim_id=?2 AND owner=?3"
+            }
+            "event" => {
+                "SELECT count(*) FROM events WHERE namespace=?1 AND event_id=?2 AND owner=?3"
+            }
+            "experience_episode" => {
+                "SELECT count(*) FROM experience_episodes WHERE namespace=?1 AND episode_id=?2 AND ?3=?3"
+            }
+            "experience_candidate" => {
+                "SELECT count(*) FROM experience_candidates WHERE namespace=?1 AND candidate_id=?2 AND ?3=?3"
+            }
+            _ => return Err(corrupt()),
         };
-        let owner = crate::domain::types::Namespace::parse(d.namespace.clone())
-            .map_err(|_| corrupt())?
-            .derived_owner();
-        let owner = match owner {
-            crate::domain::types::Owner::Self_ => "self",
-            crate::domain::types::Owner::User => "user",
-            crate::domain::types::Owner::World => "world",
-            crate::domain::types::Owner::Unknown => "unknown",
-        };
-        let sql =
-            format!("SELECT count(*) FROM {table} WHERE namespace=? AND {column}=? AND owner=?");
-        let exists: i64 = sqlx::query_scalar(&sql)
+        let exists: i64 = sqlx::query_scalar(sql)
             .bind(&d.namespace)
             .bind(id)
             .bind(owner)

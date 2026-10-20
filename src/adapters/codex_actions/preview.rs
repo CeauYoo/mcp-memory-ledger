@@ -483,17 +483,26 @@ mod tests {
     #[test]
     fn windows_and_unknown_platforms_are_unsupported() {
         for platform in [PreviewPlatform::Windows, PreviewPlatform::Unknown] {
-            assert!(
-                build_preview(
+            for command in [
+                r"C:\ledger.exe check",
+                r#""C:\Program Files\ledger.exe" "a&b" "%PATH%" "!var!""#,
+                "& 'C:\\ledger.exe' '$(Get-Item x)'",
+                "'/opt/ledger' 'hook'",
+                "WINDOWS_COMMAND_PREVIEW_UNSUPPORTED",
+            ] {
+                let error = build_preview(
                     b"{}",
-                    "C:\\ledger.exe check",
+                    command,
                     PreviewMetadata {
-                        platform,
+                        platform: platform.clone(),
+                        host_version: Some("codex-cli 0.159.2".into()),
+                        probe_evidence: vec!["caller claims supported".into()],
                         ..Default::default()
-                    }
+                    },
                 )
-                .is_err()
-            );
+                .unwrap_err();
+                assert!(error.to_string().contains("unsupported"));
+            }
         }
     }
     #[test]

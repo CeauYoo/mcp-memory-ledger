@@ -83,3 +83,8 @@ Windows lifecycle creation uses the current-user-only ACL helpers shared with th
 
 Lifecycle path guards use SQLx's decoded filename, so percent-encoded URLs cannot reserve one path and migrate another. Internal rehearsal URLs escape spaces, `%`, `?` and `#`; in-memory URLs (including `mode=memory`) are rejected. Unix backup publication also synchronizes the parent directory before any original-database migration; a sync failure leaves the backup available and aborts migration.
 Nested `file:` SQLite URI filenames are also refused: allowing SQLite to reinterpret another URI after SQLx decoding would make filesystem guards ambiguous. Pass an ordinary file-backed `sqlite://` URL instead.
+
+
+## Schema11 owner-channel provenance
+
+The explicit schema10→11 migration adds task owner event/provenance tables using the existing backup, restore rehearsal, canonical-schema and preserved-row checks. Ordinary opening rejects schema10 until migrated. Full database backup preserves owner history/replay; scoped export rejects affected namespaces. Doctor/open additionally reconciles owner events with requirement provenance and rejects detected inconsistencies. See [owner protocol](local-owner-task-attestation.md).

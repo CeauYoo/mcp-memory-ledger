@@ -11,6 +11,12 @@
   - `scripts/agent-llm-mm.ps1`
 - Do not mix platform-specific commands or examples into the main entry docs unless the task explicitly requires cross-platform restructuring.
 
+## Synthetic Test Fixture Paths
+
+- Canonicalize synthetic temporary roots before using production backup, registry or confinement helpers. macOS temporary paths may use the `/var` alias.
+- Use `support::sqlite_url::sqlite_file_url` for fixture SQLite URLs instead of hand-built POSIX strings; preserve Windows path handling.
+- Fix fixtures rather than weakening production symlink, permission or confinement checks. Cross-platform native CI remains required for native acceptance.
+
 ## Documentation Update Rule
 
 - After every completed task, update the corresponding documentation in the same task if the change affects behavior, capability boundaries, integration flow, configuration, startup flow, verification commands, examples, or collaboration rules.

@@ -1196,7 +1196,7 @@ async fn native_context_adapter_reads_live_task_and_stops_output_after_pause_or_
             panic!("native adapter {action} emitted invalid stdout: {error}")
         })
     };
-    assert_eq!(adapter("init", &[], None)["schema_version"], 1);
+    assert_eq!(adapter("init", &[], None)["schema_version"], 2);
     let selected = adapter(
         "select-default",
         &[
@@ -1257,9 +1257,70 @@ async fn native_context_adapter_reads_live_task_and_stops_output_after_pause_or_
         receipt["receipts"][0]["task_version"],
         context["task_version"]
     );
+    let refresh_flags = [
+        ("--registry", fixture.registry.as_os_str()),
+        ("--socket", fixture.socket.as_os_str()),
+        (
+            "--session-id",
+            std::ffi::OsStr::new("synthetic-native-session"),
+        ),
+    ];
+    let refresh = adapter("refresh", &refresh_flags, None);
+    assert_eq!(refresh["changed"], true);
+    assert_eq!(
+        refresh["context"]["mandatory_requirements"],
+        context["mandatory_requirements"]
+    );
+    assert_eq!(refresh["delivery"], "unverified");
+    let known = refresh["context_fingerprint"].as_str().unwrap();
+    let mut unchanged_flags = refresh_flags.to_vec();
+    unchanged_flags.push(("--known-context-fingerprint", std::ffi::OsStr::new(known)));
+    let unchanged = adapter("refresh", &unchanged_flags, None);
+    assert_eq!(unchanged["changed"], false);
+    assert!(unchanged["context"].is_null());
+    let refreshed_receipt = adapter("inspect", &inspect_flags, None);
+    assert_eq!(refreshed_receipt["receipts"][0]["output_kind"], "refresh");
+    let mut bytes = serde_json::to_vec(&unchanged).unwrap();
+    bytes.push(b'\n');
+    assert_eq!(
+        refreshed_receipt["receipts"][0]["output_digest"],
+        agent_llm_mm::adapters::codex_context::protocol::digest(&bytes)
+    );
+    // A cache hit cannot suppress complete lifecycle output on the next event.
+    let replay = adapter("hook", &hook_flags, Some(&input));
+    assert!(
+        replay["hookSpecificOutput"]["additionalContext"]
+            .as_str()
+            .unwrap()
+            .contains("SYNTHETIC_REQUIRED_CONSTRAINT")
+    );
+    let refresh_failure = || {
+        let output = Command::new(env!("CARGO_BIN_EXE_agent_llm_mm"))
+            .current_dir(&root)
+            .args(["codex-context", "refresh", "--state"])
+            .arg(&state)
+            .arg("--registry")
+            .arg(&fixture.registry)
+            .arg("--socket")
+            .arg(&fixture.socket)
+            .args([
+                "--session-id",
+                "synthetic-native-session",
+                "--known-context-fingerprint",
+                known,
+            ])
+            .output()
+            .unwrap();
+        assert!(!output.status.success());
+        assert!(
+            output.stdout.is_empty(),
+            "failed refresh must not emit cached requirements"
+        );
+    };
     let paused = bridge.call("revise_task", json!({"task_id":"adapter-task","request_id":"pause-adapter-task",
         "expected_version":1,"changes":[],"status":"paused","source":{"kind":"caller_reported","reference":null},"reason":"Pause before resuming"})).await;
     assert_eq!(content(&paused)["record"]["status"], "paused");
+    refresh_failure();
     let resume = json!({"session_id":"synthetic-native-session","cwd":root,"hook_event_name":"SessionStart","source":"resume"});
     let paused_output = adapter("hook", &hook_flags, Some(&resume));
     assert!(paused_output.get("systemMessage").is_some());
@@ -1272,7 +1333,7 @@ async fn native_context_adapter_reads_live_task_and_stops_output_after_pause_or_
     let paused_receipt = adapter("inspect", &inspect_flags, None);
     assert_eq!(paused_receipt["minimum_task_version_seen"], 2);
     let paused_receipts = paused_receipt["receipts"].as_array().unwrap();
-    assert_eq!(paused_receipts.len(), 2);
+    assert_eq!(paused_receipts.len(), 6);
     let observed_pause = paused_receipts
         .iter()
         .find(|r| r["task_version"] == 2)
@@ -1287,6 +1348,7 @@ async fn native_context_adapter_reads_live_task_and_stops_output_after_pause_or_
         "expected_version":2,"changes":[],"status":"active","source":{"kind":"caller_reported","reference":null},"reason":"Test independent registry revocation"})).await;
     assert_eq!(content(&active)["record"]["status"], "active");
     set_workspace_active(&fixture.registry, &fixture.a.id, false).unwrap();
+    refresh_failure();
     let revoked_output = adapter("hook", &hook_flags, Some(&resume));
     assert!(revoked_output.get("systemMessage").is_some());
     assert!(revoked_output.get("hookSpecificOutput").is_none());
@@ -1298,7 +1360,7 @@ async fn native_context_adapter_reads_live_task_and_stops_output_after_pause_or_
     // A received pause raises the version floor but is never marked output-written.
     // Registry revocation occurs before core access and adds no further receipt.
     let final_receipt = adapter("inspect", &inspect_flags, None);
-    assert_eq!(final_receipt["receipts"].as_array().unwrap().len(), 2);
+    assert_eq!(final_receipt["receipts"].as_array().unwrap().len(), 6);
     assert_eq!(final_receipt["minimum_task_version_seen"], 2);
     assert_eq!(final_receipt["receipts"][0]["stage"], "core_built");
     assert_eq!(final_receipt["delivery"], "unverified");

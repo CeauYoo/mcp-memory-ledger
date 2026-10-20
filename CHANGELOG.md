@@ -22,3 +22,9 @@ This project remains a local-first technical demo / MVP. This file records chang
 - Dashboard listener lifecycle fixes and recovery coverage. A port-takeover patch alone does not complete the shared-core architecture.
 
 These entries describe work under integration, not a claim that all tests or acceptance gates have passed. The new core initially targets macOS/Linux; Windows retains the existing standalone stdio path. Installed deployment, fresh-machine acceptance, live-model evaluation and release approval remain separate. See the [active plan](docs/plans/2026-07-10-product-replan.md) for scope and the [current status](docs/project-status.md) for evidence.
+
+## Local T14 candidate — 2026-10-20
+
+- Add explicit-use `codex-results` metadata capture, private bounded outbox, exact staged scoped-core feedback retries, inspect and patch-only POSIX configuration preview.
+- Preserve unknown outcome/authenticity and independent execution permissions. No hooks are installed and no candidates autoactivate.
+- Add contract/privacy/restart tests and an isolated real-core smoke prepared for CI. Cloud socket restrictions block that smoke before seeding; native-host result acceptance remains pending.

@@ -1,5 +1,9 @@
 # macOS 开发与接入指南
 
+## 部署前路径预览（部分实现）
+
+可使用 `codex-actions deployment-path-preview --target-platform macos` 并提供五类目录参数，见[完整合同](deployment-path-preview.md)。此步骤仅处理字符串，不读取或写入目标目录；unknown 不是通过。真实同步目录归属、权限及部署仍需独立确认，既有安装流程不变。
+
 ## 任务续接与 Codex 接入
 
 新增任务工具与 CLI 见[任务账本](task-ledger.md)，原生配置预览、项目默认任务选择和宿主支持边界见[Codex 适配器](codex-task-context-adapter.md)。Schema 8 需要显式迁移，先备份，不能自动替换运行中的数据库。预览不改全局配置；未取得真实宿主注入证据，不将输出成功称为接入成功。Windows 核心/任务 CLI 与 Windows hook 自动配置支持分别记录。
@@ -339,3 +343,7 @@ Run explicit `migrate` for an existing v5 database; inspect the generated backup
 ## Schema v7 global self-model versions
 
 Use explicit `migrate` for older databases, including v6; retain its backup anchor and restore only to a new path. Migration captures current projections as baseline0 with unknown historical effective time. `serve` and index repair never seed or repair the version ledger. See [version contract](self-model-versions.md) and [database operations](database-operations.md). Run `cargo test --test schema7_migration --test self_model_versions --test version_api` and the full/fmt/Clippy/status-sync gates against this source; prior schema6 counts remain historical. Versioned writes and reads reject projection drift. Local deterministic tests are not actual user-client or fresh-machine evidence.
+
+### Optional result-feedback candidate
+
+[Codex result feedback](codex-result-feedback.md) documents the new explicit-use, patch-only POSIX preview. It does not install hooks or modify native permissions. Run the focused tests in the [testing guide](testing-guide-2026-03-24.md#t14-result-feedback-candidate); direct-input smoke is not pinned native-host acceptance. Private fixture paths must be canonical (including macOS `/private/var` aliases).

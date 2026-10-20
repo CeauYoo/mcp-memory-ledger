@@ -1,5 +1,5 @@
 use super::{
-    preview, protocol, receipts,
+    deployment, preview, protocol, receipts,
     runtime::{self, Paths},
 };
 use crate::domain::action_check::{
@@ -35,12 +35,25 @@ pub async fn try_run_cli(args: &[String]) -> Result<bool> {
     }
     if action == "help" {
         println!(
-            "codex-actions policy-preview --state ABS --registry ABS --socket ABS --session-id ID\ncodex-actions init --receipts ABS\ncodex-actions inspect --receipts ABS --session-id ID\ncodex-actions preview --state ABS --registry ABS --socket ABS --policy ABS --receipts ABS --existing-config ABS --output NEW_ABS_DIR\ncodex-actions restore-preview --manifest ABS --current ABS --output NEW_ABS_DIR\ncodex-actions hook --state ABS --registry ABS --socket ABS --policy ABS --receipts ABS\ncodex-actions capabilities\nAll configuration outputs are candidates only. No installation or host trust changes. Windows preview unsupported."
+            "codex-actions policy-preview --state ABS --registry ABS --socket ABS --session-id ID\ncodex-actions init --receipts ABS\ncodex-actions inspect --receipts ABS --session-id ID\ncodex-actions preview --state ABS --registry ABS --socket ABS --policy ABS --receipts ABS --existing-config ABS --output NEW_ABS_DIR\ncodex-actions restore-preview --manifest ABS --current ABS --output NEW_ABS_DIR\ncodex-actions hook --state ABS --registry ABS --socket ABS --policy ABS --receipts ABS\ncodex-actions deployment-path-preview --target-platform macos|windows|linux --config-dir ABS --dependencies-dir ABS --database-dir ABS --logs-dir ABS --build-dir ABS\ncodex-actions capabilities\nAll configuration outputs are candidates only. No installation or host trust changes. Windows hook-command preview unsupported; deployment-path preview is lexical only on all targets."
         );
         return Ok(true);
     }
     let mut flags = parse_flags(&args[2..])?;
     match action {
+        "deployment-path-preview" => {
+            let platform =
+                deployment::TargetPlatform::parse(&take(&mut flags, "--target-platform")?)?;
+            let paths = [
+                take(&mut flags, "--config-dir")?,
+                take(&mut flags, "--dependencies-dir")?,
+                take(&mut flags, "--database-dir")?,
+                take(&mut flags, "--logs-dir")?,
+                take(&mut flags, "--build-dir")?,
+            ];
+            ensure!(flags.is_empty(), "unexpected flags");
+            write_json(&serde_json::to_value(deployment::inspect(platform, paths))?)?;
+        }
         "capabilities" => {
             ensure!(flags.is_empty(), "unexpected flags");
             write_json(&capabilities())?;
@@ -210,7 +223,7 @@ async fn hook(args: &[String]) -> Result<crate::domain::action_check::Decision> 
     .context("action check deadline exceeded")?
 }
 fn capabilities() -> Value {
-    json!({"contract":CONTRACT,"mode":"partial_parameter_checks_unverified_host","supported_parameter_contracts":["apply_patch_strict_subset"],"default_matcher":"^apply_patch$","shell_semantics":"unsupported","hosted_tools":"uncovered","write_stdin":"uncovered","hook_start_failure":"may_fail_open","native_permissions":"unchanged","execution_authorization":false,"race_free_path_confinement":false,"mount_and_sync_detection":"unverified","same_os_user_tamper_resistance":false,"actual_host_probe":"blocked_or_unverified","windows_command_preview":"unsupported","windows_checked_writes":"unsupported","installation":"not_performed"})
+    json!({"contract":CONTRACT,"mode":"partial_parameter_checks_unverified_host","supported_parameter_contracts":["apply_patch_strict_subset"],"default_matcher":"^apply_patch$","shell_semantics":"unsupported","hosted_tools":"uncovered","write_stdin":"uncovered","hook_start_failure":"may_fail_open","native_permissions":"unchanged","execution_authorization":false,"race_free_path_confinement":false,"mount_and_sync_detection":"unverified","same_os_user_tamper_resistance":false,"actual_host_probe":"blocked_or_unverified","deployment_path_preview":"target_platform_lexical_only", "windows_command_preview":"unsupported","windows_checked_writes":"unsupported","installation":"not_performed"})
 }
 fn parse_flags(args: &[String]) -> Result<BTreeMap<String, String>> {
     ensure!(args.len().is_multiple_of(2), "flags need values");

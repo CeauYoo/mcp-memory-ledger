@@ -71,6 +71,22 @@ fn size(context: &mut TaskResumeContext) -> Result<usize, AppError> {
         "task context size did not converge".into(),
     ))
 }
+fn selection_time_current(report: Option<&serde_json::Value>) -> bool {
+    let Some(selected) = report
+        .and_then(|report| report.get("selected"))
+        .and_then(|v| v.as_array())
+    else {
+        return false;
+    };
+    let now = chrono::Utc::now();
+    selected.iter().all(|item| {
+        let Some(declaration) = item.get("declared_applicability").filter(|v| !v.is_null()) else { return true; };
+        let Ok(declaration) = serde_json::from_value::<crate::domain::recall_applicability::RecallApplicability>(declaration.clone()) else { return false; };
+        if declaration.validate().is_err() { return false; }
+        if item.get("content_digest").and_then(|v| v.as_str()) != Some(declaration.content_digest.as_str()) { return true; }
+        matches!(declaration.time_state(now), Ok(state) if state != "expired" && state != "not_yet_valid")
+    })
+}
 /// Task+checkpoint are read atomically. Optional recall uses separate reads, whose
 /// exact versions are retained; the response never asserts a cross-store snapshot.
 pub async fn build_task_resume_context<
@@ -78,6 +94,7 @@ pub async fn build_task_resume_context<
         + MemoryReadStore
         + TextMemoryStore
         + ExperienceStore
+        + crate::ports::enhanced_memory_store::EnhancedMemoryStore
         + crate::ports::experience_use_store::ExperienceUseStore
         + Sync,
 >(
@@ -96,6 +113,14 @@ pub async fn build_task_resume_context<
     .await
 }
 
+/// Optional knowledge selected as one ranked set. No component grants authority.
+#[derive(serde::Serialize)]
+pub struct OptionalTaskSelection {
+    pub related_memory: Option<serde_json::Value>,
+    pub experiences: Vec<crate::domain::experience::ExperienceCandidate>,
+    pub episodes: Vec<crate::domain::experience::PersistedEpisode>,
+    pub report: Option<serde_json::Value>,
+}
 /// Host-selected optional retrieval callback. Mandatory task loading and final
 /// version recheck remain shared; request/MCP payloads cannot choose this policy.
 pub async fn build_task_resume_context_with_recall<S, F, Fut>(
@@ -109,11 +134,48 @@ where
         + MemoryReadStore
         + TextMemoryStore
         + ExperienceStore
+        + crate::ports::enhanced_memory_store::EnhancedMemoryStore
         + crate::ports::experience_use_store::ExperienceUseStore
         + Sync,
     F: FnOnce(super::build_task_context::BuildTaskContextInput) -> Fut,
     Fut: std::future::Future<Output = Result<serde_json::Value, AppError>>,
 {
+    build_task_resume_context_with_selection(
+        store,
+        r,
+        |input| async move {
+            Ok(OptionalTaskSelection {
+                related_memory: Some(recall(input).await?),
+                experiences: vec![],
+                episodes: vec![],
+                report: None,
+            })
+        },
+        optional_deadline_ms,
+        false,
+    )
+    .await
+}
+
+pub async fn build_task_resume_context_with_selection<S, F, Fut>(
+    store: &S,
+    r: TaskContextRequest,
+    recall: F,
+    optional_deadline_ms: u64,
+    unified: bool,
+) -> Result<TaskResumeContext, AppError>
+where
+    S: TaskStore
+        + MemoryReadStore
+        + TextMemoryStore
+        + ExperienceStore
+        + crate::ports::enhanced_memory_store::EnhancedMemoryStore
+        + crate::ports::experience_use_store::ExperienceUseStore
+        + Sync,
+    F: FnOnce(super::build_task_context::BuildTaskContextInput) -> Fut,
+    Fut: std::future::Future<Output = Result<OptionalTaskSelection, AppError>>,
+{
+    crate::domain::recall_applicability::validate_environment(&r.reported_environment)?;
     if !(100..=5000).contains(&optional_deadline_ms) {
         return invalid("optional recall deadline must be 100..5000 milliseconds");
     }
@@ -142,6 +204,7 @@ where
         complete: true,
         can_resume: snapshot.task.status == TaskStatus::Active && !mandatory.is_empty(),
         mandatory_requirement_count: mandatory.len(),
+        owner_provenance: snapshot.task.owner_provenance.clone(),
         mandatory_requirements: mandatory,
         checkpoint: snapshot.checkpoint,
         diagnostics: vec!["sources_and_verification_are_caller_reports_not_authenticated".into()],
@@ -150,6 +213,8 @@ where
         task_version_after_selection: None,
         related_memory: None,
         experiences: vec![],
+        episodes: vec![],
+        optional_selection: None,
         serialized_bytes: 0,
         max_bytes: r.max_bytes,
         authority: "knowledge_only_no_execution_authority",
@@ -219,20 +284,44 @@ where
         context
             .diagnostics
             .push("related_memory_and_experience_reads_are_not_one_atomic_snapshot".into());
-        let budget = (r.max_bytes - base - 1024) / 2;
+        let budget = (r.max_bytes - base - 1024) / if unified { 1 } else { 2 };
+        let mut query = snapshot.task.title.clone();
+        if unified {
+            for requirement in &context.mandatory_requirements {
+                if query.len() + 1 + requirement.text.len() <= 4096 {
+                    query.push('\n');
+                    query.push_str(&requirement.text);
+                } else {
+                    context
+                        .diagnostics
+                        .push("optional_query_bounded_mandatory_requirements_unchanged".into());
+                    break;
+                }
+            }
+        }
         if budget >= 1024 {
+            let recall_deadline = if unified {
+                deadline - std::time::Duration::from_millis((optional_deadline_ms / 5).min(200))
+            } else {
+                deadline
+            };
             match tokio::time::timeout_at(
-                deadline,
+                recall_deadline,
                 recall(super::build_task_context::BuildTaskContextInput {
                     namespace,
-                    query: snapshot.task.title.clone(),
+                    query,
                     limit: 8,
                     max_bytes: budget,
                 }),
             )
             .await
             {
-                Ok(Ok(memory)) => context.related_memory = Some(memory),
+                Ok(Ok(selection)) => {
+                    context.related_memory = selection.related_memory;
+                    context.experiences = selection.experiences;
+                    context.episodes = selection.episodes;
+                    context.optional_selection = selection.report;
+                }
                 Ok(Err(_)) => context
                     .diagnostics
                     .push("optional_related_memory_unavailable".into()),
@@ -240,34 +329,36 @@ where
                     .diagnostics
                     .push("optional_recall_deadline_exceeded_mandatory_retained".into()),
             }
-            match tokio::time::timeout_at(
-                deadline,
-                super::experience::recall_candidates(
-                    store,
-                    RecallCandidatesRequest {
-                        namespace: r.namespace.clone(),
-                        query: snapshot.task.title,
-                        limit: 8,
-                        max_bytes: budget.min(65536),
-                    },
-                ),
-            )
-            .await
-            {
-                Ok(Ok(experiences)) => {
-                    if experiences.truncated {
-                        context
-                            .diagnostics
-                            .push("optional_experiences_truncated".into());
+            if !unified {
+                match tokio::time::timeout_at(
+                    deadline,
+                    super::experience::recall_candidates(
+                        store,
+                        RecallCandidatesRequest {
+                            namespace: r.namespace.clone(),
+                            query: snapshot.task.title,
+                            limit: 8,
+                            max_bytes: budget.min(65536),
+                        },
+                    ),
+                )
+                .await
+                {
+                    Ok(Ok(experiences)) => {
+                        if experiences.truncated {
+                            context
+                                .diagnostics
+                                .push("optional_experiences_truncated".into());
+                        }
+                        context.experiences = experiences.candidates;
                     }
-                    context.experiences = experiences.candidates;
+                    Ok(Err(_)) => context
+                        .diagnostics
+                        .push("optional_experiences_unavailable".into()),
+                    Err(_) => context
+                        .diagnostics
+                        .push("optional_experiences_deadline_exceeded_mandatory_retained".into()),
                 }
-                Ok(Err(_)) => context
-                    .diagnostics
-                    .push("optional_experiences_unavailable".into()),
-                Err(_) => context
-                    .diagnostics
-                    .push("optional_experiences_deadline_exceeded_mandatory_retained".into()),
             }
         }
         // Optional experience is a read-time suggestion, never an applicability proof.
@@ -275,23 +366,39 @@ where
             "experience_applicability_unknown_review_conditions_and_limitations_before_adoption"
                 .into(),
         );
+        let selected_experience_count = context.experiences.len();
         let mut revalidated = Vec::new();
         for selected in std::mem::take(&mut context.experiences) {
-            let current = tokio::time::timeout_at(
-                deadline,
-                super::experience::get_candidate(
-                    store,
-                    crate::domain::experience::GetCandidateRequest {
-                        namespace: r.namespace.clone(),
-                        candidate_id: selected.candidate_id.clone(),
-                        version: None,
-                    },
-                ),
-            )
+            let current = tokio::time::timeout_at(deadline, async {
+                if unified {
+                    let source = store
+                        .hydrate_selection_source(
+                            crate::domain::types::MemoryScope::for_namespace(scope(&r.namespace)?),
+                            &format!("experience_candidate:{}", selected.candidate_id),
+                        )
+                        .await?;
+                    Ok(match source {
+                        Some(super::selection_source::SelectionSource::Experience(candidate)) => {
+                            Some(candidate)
+                        }
+                        _ => None,
+                    })
+                } else {
+                    super::experience::get_candidate(
+                        store,
+                        crate::domain::experience::GetCandidateRequest {
+                            namespace: r.namespace.clone(),
+                            candidate_id: selected.candidate_id.clone(),
+                            version: None,
+                        },
+                    )
+                    .await
+                }
+            })
             .await;
             match current {
                 Ok(Ok(Some(current)))
-                    if current.version == selected.version
+                    if current == selected
                         && current.status
                             == crate::domain::experience::ExperienceStatus::Active =>
                 {
@@ -302,26 +409,41 @@ where
                     .push("experience_invalidated_during_selection_omitted".into()),
             }
         }
+        if revalidated.len() != selected_experience_count && unified {
+            context.optional_selection = None;
+            context.related_memory = None;
+            context.episodes.clear();
+            revalidated.clear();
+            context
+                .diagnostics
+                .push("unified_selection_invalidated_optional_bundle_omitted".into());
+        }
         context.experiences = revalidated;
-        match tokio::time::timeout_at(deadline, get_task_snapshot(store, &r.namespace, &r.task_id))
-            .await
+        if unified
+            && (context.related_memory.is_some()
+                || !context.episodes.is_empty()
+                || !context.experiences.is_empty())
         {
-            Ok(Ok(Some(latest))) => {
-                context.task_version_after_selection = Some(latest.task.version);
-                if latest.task.version != context.task_version
-                    || latest.checkpoint.as_ref().map(|c| c.sequence)
-                        != context.checkpoint.as_ref().map(|c| c.sequence)
-                {
-                    context.complete = false;
-                    context.can_resume = false;
-                    context.diagnostics.push(
-                        "stale_task_or_checkpoint_changed_during_selection_rebuild_context".into(),
-                    );
-                }
-            }
-            _ => {
-                context.can_resume = false;
-                context.diagnostics.push("selection_recheck_unavailable_mandatory_snapshot_retained_recheck_before_resume".into());
+            let expected = context
+                .optional_selection
+                .as_ref()
+                .and_then(|v| v.get("source_generation"))
+                .and_then(|v| v.as_str());
+            let actual = tokio::time::timeout_at(
+                deadline,
+                store.selection_source_generation(
+                    crate::domain::types::MemoryScope::for_namespace(scope(&r.namespace)?),
+                ),
+            )
+            .await;
+            if !matches!(actual, Ok(Ok(ref generation)) if Some(generation.as_str()) == expected) {
+                context.related_memory = None;
+                context.episodes.clear();
+                context.experiences.clear();
+                context.optional_selection = None;
+                context.diagnostics.push(
+                    "unified_sources_changed_or_recheck_unavailable_optional_bundle_omitted".into(),
+                );
             }
         }
     } else {
@@ -329,7 +451,71 @@ where
             .diagnostics
             .push("optional_recall_skipped_for_required_task_budget".into());
     }
+    // Run this even when the optional selection budget was exhausted.
+    // Mandatory task/checkpoint freshness is the last awaited check.
+    // Optional knowledge remains explicitly non-atomic, never authority.
+    match tokio::time::timeout_at(deadline, get_task_snapshot(store, &r.namespace, &r.task_id))
+        .await
+    {
+        Ok(Ok(Some(latest))) => {
+            context.task_version_after_selection = Some(latest.task.version);
+            if latest.task.version != context.task_version
+                || latest.checkpoint.as_ref().map(|c| c.sequence)
+                    != context.checkpoint.as_ref().map(|c| c.sequence)
+            {
+                context.complete = false;
+                context.can_resume = false;
+                context.diagnostics.push(
+                    "stale_task_or_checkpoint_changed_during_selection_rebuild_context".into(),
+                );
+            }
+        }
+        _ => {
+            context.can_resume = false;
+            context.diagnostics.push(
+                "selection_recheck_unavailable_mandatory_snapshot_retained_recheck_before_resume"
+                    .into(),
+            );
+        }
+    }
+    // Time can change without a source write. This final check is after all awaits.
+    if unified
+        && (context.related_memory.is_some()
+            || !context.episodes.is_empty()
+            || !context.experiences.is_empty())
+        && !selection_time_current(context.optional_selection.as_ref())
+    {
+        context.related_memory = None;
+        context.experiences.clear();
+        context.episodes.clear();
+        context.optional_selection = None;
+        context.diagnostics.push(
+            "unified_applicability_changed_during_final_recheck_optional_bundle_omitted".into(),
+        );
+    }
     // Omit whole optional blocks, never individual hard constraints.
+    if unified && size(&mut context)? > r.max_bytes {
+        context.related_memory = None;
+        context.experiences.clear();
+        context.episodes.clear();
+        context.optional_selection = None;
+        context
+            .diagnostics
+            .push("unified_optional_bundle_omitted_byte_budget_mandatory_retained".into());
+    }
+    if size(&mut context)? > r.max_bytes && !context.episodes.is_empty() {
+        context.episodes.clear();
+        context.optional_selection = None;
+        context
+            .diagnostics
+            .push("optional_episodes_and_selection_report_omitted_byte_budget".into());
+    }
+    if size(&mut context)? > r.max_bytes && context.optional_selection.is_some() {
+        context.optional_selection = None;
+        context
+            .diagnostics
+            .push("optional_selection_report_omitted_byte_budget".into());
+    }
     if size(&mut context)? > r.max_bytes && !context.experiences.is_empty() {
         context.experiences.clear();
         context

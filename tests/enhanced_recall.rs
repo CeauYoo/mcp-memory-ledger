@@ -41,6 +41,7 @@ impl Fixture {
             query: query.into(),
             limit: 20,
             max_bytes: 16384,
+            reported_environment: Default::default(),
         }
     }
 }
@@ -169,6 +170,7 @@ async fn authority_expiry_replay_corruption_and_missing_table_are_explicit() {
             valid_until: Some("2020-01-01T00:00:00Z".into()),
             conditions: vec![],
             environment: vec![],
+            typed_environment: Default::default(),
         },
     };
     let a = f
@@ -381,7 +383,7 @@ async fn schema9_migration_adds_no_invented_validity_and_preserves_sources() {
     use agent_llm_mm::adapters::sqlite::{CURRENT_DATABASE_SCHEMA_VERSION, migrate_database};
     let f = Fixture::new().await;
     f.event("a", "project/a", "原始来源 unchanged").await;
-    sqlx::raw_sql("DROP TABLE recall_applicability; DELETE FROM schema_migrations WHERE version=10; PRAGMA user_version=9;").execute(&f.pool).await.unwrap();
+    sqlx::raw_sql("DROP TABLE task_owner_provenance; DROP TABLE task_owner_events; DROP TABLE recall_applicability; DELETE FROM schema_migrations WHERE version>=10; PRAGMA user_version=9;").execute(&f.pool).await.unwrap();
     let before: String = sqlx::query_scalar("SELECT summary FROM events WHERE event_id='a'")
         .fetch_one(&f.pool)
         .await
@@ -424,6 +426,7 @@ async fn scoped_export_blocks_only_relevant_new_authority() {
                 valid_until: None,
                 conditions: vec!["only during tests".into()],
                 environment: vec![],
+                typed_environment: Default::default(),
             },
         })
         .await
@@ -440,4 +443,257 @@ async fn scoped_export_blocks_only_relevant_new_authority() {
             .await
             .is_ok()
     );
+}
+
+#[tokio::test]
+async fn typed_environment_filters_only_known_mismatch_and_preserves_unknown() {
+    use agent_llm_mm::domain::recall_applicability::{EnvironmentMatch, EnvironmentValue};
+    let f = Fixture::new().await;
+    f.event("typed", "project/a", "coffee").await;
+    let before = recall_memory_enhanced::execute(&f.store, f.input("coffee"), &Default::default())
+        .await
+        .unwrap();
+    let request = DeclareRecallApplicabilityRequest {
+        request_id: "typed-declaration".into(),
+        expected_revision: 0,
+        declaration: RecallApplicability {
+            namespace: "project/a".into(),
+            reference: "event:typed".into(),
+            content_digest: before.records[0].content_digest.clone(),
+            valid_from: None,
+            valid_until: None,
+            conditions: vec!["human review required".into()],
+            environment: vec![],
+            typed_environment: [
+                ("os".into(), EnvironmentValue::Text("linux".into())),
+                ("offline".into(), EnvironmentValue::Boolean(true)),
+            ]
+            .into(),
+        },
+    };
+    f.store
+        .declare_recall_applicability(request.clone())
+        .await
+        .unwrap();
+    // Exact replay remains idempotent with the new optional declaration.
+    assert_eq!(
+        f.store
+            .declare_recall_applicability(request)
+            .await
+            .unwrap()
+            .revision,
+        1
+    );
+    let unknown = recall_memory_enhanced::execute(&f.store, f.input("coffee"), &Default::default())
+        .await
+        .unwrap();
+    assert_eq!(
+        unknown.records[0].environment_match,
+        EnvironmentMatch::Unknown
+    );
+    let mut input = f.input("coffee");
+    input.reported_environment = [
+        ("os".into(), EnvironmentValue::Text("linux".into())),
+        ("offline".into(), EnvironmentValue::Boolean(true)),
+    ]
+    .into();
+    let matched = recall_memory_enhanced::execute(&f.store, input.clone(), &Default::default())
+        .await
+        .unwrap();
+    assert_eq!(
+        matched.records[0].environment_match,
+        EnvironmentMatch::MatchesReportedValues
+    );
+    // A typed equality is not proof of natural-language applicability or authorization.
+    assert_eq!(
+        matched.records[0].applicability,
+        "declared_conditions_not_evaluated"
+    );
+    input
+        .reported_environment
+        .insert("os".into(), EnvironmentValue::Text("windows".into()));
+    let mismatch = recall_memory_enhanced::execute(&f.store, input, &Default::default())
+        .await
+        .unwrap();
+    assert!(mismatch.records.is_empty());
+    assert_eq!(mismatch.applicability_omissions, 1);
+}
+
+struct ChangeDeclarationDuringEmbedding<'a> {
+    store: &'a SqliteStore,
+    request: DeclareRecallApplicabilityRequest,
+    profile: EmbeddingProfile,
+    changed: std::sync::atomic::AtomicBool,
+}
+#[async_trait]
+impl EmbeddingPort for ChangeDeclarationDuringEmbedding<'_> {
+    fn profile(&self) -> &EmbeddingProfile {
+        &self.profile
+    }
+    async fn embed(
+        &self,
+        _: &Namespace,
+        _: EmbeddingPurpose,
+        texts: &[String],
+    ) -> Result<Vec<Vec<f32>>, AppError> {
+        if !self.changed.swap(true, std::sync::atomic::Ordering::SeqCst) {
+            self.store
+                .declare_recall_applicability(self.request.clone())
+                .await?;
+        }
+        Ok(texts.iter().map(|_| vec![1.0, 0.0]).collect())
+    }
+}
+#[tokio::test]
+async fn typed_environment_rechecks_updated_declarations_after_embedding() {
+    use agent_llm_mm::domain::recall_applicability::EnvironmentValue;
+    for stale_digest in [false, true] {
+        let f = Fixture::new().await;
+        f.event("race", "project/a", "coffee").await;
+        let before =
+            recall_memory_enhanced::execute(&f.store, f.input("coffee"), &Default::default())
+                .await
+                .unwrap();
+        let mut request = DeclareRecallApplicabilityRequest {
+            request_id: "race-v1".into(),
+            expected_revision: 0,
+            declaration: RecallApplicability {
+                namespace: "project/a".into(),
+                reference: "event:race".into(),
+                content_digest: before.records[0].content_digest.clone(),
+                valid_from: None,
+                valid_until: None,
+                conditions: vec![],
+                environment: vec![],
+                typed_environment: [("os".into(), EnvironmentValue::Text("linux".into()))].into(),
+            },
+        };
+        f.store
+            .declare_recall_applicability(request.clone())
+            .await
+            .unwrap();
+        request.request_id = "race-v2".into();
+        request.expected_revision = 1;
+        request
+            .declaration
+            .typed_environment
+            .insert("os".into(), EnvironmentValue::Text("windows".into()));
+        if stale_digest {
+            request.declaration.content_digest = "0".repeat(64);
+        }
+        let port = ChangeDeclarationDuringEmbedding {
+            store: &f.store,
+            request,
+            changed: false.into(),
+            profile: EmbeddingProfile {
+                model: "synthetic".into(),
+                model_digest: "a".repeat(64),
+                dimensions: 2,
+                document_prefix: String::new(),
+                query_prefix: String::new(),
+            },
+        };
+        let mut input = f.input("coffee");
+        input.reported_environment = [("os".into(), EnvironmentValue::Text("linux".into()))].into();
+        let result = recall_memory_enhanced::execute_with_embedding(
+            &f.store,
+            input,
+            &Default::default(),
+            Some(&port),
+        )
+        .await
+        .unwrap();
+        assert!(port.changed.load(std::sync::atomic::Ordering::SeqCst));
+        if stale_digest {
+            assert_eq!(result.records.len(), 1);
+            assert_eq!(
+                result.records[0].environment_match,
+                agent_llm_mm::domain::recall_applicability::EnvironmentMatch::NotDeclared
+            );
+            assert_eq!(
+                result.records[0].applicability,
+                "declaration_for_other_content_digest_unknown"
+            );
+            assert_eq!(result.applicability_omissions, 0);
+        } else {
+            assert!(result.records.is_empty());
+            assert_eq!(result.applicability_omissions, 1);
+        }
+        assert_eq!(result.unavailable_after_retrieval, 0);
+    }
+}
+
+#[tokio::test]
+async fn typed_mismatch_never_reaches_document_embedding() {
+    use agent_llm_mm::domain::recall_applicability::EnvironmentValue;
+    let f = Fixture::new().await;
+    f.event("blocked", "project/a", "foreign coffee").await;
+    f.event("allowed", "project/a", "coffee").await;
+    let before = recall_memory_enhanced::execute(&f.store, f.input("coffee"), &Default::default())
+        .await
+        .unwrap();
+    let digest = before
+        .records
+        .iter()
+        .find(|h| h.reference == "event:blocked")
+        .unwrap()
+        .content_digest
+        .clone();
+    f.store
+        .declare_recall_applicability(DeclareRecallApplicabilityRequest {
+            request_id: "blocked-env".into(),
+            expected_revision: 0,
+            declaration: RecallApplicability {
+                namespace: "project/a".into(),
+                reference: "event:blocked".into(),
+                content_digest: digest,
+                valid_from: None,
+                valid_until: None,
+                conditions: vec![],
+                environment: vec![],
+                typed_environment: [("os".into(), EnvironmentValue::Text("windows".into()))].into(),
+            },
+        })
+        .await
+        .unwrap();
+    let mut input = f.input("coffee");
+    input.reported_environment = [("os".into(), EnvironmentValue::Text("linux".into()))].into();
+    // Fake rejects any input text containing "foreign", proving exclusion before transmission.
+    let port = Fake {
+        profile: EmbeddingProfile {
+            dimensions: 2,
+            ..Default::default()
+        },
+    };
+    let result = recall_memory_enhanced::execute_with_embedding(
+        &f.store,
+        input,
+        &Default::default(),
+        Some(&port),
+    )
+    .await
+    .unwrap();
+    assert_eq!(result.records.len(), 1);
+    assert_eq!(result.records[0].reference, "event:allowed");
+    assert_eq!(result.applicability_omissions, 1);
+}
+
+#[tokio::test]
+async fn literal_pre_typed_environment_persisted_request_replays() {
+    let f = Fixture::new().await;
+    let payload = format!(
+        r#"{{"namespace":"project/a","reference":"event:old","content_digest":"{}","valid_from":null,"valid_until":null,"conditions":[],"environment":[]}}"#,
+        "a".repeat(64)
+    );
+    let request =
+        format!(r#"{{"request_id":"old","expected_revision":0,"declaration":{payload}}}"#);
+    sqlx::query("INSERT INTO recall_applicability(namespace,reference,revision,request_id,request_json,payload_json) VALUES('project/a','event:old',1,'old',?,?)")
+        .bind(&request).bind(&payload).execute(&f.pool).await.unwrap();
+    let replay = f
+        .store
+        .declare_recall_applicability(serde_json::from_str(&request).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(replay.revision, 1);
+    assert!(replay.declaration.typed_environment.is_empty());
 }

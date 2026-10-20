@@ -23,4 +23,22 @@ pub trait EnhancedMemoryStore {
         scope: MemoryScope,
         reference: &str,
     ) -> Result<Option<SearchMemoryRecord>, AppError>;
+    /// Typed unified source hydration, including current-active experiences. Whole provenance only.
+    async fn hydrate_selection_source(
+        &self,
+        scope: MemoryScope,
+        reference: &str,
+    ) -> Result<Option<crate::application::selection_source::SelectionSource>, AppError> {
+        let _ = (scope, reference);
+        Err(AppError::Message(
+            "typed selection hydration unsupported".into(),
+        ))
+    }
+    /// Opaque conservative source revision; not a truth or authority token.
+    async fn selection_source_generation(&self, scope: MemoryScope) -> Result<String, AppError> {
+        let _ = scope;
+        Err(AppError::Message(
+            "selection generation validation unsupported".into(),
+        ))
+    }
 }

@@ -106,6 +106,7 @@ fn checkpoint() -> RecordTaskCheckpointRequest {
 }
 fn context(max_bytes: usize) -> TaskContextRequest {
     TaskContextRequest {
+        reported_environment: Default::default(),
         namespace: "project/alpha".into(),
         task_id: "task-one".into(),
         max_bytes,
@@ -362,7 +363,7 @@ async fn context_snapshot_truth_and_size_are_explicit() {
 async fn schema7_requires_explicit_migration_and_schema8_preserves_records() {
     let f = Fixture::new().await;
     let pool = SqlitePool::connect(&f.url).await.unwrap();
-    sqlx::raw_sql("DROP TABLE recall_applicability;DROP TABLE experience_use_events;DROP TABLE experience_uses;DROP TABLE task_checkpoint_sources;DROP TABLE task_checkpoints;DROP TABLE task_requirements;DROP TABLE task_revisions;DROP TABLE task_heads;DELETE FROM schema_migrations WHERE version>=8;PRAGMA user_version=7;").execute(&pool).await.unwrap();
+    sqlx::raw_sql("DROP TABLE task_owner_provenance; DROP TABLE task_owner_events; DROP TABLE recall_applicability;DROP TABLE experience_use_events;DROP TABLE experience_uses;DROP TABLE task_checkpoint_sources;DROP TABLE task_checkpoints;DROP TABLE task_requirements;DROP TABLE task_revisions;DROP TABLE task_heads;DELETE FROM schema_migrations WHERE version>=8;PRAGMA user_version=7;").execute(&pool).await.unwrap();
     assert!(open_current_database(&f.url).await.is_err());
     let report = migrate_database(&f.url).await.unwrap();
     assert_eq!(report.schema_version, Some(CURRENT_DATABASE_SCHEMA_VERSION));
@@ -465,9 +466,12 @@ async fn full_database_backup_restore_preserves_tasks_checkpoints_and_receipts()
     task::record_task_checkpoint(&f.store, checkpoint())
         .await
         .unwrap();
-    let original = f._dir.path().join("tasks.sqlite");
-    let backup = f._dir.path().join("backup.sqlite");
-    let restored = f._dir.path().join("restored.sqlite");
+    // macOS temporary roots may be reached through /var -> /private/var.
+    // Canonicalize this synthetic fixture; keep production symlink rejection.
+    let root = std::fs::canonicalize(f._dir.path()).unwrap();
+    let original = root.join("tasks.sqlite");
+    let backup = root.join("backup.sqlite");
+    let restored = root.join("restored.sqlite");
     agent_llm_mm::support::database_backup::transfer_database("backup", &original, &backup)
         .await
         .unwrap();
@@ -614,6 +618,7 @@ async fn optional_recall_deadline_preserves_mandatory_requirements() {
     let result = task::build_task_resume_context_with_recall(
         &f.store,
         TaskContextRequest {
+            reported_environment: Default::default(),
             namespace: "project/alpha".into(),
             task_id: "task-one".into(),
             max_bytes: 16384,

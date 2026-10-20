@@ -19,7 +19,7 @@ pub async fn try_run_cli(args: &[String]) -> Result<bool> {
     let action = args.get(1).map(String::as_str).unwrap_or("help");
     if action == "help" {
         println!(
-            "codex-context init --state ABS_PATH\ncodex-context bind --state ABS_PATH --registry ABS_PATH --socket ABS_PATH --root ABS_ROOT --workspace-id ID --task-id ID --session-id ID\ncodex-context select-default (same flags as bind, without --session-id)\ncodex-context inspect --state ABS_PATH --session-id ID\ncodex-context preview --state ABS_PATH --registry ABS_PATH --socket ABS_PATH [--max-bytes 8192]\ncodex-context hook (same flags as preview; public hook JSON on stdin)\ncodex-context capabilities (reports installed CLI version only; does not enable hooks)"
+            "codex-context init --state ABS_PATH\ncodex-context migrate --state ABS_PATH\ncodex-context refresh --state ABS_PATH --registry ABS_PATH --socket ABS_PATH --session-id ID [--known-context-fingerprint SHA256] [--max-bytes 8192]\ncodex-context bind --state ABS_PATH --registry ABS_PATH --socket ABS_PATH --root ABS_ROOT --workspace-id ID --task-id ID --session-id ID\ncodex-context select-default (same flags as bind, without --session-id)\ncodex-context inspect --state ABS_PATH --session-id ID\ncodex-context preview --state ABS_PATH --registry ABS_PATH --socket ABS_PATH [--max-bytes 8192]\ncodex-context hook (same flags as preview; public hook JSON on stdin)\ncodex-context capabilities (reports installed CLI version only; does not enable hooks)"
         );
         return Ok(true);
     }
@@ -36,7 +36,18 @@ pub async fn try_run_cli(args: &[String]) -> Result<bool> {
         "init" => {
             ensure!(flags.is_empty(), "unexpected init flag");
             State::initialize(&state_path).await?;
-            println!("{}", json!({"initialized":state_path,"schema_version":1}));
+            println!(
+                "{}",
+                json!({"initialized":state_path,"schema_version":super::state::SCHEMA_VERSION})
+            );
+        }
+        "migrate" => {
+            ensure!(flags.is_empty(), "unexpected migrate flag");
+            State::migrate(&state_path).await?;
+            println!(
+                "{}",
+                json!({"schema_version":super::state::SCHEMA_VERSION,"ledger_database_changed":false})
+            );
         }
         "inspect" => {
             let session = take(&mut flags, "--session-id")?;
@@ -91,7 +102,7 @@ pub async fn try_run_cli(args: &[String]) -> Result<bool> {
                 json!({"selected":binding,"scope":action,"delivery":"unverified","global_config_changed":false})
             );
         }
-        "preview" | "hook" => {
+        "preview" | "hook" | "refresh" => {
             let registry = absolute(take(&mut flags, "--registry")?)?;
             let socket = absolute(take(&mut flags, "--socket")?)?;
             let max_bytes = protocol::budget(
@@ -101,6 +112,17 @@ pub async fn try_run_cli(args: &[String]) -> Result<bool> {
                     .transpose()?
                     .unwrap_or(protocol::DEFAULT_CONTEXT_BYTES),
             )?;
+            let refresh = if action == "refresh" {
+                let session = take(&mut flags, "--session-id")?;
+                protocol::identifier(&session)?;
+                let known = flags.remove("--known-context-fingerprint");
+                if let Some(value) = &known {
+                    protocol::fingerprint(value)?;
+                }
+                Some((session, known))
+            } else {
+                None
+            };
             ensure!(flags.is_empty(), "unexpected adapter flag");
             if action == "preview" {
                 let preview = preview(
@@ -111,6 +133,24 @@ pub async fn try_run_cli(args: &[String]) -> Result<bool> {
                     max_bytes,
                 )?;
                 println!("{}", serde_json::to_string_pretty(&preview)?);
+            } else if let Some((session, known)) = refresh {
+                // Explicit controller interface, not an invented native hook.
+                // Errors return nonzero; no cached context or unchanged success.
+                let input = HookInput {
+                    session_id: session,
+                    cwd: std::env::current_dir()?,
+                    hook_event_name: "ControllerRefresh".into(),
+                    source: None,
+                };
+                run_context(
+                    &state_path,
+                    &registry,
+                    &socket,
+                    max_bytes,
+                    input,
+                    Some(known.as_deref()),
+                )
+                .await?;
             } else {
                 // Failure only reports degraded context. It does not claim to gate
                 // tools or change native host approval/sandbox behavior.
@@ -140,6 +180,18 @@ async fn run_hook(
         .read_to_end(&mut bytes)?;
     let input = HookInput::parse(&bytes)?;
     drop(bytes);
+    run_context(state_path, registry, socket, max_bytes, input, None).await
+}
+
+// Outer Some selects the explicit refresh protocol; inner None means first read.
+async fn run_context(
+    state_path: &Path,
+    registry: &Path,
+    socket: &Path,
+    max_bytes: usize,
+    input: HookInput,
+    refresh: Option<Option<&str>>,
+) -> Result<()> {
     let cwd = input.cwd.canonicalize().context("hook cwd unavailable")?;
     let state = State::open(state_path).await?;
     let _session_lock = super::state::lock_session(state_path, &input.session_id)?;
@@ -194,12 +246,23 @@ async fn run_hook(
         None
     };
     // Validate scope, task status, freshness and base budget before any artifact IO.
-    protocol::render(&input, &binding, &context, max_bytes, minimum)?;
+    match refresh {
+        Some(known) => {
+            protocol::render_refresh(&binding, &context, max_bytes, minimum, known)?;
+        }
+        None => {
+            protocol::render(&input, &binding, &context, max_bytes, minimum)?;
+        }
+    }
     let observations = super::artifacts::observe(&binding.workspace_root, &context);
     if !observations.is_empty() {
         context["adapter_artifact_observations"] = serde_json::to_value(observations)?;
     }
-    let output = protocol::render(&input, &binding, &context, max_bytes, minimum)?;
+    let output = match refresh {
+        Some(known) => protocol::render_refresh(&binding, &context, max_bytes, minimum, known)?,
+        None => protocol::render(&input, &binding, &context, max_bytes, minimum)?,
+    };
+    let fingerprint = protocol::context_fingerprint(&binding, &context)?;
     // A default only becomes a session binding after fresh context validation.
     if !existing {
         state.bind(&binding).await?;
@@ -219,13 +282,36 @@ async fn run_hook(
                 .await?
         }
     };
-    write_output(&output).map_err(OutputError)?;
+    persist_and_write_output(
+        &state,
+        &receipt,
+        &output,
+        &fingerprint,
+        if refresh.is_some() { "refresh" } else { "hook" },
+        write_output,
+    )
+    .await
+}
+
+pub(super) async fn persist_and_write_output(
+    state: &State,
+    receipt: &str,
+    output: &Value,
+    fingerprint: &str,
+    kind: &str,
+    write: impl FnOnce(&Value) -> Result<()>,
+) -> Result<()> {
+    state
+        .prepare_output(receipt, output, fingerprint, kind)
+        .await?;
+    write(output).map_err(OutputError)?;
     // If persistence fails after stdout, never emit a second JSON document.
-    if let Err(error) = state.output_written(&receipt).await {
+    if let Err(error) = state.output_written(receipt).await {
         eprintln!("codex-context output written, receipt update unconfirmed: {error}");
     }
     Ok(())
 }
+
 async fn fetch(socket: &Path, binding: &Binding, max_bytes: usize) -> Result<Value> {
     let executable = std::env::current_exe()?;
     let socket = socket.to_owned();
@@ -293,29 +379,54 @@ fn preview(
         "--max-bytes".into(),
         max_bytes.to_string(),
     ];
-    let posix = args
-        .iter()
-        .map(|a| format!("'{}'", a.replace('\'', "'\\''")))
-        .collect::<Vec<_>>()
-        .join(" ");
-    // Windows shell interpolation is not approximated: produce an explicit
-    // unsupported placeholder rather than a command vulnerable to expansion.
-    let mut handler =
-        json!({"type":"command","command":posix,"additionalContextLimit":0,"timeout":8});
-    if cfg!(windows) {
-        handler["command"] = json!("WINDOWS_COMMAND_PREVIEW_UNSUPPORTED");
-    }
-    Ok(
-        json!({"preview_only":true,"contract":protocol::CONTRACT,"max_context_bytes":max_bytes,"argv":args,"platform_preview_supported":!cfg!(windows),"delivery":"unverified","trust_review_required":true,"hooks_json":{"hooks":{"SessionStart":[{"matcher":"^(startup|resume|clear|compact|fork)$","hooks":[handler.clone()]}],"UserPromptSubmit":[{"hooks":[handler]}]}}}),
-    )
+    let platform = if cfg!(unix) {
+        "posix"
+    } else if cfg!(windows) {
+        "windows"
+    } else {
+        "unknown"
+    };
+    Ok(preview_for_platform(args, max_bytes, platform))
 }
+
+// Pure rendering keeps unsupported-target regression tests runnable on every host.
+// A placeholder in hooks_json is still an installable command, so do not emit one.
+fn preview_for_platform(args: Vec<String>, max_bytes: usize, platform: &str) -> Value {
+    let supported = platform == "posix";
+    let hooks = if supported {
+        let command = args
+            .iter()
+            .map(|a| format!("'{}'", a.replace('\'', "'\\''")))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let handler =
+            json!({"type":"command","command":command,"additionalContextLimit":0,"timeout":8});
+        json!({"hooks":{"SessionStart":[{"matcher":"^(startup|resume|clear|compact|fork)$","hooks":[handler.clone()]}],"UserPromptSubmit":[{"hooks":[handler]}]}})
+    } else {
+        Value::Null
+    };
+    json!({
+        "preview_only":true,
+        "contract":protocol::CONTRACT,
+        "max_context_bytes":max_bytes,
+        "argv":args,
+        "target_platform":platform,
+        "platform_preview_supported":supported,
+        "configuration_candidate_available":supported,
+        "unsupported_reason":if supported { Value::Null } else { json!("target_shell_contract_and_argument_roundtrip_unverified") },
+        "delivery":"unverified",
+        "trust_review_required":true,
+        "hooks_json":hooks
+    })
+}
+
 fn capabilities() -> Result<Value> {
     // Only public --version, not configuration/auth inspection. Host event
     // payloads contain no authenticated version; this executable may not be the
     // invoking host. Never report automatic delivery from this probe alone.
     let version = installed_version();
     Ok(
-        json!({"adapter_contract":protocol::CONTRACT,"installed_cli_version":version,"reference_schema_version":"codex-cli 0.159.2","installed_version_matches_reference":version.as_deref().map(|v|v=="codex-cli 0.159.2"),"invoking_host_version":"unverified","mode":"manual_until_host_delivery_verified","documented_sources":["startup","resume","clear","compact","fork"],"events":["SessionStart","UserPromptSubmit"],"actual_hook_execution":"unverified","host_delivery":"unverified","model_adoption":"unknown","execution_authorization":false,"transcript_access":false}),
+        json!({"adapter_contract":protocol::CONTRACT,"installed_cli_version":version,"reference_schema_version":"codex-cli 0.159.2","installed_version_matches_reference":version.as_deref().map(|v|v=="codex-cli 0.159.2"),"invoking_host_version":"unverified","mode":"manual_until_host_delivery_verified","documented_sources":["startup","resume","clear","compact","fork"],"events":["SessionStart","UserPromptSubmit"],"actual_hook_execution":"unverified","host_delivery":"unverified","model_adoption":"unknown","execution_authorization":false,"transcript_access":false,"controller_refresh":"explicit_poll_only","background_requirement_watcher":false,"durable_output_identity":true,"independent_delivery_receipts":false}),
     )
 }
 
@@ -352,4 +463,65 @@ fn installed_version() -> Option<String> {
         return None;
     }
     String::from_utf8(bytes).ok().map(|s| s.trim().to_owned())
+}
+
+#[cfg(test)]
+mod preview_tests {
+    use super::*;
+
+    #[test]
+    fn unsupported_targets_never_emit_installable_placeholder_commands() {
+        let args: Vec<String> = [
+            r"C:\Program Files\ledger.exe",
+            "",
+            "a'b",
+            "a\"b",
+            "%PATH%",
+            "!var!",
+            "$(touch sentinel)",
+            "&|<>^;`",
+            "尾\\",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+        for platform in ["windows", "unknown"] {
+            let output = preview_for_platform(args.clone(), 8192, platform);
+            assert_eq!(output["argv"], json!(args));
+            assert_eq!(output["target_platform"], platform);
+            assert_eq!(output["platform_preview_supported"], false);
+            assert_eq!(output["configuration_candidate_available"], false);
+            assert_eq!(
+                output["unsupported_reason"],
+                "target_shell_contract_and_argument_roundtrip_unverified"
+            );
+            assert!(output["hooks_json"].is_null());
+            assert_eq!(output["delivery"], "unverified");
+        }
+    }
+
+    #[test]
+    fn posix_preview_preserves_exact_quoting_and_hook_contract() {
+        let output = preview_for_platform(
+            vec![
+                "/opt/a'b/ledger".into(),
+                "".into(),
+                "$HOME;`echo no`".into(),
+            ],
+            8192,
+            "posix",
+        );
+        let handler = &output["hooks_json"]["hooks"]["SessionStart"][0]["hooks"][0];
+        assert_eq!(
+            handler["command"],
+            "'/opt/a'\\''b/ledger' '' '$HOME;`echo no`'"
+        );
+        assert_eq!(handler["additionalContextLimit"], 0);
+        assert_eq!(output["configuration_candidate_available"], true);
+        assert!(output["unsupported_reason"].is_null());
+        assert_eq!(
+            handler,
+            &output["hooks_json"]["hooks"]["UserPromptSubmit"][0]["hooks"][0]
+        );
+    }
 }

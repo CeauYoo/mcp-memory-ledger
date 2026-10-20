@@ -66,6 +66,8 @@ pub struct TaskRevision {
     pub source: TaskSource,
     pub reason: String,
     pub recorded_at: String,
+    #[serde(default)]
+    pub owner_provenance: Vec<crate::domain::owner_attestation::OwnerRequirementProvenance>,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -189,6 +191,9 @@ pub struct TaskSnapshot {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct TaskContextRequest {
+    /// Caller-reported, unauthenticated environment facts; never host permission.
+    #[serde(default)]
+    pub reported_environment: crate::domain::recall_applicability::EnvironmentFacts,
     pub namespace: String,
     pub task_id: String,
     #[serde(default = "default_budget")]
@@ -206,6 +211,7 @@ pub struct TaskResumeContext {
     pub can_resume: bool,
     pub mandatory_requirements: Vec<TaskRequirement>,
     pub mandatory_requirement_count: usize,
+    pub owner_provenance: Vec<crate::domain::owner_attestation::OwnerRequirementProvenance>,
     pub checkpoint: Option<TaskCheckpoint>,
     pub diagnostics: Vec<String>,
     pub snapshot_consistent: bool,
@@ -213,6 +219,10 @@ pub struct TaskResumeContext {
     pub task_version_after_selection: Option<i64>,
     pub related_memory: Option<serde_json::Value>,
     pub experiences: Vec<crate::domain::experience::ExperienceCandidate>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub episodes: Vec<crate::domain::experience::PersistedEpisode>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub optional_selection: Option<serde_json::Value>,
     pub serialized_bytes: usize,
     pub max_bytes: usize,
     pub authority: &'static str,
@@ -331,6 +341,23 @@ pub fn apply_revision(
     }
     if current.version >= i64::MAX - 1 {
         return invalid("task revision version exhausted");
+    }
+    for provenance in &current.owner_provenance {
+        if provenance.withdrawn_at_version.is_none()
+            && r.status.is_some_and(|s| s != current.status)
+        {
+            return invalid(
+                "owner-attested requirements forbid ordinary lifecycle deactivation; explicit owner withdrawal required",
+            );
+        }
+        for change in &r.changes {
+            if matches!(change, RequirementChange::Replace { requirement_id, .. } | RequirementChange::Withdraw { requirement_id } if requirement_id == &provenance.requirement_id)
+            {
+                return invalid(
+                    "ordinary revision cannot replace or withdraw owner-attested requirements",
+                );
+            }
+        }
     }
     let reported = r.source.kind == FeedbackSourceKind::CallerReported;
     if r.status.is_some() && !reported {
@@ -494,6 +521,25 @@ pub fn validate_persisted_revision(r: &TaskRevision) -> Result<(), AppError> {
             && (id == &q.requirement_id || !ids.contains(id))
         {
             return invalid("persisted replacement target invalid");
+        }
+    }
+    for p in &r.owner_provenance {
+        let q = r
+            .requirements
+            .iter()
+            .find(|q| q.requirement_id == p.requirement_id)
+            .ok_or_else(|| AppError::Message("owner provenance target missing".into()))?;
+        if (p.withdrawn_at_version.is_none() && r.status != TaskStatus::Active)
+            || q.text != p.exact_text
+            || q.kind != p.kind
+            || q.source.reference.is_some()
+            || q.source.kind != FeedbackSourceKind::CallerReported
+            || q.replaces.is_some()
+            || p.imported_at_version > r.version
+            || (p.withdrawn_at_version.is_some() != (q.state == RequirementState::Withdrawn))
+            || (p.withdrawn_at_version.is_none() && q.state != RequirementState::Reported)
+        {
+            return invalid("owner provenance and requirement mismatch");
         }
     }
     chrono::DateTime::parse_from_rfc3339(&r.recorded_at)

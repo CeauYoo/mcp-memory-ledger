@@ -1,5 +1,6 @@
 //! Deny-only additional checks, not a sandbox or authenticated approval service.
 mod cli;
+pub mod deployment;
 pub mod patch;
 pub mod preview;
 mod protocol;

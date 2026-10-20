@@ -92,7 +92,10 @@ pub(crate) async fn inventory(
         if !report.database_counts.iter().any(|t| t.table == name)
             && !matches!(
                 name.as_str(),
-                "text_recall_documents"
+                "derived_semantic_source"
+                    | "derived_semantic_runs"
+                    | "derived_semantic_vectors"
+                    | "text_recall_documents"
                     | "text_recall_vocab"
                     | "text_recall_fts"
                     | "text_recall_fts_data"
@@ -312,6 +315,11 @@ async fn validate_schema_objects(
             .iter()
             .filter(|(_, ddl)| ddl.starts_with("CREATE TRIGGER"))
             .map(|(name, ddl)| ((*name).into(), (*ddl).into())),
+    );
+    expected.extend(
+        super::semantic_index::ddl()
+            .into_iter()
+            .filter(|(_, ddl)| ddl.starts_with("CREATE TRIGGER")),
     );
     let objects =
         sqlx::query("SELECT type,name,sql FROM sqlite_schema WHERE type IN ('trigger','view')")

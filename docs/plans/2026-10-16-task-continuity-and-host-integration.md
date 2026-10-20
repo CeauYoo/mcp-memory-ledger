@@ -1,15 +1,21 @@
+> 2026-10-20 follow-on: T20 now has optional exact typed environment matching in a separate local slice. Caller reports are not host attestation; task-resume does not yet supply environment facts. See [validation and boundaries](../typed-environment-validation-2026-10-20.md). Full plan completion is not implied.
+
 # MCP Memory Ledger 前沿调研与后续任务规划
+
+## 后续独立切片（2026-10-20）
+
+T07/T08 增量新增显式 controller refresh、内容 fingerprint 缓存校验及精确 stdout 身份的持久回执；适配器 Schema 2 只显式迁移。不是运行中自动推送或已验证宿主送达，完整独立 host receipt 仍未实现。没有新增自动启用的 hooks、用户机器操作或权限。具体合同见 [Codex 适配器](../codex-task-context-adapter.md)。
 
 ## 当前实现进度（2026-10-19）
 
-第三片源码已恢复，正在重新验证：
+第三片恢复源码已作为 `4ac6cfca1a7c69327d8186957c191aa9ed243e93` 发布；后续本地增量另行验证。第三片范围如下：
 
 - T16：显式模型草稿、同范围证据、持久化单次尝试和 pending 候选恢复；不自动激活或学习。见[草稿合同](../experience-model-drafts.md)。
-- P4 / Schema 10：中文分词、同域别名、RRF、适用性声明与可选本地 Ollama；T12 由宿主选择 literal/enhanced/hybrid 续接检索模式。见[增强召回](../enhanced-recall.md)和[本地向量](../local-embeddings.md)。持久派生缓存仍在实现中，尚未验收。
+- P4 / Schema 10：中文分词、同域别名、RRF、适用性声明与可选本地 Ollama；T12 由宿主选择 literal/enhanced/hybrid 续接检索模式。见[增强召回](../enhanced-recall.md)和[本地向量](../local-embeddings.md)。持久派生缓存已恢复并完成本地验证；它仍不等于全量语义索引。
 - 当前工具为 43 个 standalone、36 个 scoped、7 个全局入口拒绝；范围与撤销检查保持不变。原界面不新增冗长文字或写权限。
 - 新增 30 组合成场景共 756 轮，其中两段历史为 20,478 / 19,738 个 whitespace words；这不是 token 数、真实对话或模型效果证据。旧 578 轮及此前未保存切片的结果不用于本次验收。
 
-已发布基线 `8f87a813` 的 Ubuntu / Windows CI 全部成功，Ubuntu 原生 Codex startup/resume 合成 gate 已通过；只证明该版本的宿主送达路径，不证明模型理解或动作授权。macOS 当时在 `/var` fixture 路径检查失败，当前源码已补修，仍待新提交原生复验。见[宿主探针范围](../codex-native-host-verification.md)。当前恢复代码不继承旧 CI、旧 990 项等结果；未操作用户机器、安装或部署。
+恢复前基线 `8f87a813` 的 Ubuntu / Windows CI 全部成功，Ubuntu 原生 Codex startup/resume 合成 gate 已通过；只证明该版本的宿主送达路径，不证明模型理解或动作授权。macOS 当时在 `/var` fixture 路径检查失败，当前源码已补修，仍待新提交原生复验。见[宿主探针范围](../codex-native-host-verification.md)。当前恢复代码不继承旧 CI、旧 990 项等结果；未操作用户机器、安装或部署。
 
 T09–T11 deny-only patch、独立 policy epoch、预览/撤回候选及 P3 经验反馈保持既有有界合同；通用 shell、Windows hook 预览和实际安装不因合入代码视为完成。下文保留完整批准计划，不是已完成清单；本计划仍是唯一执行队列。
 
@@ -151,6 +157,7 @@ AgentMemGate（2026-10-06）指出未落实计划可能被错误写成当前事�
 - T12 联合选择有效任务要求、当前事实、相关 Episode 和 active experience；给出适用条件、反例、来源与未采用原因。
 - T13 新增 `ExperienceUse`：任务版本、经验精确版本、建议/采用/拒绝、关联动作、结果引用、评估方式及局限。
 - T14 将用户纠正和工具结果写回已有 Episode/反馈流程，复用经验修订与回滚；不新造第二套经验仓库。
+  - 2026-10-20 本地候选：`codex-results` 使用明确的动作前经验绑定、元数据 outbox 和 scoped core 写入 Event/related-use；不改原动作许可账本、不证明结果成功、不自动激活候选。真实 scoped-core 测试因沙箱 Unix socket EPERM 停在建核阶段，固定宿主 PostToolUse 验收仍待后续授权 CI；详见 [结果反馈边界](../codex-result-feedback.md)。
 - T15 对过时、污染或被证伪的经验停止后续召回，清除受影响的派生缓存，标记受影响任务；保留原始来源和历史。
 - T16 支持有证据的候选归纳。自动提炼只生成候选，不自动获得全局效力、执行能力或新权限。
 
@@ -180,6 +187,7 @@ AgentMemGate（2026-10-06）指出未落实计划可能被错误写成当前事�
 - T22 保留原版视觉、角色横幅、导航密度，统一中英日文键值；长译文、窄窗口、空态和错误态检查布局。
 - T23 维持单核心全局接入、按工作空间和任务区分；多个未完成任务时提供简短选择，不能仅凭 cwd 猜唯一任务。
 - T24 交付一套本地部署/撤回预览。配置、依赖、数据库、日志和构建产物均位于经确认的非同步目录；部署路径按目标平台逐项核验。
+  - 2026-10-20 部分实现：[只读词法预览](../deployment-path-preview.md)显式选择目标平台并拒绝常见同步标记；普通/不确定路径保持 unknown。真实目标归属核验、安装及部署尚未完成，不能据此勾选 T24 完成。
 
 完成条件：状态来自真实事件、按钮有实际行为；普通使用不要求用户填写十几个运行参数；没有把未部署的新版本展示成已在用户机器运行。
 

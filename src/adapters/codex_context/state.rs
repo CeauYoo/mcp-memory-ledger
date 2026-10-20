@@ -8,6 +8,9 @@ use sqlx::{
 };
 use std::{fs, path::Path, time::Duration};
 
+pub const SCHEMA_VERSION: i64 = 2;
+const OUTPUT_SCHEMA: &str = "CREATE TABLE context_outputs (receipt_id TEXT PRIMARY KEY REFERENCES context_receipts(receipt_id), output_digest TEXT NOT NULL CHECK(length(output_digest)=64), context_fingerprint TEXT NOT NULL CHECK(length(context_fingerprint)=64), output_kind TEXT NOT NULL CHECK(output_kind IN ('hook','refresh')), output_bytes INTEGER NOT NULL CHECK(output_bytes > 0 AND output_bytes <= 32768)); PRAGMA user_version = 2;";
+
 pub struct State {
     pool: SqlitePool,
 }
@@ -33,6 +36,7 @@ impl State {
         let pool = connect(path).await?;
         let mut tx = pool.begin().await?;
         sqlx::raw_sql("CREATE TABLE adapter_bindings (host_session_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, namespace TEXT NOT NULL, task_id TEXT NOT NULL, workspace_root TEXT NOT NULL, minimum_version INTEGER NOT NULL DEFAULT 0); CREATE TABLE adapter_defaults (workspace_root TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, namespace TEXT NOT NULL, task_id TEXT NOT NULL); CREATE TABLE context_receipts (receipt_id TEXT PRIMARY KEY, host_session_id TEXT NOT NULL, workspace_id TEXT NOT NULL, task_id TEXT NOT NULL, context_id TEXT NOT NULL, task_version INTEGER NOT NULL, context_digest TEXT NOT NULL, hook_event TEXT NOT NULL, source TEXT, stage TEXT NOT NULL CHECK(stage IN ('core_built','output_written')), created_at TEXT NOT NULL); PRAGMA user_version = 1;").execute(&mut *tx).await?;
+        sqlx::raw_sql(OUTPUT_SCHEMA).execute(&mut *tx).await?;
         tx.commit().await?;
         pool.close().await;
         Ok(())
@@ -44,10 +48,37 @@ impl State {
             .fetch_one(&pool)
             .await?;
         ensure!(
-            version == 1,
+            version == SCHEMA_VERSION,
             "adapter state version unsupported; explicit migration required"
         );
         Ok(Self { pool })
+    }
+    /// Operator-only, explicit adapter migration. Hook/refresh/open never migrate.
+    pub async fn migrate(path: &Path) -> Result<()> {
+        validate_file(path)?;
+        let pool = connect(path).await?;
+        let mut tx = pool.begin_with("BEGIN IMMEDIATE").await?;
+        let version: i64 = sqlx::query_scalar("PRAGMA user_version")
+            .fetch_one(&mut *tx)
+            .await?;
+        ensure!(
+            version == 1 || version == SCHEMA_VERSION,
+            "adapter state version unsupported"
+        );
+        if version == 1 {
+            // Version alone is not proof that this is an intact adapter database.
+            for sql in [
+                "SELECT host_session_id,workspace_id,namespace,task_id,workspace_root,minimum_version FROM adapter_bindings LIMIT 0",
+                "SELECT workspace_root,workspace_id,namespace,task_id FROM adapter_defaults LIMIT 0",
+                "SELECT receipt_id,host_session_id,workspace_id,task_id,context_id,task_version,context_digest,hook_event,source,stage,created_at FROM context_receipts LIMIT 0",
+            ] {
+                sqlx::query(sql).execute(&mut *tx).await?;
+            }
+            sqlx::raw_sql(OUTPUT_SCHEMA).execute(&mut *tx).await?;
+        }
+        tx.commit().await?;
+        pool.close().await;
+        Ok(())
     }
     pub async fn bind(&self, binding: &Binding) -> Result<()> {
         for value in [
@@ -166,9 +197,62 @@ impl State {
         tx.commit().await?;
         Ok(receipt)
     }
+    /// Persist exact serialized output identity BEFORE writing stdout. A prepared
+    /// output is not evidence that any bytes were written or accepted by a host.
+    pub async fn prepare_output(
+        &self,
+        receipt: &str,
+        output: &Value,
+        fingerprint: &str,
+        kind: &str,
+    ) -> Result<()> {
+        identifier(receipt)?;
+        super::protocol::fingerprint(fingerprint)?;
+        ensure!(
+            matches!(kind, "hook" | "refresh"),
+            "unsupported output kind"
+        );
+        let mut bytes = serde_json::to_vec(output)?;
+        bytes.push(b'\n');
+        ensure!(
+            bytes.len() <= super::protocol::MAX_CONTEXT_BYTES,
+            "output exceeds limit"
+        );
+        let hash = super::protocol::digest(&bytes);
+        let mut tx = self.pool.begin().await?;
+        let stage: Option<String> =
+            sqlx::query_scalar("SELECT stage FROM context_receipts WHERE receipt_id=?")
+                .bind(receipt)
+                .fetch_optional(&mut *tx)
+                .await?;
+        ensure!(
+            stage.as_deref() == Some("core_built"),
+            "receipt missing or already written"
+        );
+        sqlx::query(
+            "INSERT INTO context_outputs VALUES(?,?,?,?,?) ON CONFLICT(receipt_id) DO NOTHING",
+        )
+        .bind(receipt)
+        .bind(&hash)
+        .bind(fingerprint)
+        .bind(kind)
+        .bind(bytes.len() as i64)
+        .execute(&mut *tx)
+        .await?;
+        let row = sqlx::query("SELECT output_digest,context_fingerprint,output_kind,output_bytes FROM context_outputs WHERE receipt_id=?").bind(receipt).fetch_one(&mut *tx).await?;
+        ensure!(
+            row.try_get::<String, _>("output_digest")? == hash
+                && row.try_get::<String, _>("context_fingerprint")? == fingerprint
+                && row.try_get::<String, _>("output_kind")? == kind
+                && row.try_get::<i64, _>("output_bytes")? == bytes.len() as i64,
+            "conflicting prepared output; no overwrite"
+        );
+        tx.commit().await?;
+        Ok(())
+    }
     pub async fn output_written(&self, receipt: &str) -> Result<()> {
         // No generic stage setter: untrusted claims cannot mark delivery.
-        let changed = sqlx::query("UPDATE context_receipts SET stage='output_written' WHERE receipt_id=? AND stage='core_built'").bind(receipt).execute(&self.pool).await?;
+        let changed = sqlx::query("UPDATE context_receipts SET stage='output_written' WHERE receipt_id=? AND stage='core_built' AND EXISTS(SELECT 1 FROM context_outputs o WHERE o.receipt_id=context_receipts.receipt_id)").bind(receipt).execute(&self.pool).await?;
         ensure!(
             changed.rows_affected() == 1,
             "receipt missing or stage changed"
@@ -177,10 +261,10 @@ impl State {
     }
     pub async fn inspect(&self, session: &str) -> Result<Value> {
         let (binding, minimum) = self.binding(session).await?;
-        let rows = sqlx::query("SELECT receipt_id,context_id,task_version,context_digest,hook_event,source,stage,created_at FROM context_receipts WHERE host_session_id=? ORDER BY created_at DESC,receipt_id DESC LIMIT 20").bind(session).fetch_all(&self.pool).await?;
+        let rows = sqlx::query("SELECT r.receipt_id,context_id,task_version,context_digest,hook_event,source,stage,created_at,output_digest,context_fingerprint,output_kind,output_bytes FROM context_receipts r LEFT JOIN context_outputs o ON o.receipt_id=r.receipt_id WHERE host_session_id=? ORDER BY created_at DESC,r.receipt_id DESC LIMIT 20").bind(session).fetch_all(&self.pool).await?;
         let mut receipts = Vec::new();
         for row in rows {
-            receipts.push(json!({"receipt_id":row.try_get::<String,_>("receipt_id")?,"context_id":row.try_get::<String,_>("context_id")?,"task_version":row.try_get::<i64,_>("task_version")?,"context_digest":row.try_get::<String,_>("context_digest")?,"hook_event":row.try_get::<String,_>("hook_event")?,"source":row.try_get::<Option<String>,_>("source")?,"stage":row.try_get::<String,_>("stage")?,"created_at":row.try_get::<String,_>("created_at")?}));
+            receipts.push(json!({"receipt_id":row.try_get::<String,_>("receipt_id")?,"context_id":row.try_get::<String,_>("context_id")?,"task_version":row.try_get::<i64,_>("task_version")?,"context_digest":row.try_get::<String,_>("context_digest")?,"hook_event":row.try_get::<String,_>("hook_event")?,"source":row.try_get::<Option<String>,_>("source")?,"stage":row.try_get::<String,_>("stage")?,"created_at":row.try_get::<String,_>("created_at")?,"output_digest":row.try_get::<Option<String>,_>("output_digest")?,"context_fingerprint":row.try_get::<Option<String>,_>("context_fingerprint")?,"output_kind":row.try_get::<Option<String>,_>("output_kind")?,"output_bytes":row.try_get::<Option<i64>,_>("output_bytes")?}));
         }
         Ok(
             json!({"binding":binding,"minimum_task_version_seen":minimum,"receipts":receipts,"delivery":"unverified","model_adoption":"unknown","result_effect":"unknown","reserved_evidence_levels":[ReceiptStage::HostDelivered,ReceiptStage::ModelClaimed,ReceiptStage::ResultVerified]}),
@@ -370,6 +454,15 @@ mod tests {
             state.inspect("session").await.unwrap()["receipts"][0]["stage"],
             "core_built"
         );
+        state
+            .prepare_output(
+                &receipt,
+                &json!({"synthetic":true}),
+                &super::super::protocol::digest(b"context"),
+                "hook",
+            )
+            .await
+            .unwrap();
         state.output_written(&receipt).await.unwrap();
         assert_eq!(
             state.inspect("session").await.unwrap()["delivery"],
@@ -427,6 +520,188 @@ mod tests {
                 .iter()
                 .all(|r| r["stage"] == "core_built")
         );
+    }
+    #[tokio::test]
+    async fn exact_outputs_are_durable_immutable_and_do_not_prove_delivery() {
+        let (temp, state, path) = fixture().await;
+        let b = binding(temp.path(), "session", "task");
+        state.bind(&b).await.unwrap();
+        let receipt = state
+            .built(&b, "context", 1, "core-digest", "ControllerRefresh", None)
+            .await
+            .unwrap();
+        assert!(state.output_written(&receipt).await.is_err());
+        let output = json!({"changed":true,"context":{"requirement":"中文 / English / 日本語"}});
+        let fingerprint = super::super::protocol::digest(b"fingerprint");
+        state
+            .prepare_output(&receipt, &output, &fingerprint, "refresh")
+            .await
+            .unwrap();
+        state
+            .prepare_output(&receipt, &output, &fingerprint, "refresh")
+            .await
+            .unwrap();
+        assert!(
+            state
+                .prepare_output(&receipt, &json!({"changed":false}), &fingerprint, "refresh")
+                .await
+                .is_err()
+        );
+        assert!(
+            state
+                .prepare_output(&receipt, &output, &fingerprint, "hook")
+                .await
+                .is_err()
+        );
+        let before = state.inspect("session").await.unwrap();
+        assert_eq!(before["receipts"][0]["stage"], "core_built");
+        assert_eq!(before["delivery"], "unverified");
+        state.output_written(&receipt).await.unwrap();
+        drop(state);
+        let reopened = State::open(&path).await.unwrap();
+        let report = reopened.inspect("session").await.unwrap();
+        let mut bytes = serde_json::to_vec(&output).unwrap();
+        bytes.push(b'\n');
+        assert_eq!(
+            report["receipts"][0]["output_digest"],
+            super::super::protocol::digest(&bytes)
+        );
+        assert_eq!(report["receipts"][0]["output_bytes"], bytes.len());
+        assert_eq!(report["receipts"][0]["stage"], "output_written");
+        assert_eq!(report["delivery"], "unverified");
+        assert!(
+            reopened
+                .prepare_output(&receipt, &output, &fingerprint, "refresh")
+                .await
+                .is_err()
+        );
+    }
+    #[tokio::test]
+    async fn schema_one_requires_explicit_migration_and_preserves_legacy_receipts() {
+        let (temp, state, path) = fixture().await;
+        let b = binding(temp.path(), "session", "task");
+        state.bind(&b).await.unwrap();
+        state
+            .built(
+                &b,
+                "legacy",
+                4,
+                "legacy-digest",
+                "SessionStart",
+                Some("resume"),
+            )
+            .await
+            .unwrap();
+        sqlx::raw_sql("DROP TABLE context_outputs; UPDATE context_receipts SET stage='output_written'; PRAGMA user_version=1;").execute(&state.pool).await.unwrap();
+        drop(state);
+        assert!(State::open(&path).await.is_err());
+        State::migrate(&path).await.unwrap();
+        State::migrate(&path).await.unwrap();
+        let reopened = State::open(&path).await.unwrap();
+        let report = reopened.inspect("session").await.unwrap();
+        assert_eq!(report["minimum_task_version_seen"], 4);
+        assert_eq!(report["receipts"][0]["context_id"], "legacy");
+        assert_eq!(report["receipts"][0]["stage"], "output_written");
+        assert!(report["receipts"][0]["output_digest"].is_null());
+        assert_eq!(report["delivery"], "unverified");
+        sqlx::raw_sql("PRAGMA user_version=99")
+            .execute(&reopened.pool)
+            .await
+            .unwrap();
+        drop(reopened);
+        assert!(State::migrate(&path).await.is_err());
+    }
+    #[tokio::test]
+    async fn conflicting_migration_rolls_back_without_replacing_state() {
+        let (_temp, state, path) = fixture().await;
+        sqlx::raw_sql("PRAGMA user_version=1")
+            .execute(&state.pool)
+            .await
+            .unwrap();
+        drop(state);
+        // An unexpected preexisting table must not be dropped or silently reused.
+        assert!(State::migrate(&path).await.is_err());
+        let pool = connect(&path).await.unwrap();
+        let version: i64 = sqlx::query_scalar("PRAGMA user_version")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(version, 1);
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM context_outputs")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count, 0);
+    }
+    #[tokio::test]
+    async fn damaged_schema_one_is_not_promoted_by_migration() {
+        let (_temp, state, path) = fixture().await;
+        sqlx::raw_sql(
+            "DROP TABLE context_outputs; DROP TABLE adapter_defaults; PRAGMA user_version=1",
+        )
+        .execute(&state.pool)
+        .await
+        .unwrap();
+        drop(state);
+        assert!(State::migrate(&path).await.is_err());
+        let pool = connect(&path).await.unwrap();
+        let version: i64 = sqlx::query_scalar("PRAGMA user_version")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(version, 1);
+        let count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM sqlite_master WHERE name='context_outputs'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(count, 0);
+    }
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn broken_pipe_keeps_exact_prepared_output_unconfirmed() {
+        use std::io::Write;
+        use std::os::fd::FromRawFd;
+        let (temp, state, path) = fixture().await;
+        let b = binding(temp.path(), "session", "task");
+        state.bind(&b).await.unwrap();
+        let receipt = state
+            .built(&b, "context", 1, "digest", "ControllerRefresh", None)
+            .await
+            .unwrap();
+        let mut descriptors = [-1; 2];
+        // Anonymous pipe only, no Unix socket, host process or network access.
+        assert_eq!(unsafe { libc::pipe(descriptors.as_mut_ptr()) }, 0);
+        let reader = unsafe { std::fs::File::from_raw_fd(descriptors[0]) };
+        let mut writer = unsafe { std::fs::File::from_raw_fd(descriptors[1]) };
+        drop(reader);
+        let output = json!({"context":"synthetic"});
+        let result = super::super::cli::persist_and_write_output(
+            &state,
+            &receipt,
+            &output,
+            &super::super::protocol::digest(b"fingerprint"),
+            "refresh",
+            |value| {
+                let mut bytes = serde_json::to_vec(value)?;
+                bytes.push(b'\n');
+                let error = writer.write_all(&bytes).unwrap_err();
+                assert_eq!(error.kind(), std::io::ErrorKind::BrokenPipe);
+                Err(error.into())
+            },
+        )
+        .await;
+        assert!(result.is_err());
+        drop(state);
+        let report = State::open(&path)
+            .await
+            .unwrap()
+            .inspect("session")
+            .await
+            .unwrap();
+        assert_eq!(report["receipts"][0]["stage"], "core_built");
+        assert!(report["receipts"][0]["output_digest"].is_string());
+        assert_eq!(report["delivery"], "unverified");
     }
     #[tokio::test]
     async fn same_session_lock_is_exclusive() {

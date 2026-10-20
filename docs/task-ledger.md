@@ -81,3 +81,8 @@ The scoped memory export format remains limited to its existing record types and
 ## Verification
 
 `cargo test --test task_ledger --test mcp_session_policy --test sqlite_lifecycle --test schema7_migration` exercises retention, immutable history, explicit replacement, candidate separation, stale CAS, receipt replay/conflict, workspace isolation, inactive/all-candidate refusal, context overflow, checkpoint sequence and stale version, plan/result separation, source existence, context snapshot honesty, explicit v7 migration, concurrent CAS, receipt-write failure rollback, cross-scope evidence rejection, complete backup/restore and CLI argument boundaries. Legacy adoption refusal and live bridge session-revocation coverage are in their respective suites. These are deterministic local tests; they are not evidence that a real host has injected or understood a context, and they do not count as 30 independent user-experience scenarios. Host transport and dashboard tests are separate.
+
+
+## Explicit local owner-channel tier (partial T03)
+
+Schema11 adds server-owned provenance via a separate `task-owner-attest` CLI, not ordinary create/revise/source parameters. Exact append/withdraw requests preserve text and evidence, deduplicate by stable event ID and commit with task CAS. Ordinary task APIs cannot replace/withdraw imported IDs or change lifecycle while live imports exist. Historical IDs/provenance remain after withdrawal. Task/context reads expose provenance; it carries no execution permission. Full backups retain it; scoped export and legacy adoption fail closed where unsupported. This channel is not verified human identity or isolation from same-user shell callers. See [full protocol](local-owner-task-attestation.md).

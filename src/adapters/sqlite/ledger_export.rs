@@ -143,6 +143,15 @@ impl LedgerExportStore for SqliteStore {
         if applicability > 0 {
             return Err(AppError::InvalidParams("scoped export cannot preserve recall applicability authority yet; use a full database backup".into()));
         }
+        let owner_events: i64 = db(sqlx::query_scalar(
+            "SELECT count(*) FROM task_owner_events WHERE namespace=?",
+        )
+        .bind(namespace.as_str())
+        .fetch_one(&mut *tx)
+        .await)?;
+        if owner_events > 0 {
+            return Err(AppError::InvalidParams("scoped export cannot preserve owner attestation provenance; use a full database backup".into()));
+        }
         let mut result = LedgerExport::empty(namespace.clone(), version);
         let mut budget = Budget::new(&request);
         let event_rows = rows(

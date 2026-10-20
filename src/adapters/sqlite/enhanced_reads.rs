@@ -175,7 +175,7 @@ async fn preflight(
     }
     Ok(Some(bytes))
 }
-async fn hydrate(
+pub(super) async fn hydrate(
     conn: &mut SqliteConnection,
     claim: bool,
     rowid: i64,
@@ -383,6 +383,31 @@ impl EnhancedMemoryStore for SqliteStore {
                 .map(|(record, _)| record),
             None => None,
         };
+        tx.rollback().await.map_err(error)?;
+        Ok(result)
+    }
+    async fn hydrate_selection_source(
+        &self,
+        scope: MemoryScope,
+        reference: &str,
+    ) -> Result<Option<crate::application::selection_source::SelectionSource>, AppError> {
+        let (_, namespace) = scope_parts(&scope)?;
+        let namespace = crate::domain::types::Namespace::parse(namespace.to_owned())?;
+        let mut tx = self.pool.begin().await.map_err(error)?;
+        let result = super::selection_reads::hydrate_by_reference(
+            &mut tx,
+            &namespace,
+            reference,
+            RECORD_BYTES,
+        )
+        .await?;
+        tx.rollback().await.map_err(error)?;
+        Ok(result)
+    }
+    async fn selection_source_generation(&self, scope: MemoryScope) -> Result<String, AppError> {
+        scope_parts(&scope)?;
+        let mut tx = self.pool.begin().await.map_err(error)?;
+        let result = super::semantic_index::source_generation(&mut tx).await?;
         tx.rollback().await.map_err(error)?;
         Ok(result)
     }

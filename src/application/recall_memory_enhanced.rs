@@ -25,6 +25,7 @@ pub struct EnhancedRecallInput {
     pub query: String,
     pub limit: usize,
     pub max_bytes: usize,
+    pub reported_environment: crate::domain::recall_applicability::EnvironmentFacts,
 }
 #[derive(Debug, Clone, Serialize)]
 pub struct EnhancedRecallHit {
@@ -33,6 +34,7 @@ pub struct EnhancedRecallHit {
     pub routes: BTreeMap<String, usize>,
     pub rrf_score: f64,
     pub applicability: &'static str,
+    pub environment_match: crate::domain::recall_applicability::EnvironmentMatch,
     pub declared_applicability: Option<crate::domain::recall_applicability::RecallApplicability>,
     pub record: SearchMemoryRecord,
 }
@@ -161,6 +163,7 @@ pub async fn execute_with_embedding<S: TextMemoryStore + EnhancedMemoryStore + S
     config: &EnhancedRecallConfig,
     embedding: Option<&dyn EmbeddingPort>,
 ) -> Result<EnhancedRecallResult, AppError> {
+    crate::domain::recall_applicability::validate_environment(&input.reported_environment)?;
     let literal = RecallMemoryInput {
         namespace: input.namespace.clone(),
         query: input.query.clone(),
@@ -258,6 +261,8 @@ pub async fn execute_with_embedding<S: TextMemoryStore + EnhancedMemoryStore + S
                     routes: BTreeMap::new(),
                     rrf_score: 0.0,
                     applicability: "unknown_no_declared_conditions",
+                    environment_match:
+                        crate::domain::recall_applicability::EnvironmentMatch::NotDeclared,
                     declared_applicability: None,
                     record,
                 });
@@ -294,6 +299,8 @@ pub async fn execute_with_embedding<S: TextMemoryStore + EnhancedMemoryStore + S
                     routes: BTreeMap::new(),
                     rrf_score: 0.0,
                     applicability: "unknown_no_declared_conditions",
+                    environment_match:
+                        crate::domain::recall_applicability::EnvironmentMatch::NotDeclared,
                     declared_applicability: None,
                     record,
                 });
@@ -302,7 +309,14 @@ pub async fn execute_with_embedding<S: TextMemoryStore + EnhancedMemoryStore + S
     // Reject outside declared intervals before any optional embedding transmission.
     let mut applicable = BTreeMap::new();
     for (id, mut hit) in candidates {
-        if apply_metadata(store, &input.namespace, &mut hit).await? {
+        if apply_metadata(
+            store,
+            &input.namespace,
+            &mut hit,
+            &input.reported_environment,
+        )
+        .await?
+        {
             applicable.insert(id, hit);
         } else {
             result.applicability_omissions += 1;
@@ -402,8 +416,18 @@ pub async fn execute_with_embedding<S: TextMemoryStore + EnhancedMemoryStore + S
             )
             .await?
             && content_digest(&current)? == candidate.content_digest
-            && apply_metadata(store, &input.namespace, &mut candidate).await?
         {
+            if !apply_metadata(
+                store,
+                &input.namespace,
+                &mut candidate,
+                &input.reported_environment,
+            )
+            .await?
+            {
+                result.applicability_omissions += 1;
+                continue;
+            }
             candidate.record = current;
             candidate.rrf_score = candidate
                 .routes
@@ -457,7 +481,10 @@ async fn apply_metadata<S: TextMemoryStore + Sync>(
     store: &S,
     namespace: &Namespace,
     hit: &mut EnhancedRecallHit,
+    reported_environment: &crate::domain::recall_applicability::EnvironmentFacts,
 ) -> Result<bool, AppError> {
+    hit.applicability = "unknown_no_declared_conditions";
+    hit.environment_match = crate::domain::recall_applicability::EnvironmentMatch::NotDeclared;
     hit.declared_applicability = store
         .recall_applicability(namespace.as_str(), &hit.reference)
         .await?;
@@ -466,11 +493,22 @@ async fn apply_metadata<S: TextMemoryStore + Sync>(
             hit.applicability = "declaration_for_other_content_digest_unknown";
             return Ok(true);
         }
+        hit.environment_match = crate::domain::recall_applicability::match_environment(
+            &metadata.typed_environment,
+            reported_environment,
+        )?;
+        if hit.environment_match == crate::domain::recall_applicability::EnvironmentMatch::Mismatch
+        {
+            return Ok(false);
+        }
         let state = metadata.time_state(chrono::Utc::now())?;
         if state == "expired" || state == "not_yet_valid" {
             return Ok(false);
         }
-        hit.applicability = if metadata.conditions.is_empty() && metadata.environment.is_empty() {
+        hit.applicability = if metadata.conditions.is_empty()
+            && metadata.environment.is_empty()
+            && metadata.typed_environment.is_empty()
+        {
             state
         } else {
             "declared_conditions_not_evaluated"

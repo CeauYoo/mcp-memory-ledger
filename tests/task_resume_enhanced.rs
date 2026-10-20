@@ -43,6 +43,7 @@ async fn fixture() -> (tempfile::TempDir, SqliteStore) {
 }
 fn request() -> TaskContextRequest {
     TaskContextRequest {
+        reported_environment: Default::default(),
         namespace: "project/resume".into(),
         task_id: "resume".into(),
         max_bytes: 32768,
@@ -55,6 +56,7 @@ fn recall_request(hybrid: bool) -> EnhancedRecallRequest {
         limit: 8,
         max_bytes: 8192,
         hybrid,
+        reported_environment: Default::default(),
     }
 }
 

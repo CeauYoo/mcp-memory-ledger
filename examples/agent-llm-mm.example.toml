@@ -104,6 +104,9 @@ max_concurrent_tasks = 1
 
 # Optional host-owned task recall; existing installations default to literal.
 # [retrieval]
-# task_context_mode = "enhanced" # literal | enhanced | hybrid
+# task_context_mode = "enhanced" # literal | enhanced | hybrid | unified
 # optional_deadline_ms = 2000
 # Hybrid additionally requires explicit local_embedding configuration above.
+
+# unified requires host-enabled local embedding and an explicitly completed v2 semantic index.
+# It never builds the index during task resume; literal remains the default.

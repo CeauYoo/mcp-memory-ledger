@@ -7,6 +7,21 @@ fn decode<T: DeserializeOwned>(value: &str) -> anyhow::Result<T> {
     Ok(serde_json::from_str(value)?)
 }
 pub async fn try_run_cli(args: &[String]) -> anyhow::Result<bool> {
+    if args.first().map(String::as_str) == Some("task-owner-attest") {
+        if args.len() != 3
+            || args[1] != "--json"
+            || args[2].len() > crate::domain::task::MAX_TASK_BYTES
+        {
+            anyhow::bail!(
+                "usage: task-owner-attest --json '<exact attestation JSON>'; local owner channel only, not authenticated human authorship"
+            );
+        }
+        let config = AppConfig::load().map_err(anyhow::Error::msg)?;
+        let store = open_current_database(&config.database_url).await?;
+        let result = store.attest_task_owner(decode(&args[2])?).await?;
+        println!("{}", serde_json::to_string(&result)?);
+        return Ok(true);
+    }
     if args.first().map(String::as_str) != Some("task") {
         return Ok(false);
     }

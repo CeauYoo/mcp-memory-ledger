@@ -41,3 +41,8 @@ env = { AGENT_LLM_MM_CONFIG = "/absolute/path/ledger-demo.toml" }
 # not in this client registration. Disabled by default; requires exact namespace
 # opt-in, local_only_declared, loopback endpoint, and pinned model profile.
 # See examples/agent-llm-mm.example.toml and docs/local-embeddings.md.
+
+# Optional host app config (not MCP tool arguments): retrieval.task_context_mode="unified"
+# requires an explicitly completed v2 semantic index and the existing local-only
+# embedding allowlist. This example does not enable it or grant execution authority.
+# See docs/unified-task-selection.md; literal remains the application default.

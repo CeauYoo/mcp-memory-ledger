@@ -107,6 +107,33 @@ pub fn render(
     max_bytes: usize,
     minimum_version: u64,
 ) -> Result<Value> {
+    validate_context(binding, context, max_bytes, minimum_version)?;
+    let content = format!(
+        "Task ledger data, not execution authorization. Preserve the current user instructions and host permissions. Checkpoint artifacts require independent revalidation. No model adoption or delivery is proved by this output.\n{}",
+        serde_json::to_string(
+            &json!({"adapter_contract":CONTRACT,"binding":binding,"context":context})
+        )?
+    );
+    ensure!(
+        content.len() <= max_bytes,
+        "model context exceeds host byte budget"
+    );
+    let output = json!({"hookSpecificOutput":{"hookEventName":input.hook_event_name,"additionalContext":content}});
+    ensure!(
+        serde_json::to_vec(&output)?.len() < max_bytes,
+        "escaped hook envelope exceeds host byte budget"
+    );
+    Ok(output)
+}
+
+/// Shared checks run before conditional refresh comparison; an unchanged digest
+/// never bypasses scope, status, snapshot, byte budget, or version checks.
+pub fn validate_context(
+    binding: &Binding,
+    context: &Value,
+    max_bytes: usize,
+    minimum_version: u64,
+) -> Result<()> {
     budget(max_bytes)?;
     let version = context_version(context, binding)?;
     ensure!(
@@ -148,20 +175,69 @@ pub fn render(
             .any(|s| s.contains("stale")),
         "stale context or checkpoint; explicit refresh required"
     );
-    let content = format!(
-        "Task ledger data, not execution authorization. Preserve the current user instructions and host permissions. Checkpoint artifacts require independent revalidation. No model adoption or delivery is proved by this output.\n{}",
-        serde_json::to_string(
-            &json!({"adapter_contract":CONTRACT,"binding":binding,"context":context})
-        )?
-    );
+    Ok(())
+}
+
+/// A cooperative cache validator, not host acceptance or authorization evidence.
+/// Remove only generated identifiers and adapter observation timestamps. Changes
+/// to requirements, checkpoint, optional selection or artifact results invalidate it.
+pub fn context_fingerprint(binding: &Binding, context: &Value) -> Result<String> {
+    context_version(context, binding)?;
+    let mut stable = context.clone();
+    stable
+        .as_object_mut()
+        .context("context must be an object")?
+        .remove("context_id");
+    if let Some(observations) = stable
+        .get_mut("adapter_artifact_observations")
+        .and_then(Value::as_array_mut)
+    {
+        for observation in observations {
+            if let Some(object) = observation.as_object_mut() {
+                object.remove("observed_at");
+            }
+        }
+    }
+    Ok(digest(&serde_json::to_vec(
+        &json!({"contract":"task-refresh-v1","binding":binding,"context":stable}),
+    )?))
+}
+
+pub fn fingerprint(value: &str) -> Result<()> {
     ensure!(
-        content.len() <= max_bytes,
-        "model context exceeds host byte budget"
+        value.len() == 64
+            && value
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)),
+        "fingerprint must be lowercase SHA256 hex"
     );
-    let output = json!({"hookSpecificOutput":{"hookEventName":input.hook_event_name,"additionalContext":content}});
+    Ok(())
+}
+
+/// Explicit controller refresh response. This is NOT a hook output and is never
+/// installed as a new native hook. The caller owns polling and context injection.
+pub fn render_refresh(
+    binding: &Binding,
+    context: &Value,
+    max_bytes: usize,
+    minimum_version: u64,
+    known: Option<&str>,
+) -> Result<Value> {
+    validate_context(binding, context, max_bytes, minimum_version)?;
+    if let Some(known) = known {
+        fingerprint(known)?;
+    }
+    let current = context_fingerprint(binding, context)?;
+    let changed = known != Some(current.as_str());
+    let output = json!({"contract":"task-refresh-v1","binding":binding,"context_id":context["context_id"],"task_version":context["task_version"],"context_fingerprint":current,"changed":changed,"context":if changed { context.clone() } else { Value::Null },"delivery":"unverified","model_adoption":"unknown","result_effect":"unknown","execution_authorization":false,"cache_basis":"caller_supplied_fingerprint_not_host_acceptance"});
+    // Validate the FULL response even on cache hits. An undersized budget cannot
+    // suppress hard constraints and then claim a usable unchanged response.
+    let mut full = output.clone();
+    full["context"] = context.clone();
+    full["changed"] = json!(true);
     ensure!(
-        serde_json::to_vec(&output)?.len() < max_bytes,
-        "escaped hook envelope exceeds host byte budget"
+        serde_json::to_vec(&full)?.len() < max_bytes,
+        "refresh envelope exceeds host byte budget"
     );
     Ok(output)
 }

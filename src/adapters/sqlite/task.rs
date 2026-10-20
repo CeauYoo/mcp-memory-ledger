@@ -53,7 +53,7 @@ pub(super) async fn install(c: &mut SqliteConnection) -> Result<(), AppError> {
     }
     Ok(())
 }
-fn db<T>(r: Result<T, sqlx::Error>) -> Result<T, AppError> {
+pub(super) fn db<T>(r: Result<T, sqlx::Error>) -> Result<T, AppError> {
     r.map_err(|_| AppError::Message("task database operation failed".into()))
 }
 fn json<T: Serialize>(r: &T) -> Result<String, AppError> {
@@ -140,7 +140,10 @@ async fn validate_sources(c: &mut SqliteConnection, record: &TaskRevision) -> Re
     }
     Ok(())
 }
-async fn save_revision(c: &mut SqliteConnection, r: &TaskRevision) -> Result<(), AppError> {
+pub(super) async fn save_revision(
+    c: &mut SqliteConnection,
+    r: &TaskRevision,
+) -> Result<(), AppError> {
     validate_sources(c, r).await?;
     let source_event = r
         .source
@@ -165,7 +168,7 @@ async fn save_revision(c: &mut SqliteConnection, r: &TaskRevision) -> Result<(),
 fn corrupt_task_data(_: AppError) -> AppError {
     AppError::Message("stored task data is unavailable or inconsistent".into())
 }
-async fn load_revision(
+pub(super) async fn load_revision(
     c: &mut SqliteConnection,
     ns: &str,
     id: &str,
@@ -234,6 +237,7 @@ async fn load_revision_inner(
         reason: row.get("reason"),
         recorded_at: row.get("recorded_at"),
         requirements,
+        owner_provenance: super::owner_attestation::load_provenance(c, ns, id, version).await?,
     };
     validate_persisted_revision(&record)?;
     let source = record
@@ -323,6 +327,7 @@ impl TaskStore for SqliteStore {
             source: r.source,
             reason: r.reason,
             recorded_at: Utc::now().to_rfc3339(),
+            owner_provenance: vec![],
         };
         bounded(&record)?;
         db(

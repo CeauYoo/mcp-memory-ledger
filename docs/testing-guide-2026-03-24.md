@@ -1,4 +1,30 @@
+## Cross-slice owner/index compatibility
+
+`cargo test --test owner_semantic_compatibility` verifies explicit schema10→11 migration with the optional index, whole-database backup/restore, derived-only reset and protected requirement retention. Use canonical synthetic roots and the shared SQLite URL helper; never relax production path checks to make fixtures pass. See [integration evidence](owner-index-integration-validation-2026-10-20.md).
+
+## 2026-10-20 typed environment slice
+
+Run `cargo test --test enhanced_recall --test task_resume_enhanced` and `cargo test --lib typed_environment`, plus strict Clippy and formatting. Covers typed equality, known mismatch, missing facts, bounds, legacy serialization/idempotency and free-text uncertainty. These are mechanism tests, not host attestation or model-effectiveness evidence.
+
+# Controller refresh / output receipt increment (2026-10-20)
+
+New focused coverage: conditional refresh validates state/version/snapshot/budget even on cache hits; fingerprints include scope, requirements, checkpoint and artifact outcomes; exact output SHA256 includes newline; prepared-vs-written stages, immutable output, restart persistence, explicit migration and unsupported-version rejection. The native local-core integration also exercises first/unchanged refresh and output linkage. No test result below proves independent host acceptance.
+
+```sh
+cargo test --all-features --lib adapters::codex_context
+cargo test --all-features --test codex_context_adapter
+cargo test --all-features --test local_core native_context_adapter_reads_live_task_and_stops_output_after_pause_or_revocation
+cargo fmt --all -- --check
+cargo clippy --all-targets --all-features -- -D warnings
+```
+
+Current execution outcomes are recorded in `docs/continuity-refresh-validation-2026-10-20.md`; do not treat these commands as passed without that evidence. Historical records below retain their original scope.
+
 # 任务与经验切片验证更新（2026-10-16）
+
+## 部署路径词法预览测试（2026-10-20）
+
+运行 `cargo test --all-features --test deployment_path_preview`。覆盖五类目录、目标 OS 与运行 OS 分离、Windows 大小写/分隔符/UNC/相对路径与穿越、macOS 常见同步标记、unknown 边界及临时目录无写入。测试只用合成字符串/临时目录，不证明真实机器安全；详见[合同](deployment-path-preview.md)。
 
 当前新增 native Codex host 探针见 [验证说明](codex-native-host-verification.md)。Ubuntu CI 固定官方 0.159.2 与 SHA256，使用独立 HOME、合成任务和本机 Responses fixture；不使用真实密钥或付费模型，只上传显式安全摘要。启动与恢复均须同时看到 hook 上下文和请求中的当前要求，否则失败。动作检查的真实宿主覆盖另行验证，不借上下文注入通过推定。
 
@@ -1807,3 +1833,30 @@ No network, credentials, model calls, new live harness, or modifications to the
 existing `tools/experience` harness are involved. Passing this target establishes
 scripted persistence and contract behavior only. Native Windows execution remains
 a separate CI result; Linux tests do not establish Windows behavior.
+
+## Rebuildable semantic index (synthetic only)
+
+Run `cargo test --test semantic_index` for full-source (>64) batch/resume coverage, source mutation/profile invalidation, namespace denial, stale inference commit rejection, bounded SQL plans, corrupt-state recovery, command dispatch, optional-schema lifecycle/adoption, scoped export exclusion and full backup/restore. No real model/provider calls occur. See [the index contract](rebuildable-semantic-index.md).
+
+## Windows hook preview safety correction (2026-10-20)
+
+Context preview now returns `hooks_json: null` and `configuration_candidate_available: false` on Windows/unknown targets, preserving diagnostic argv only. Action preview still rejects these targets before producing a candidate bundle. See the [pinned contract and verification scope](windows-hook-preview-assessment-2026-10-20.md). Run `cargo test --lib preview_tests`, `cargo test --lib windows_and_unknown_platforms_are_unsupported`, and `cargo test --test codex_context_adapter`; existing Windows CI includes both `--lib` and this integration target. Linux tests do not establish Windows runtime or host acceptance.
+
+
+## Owner-channel attestation guardrail suite
+
+Run `cargo test --test owner_attestation --test task_ledger --test sqlite_lifecycle --test schema7_migration --test enhanced_recall` for schema11 migration, exact input/replay/CAS/rollback, source separation, lifecycle bypass and corruption/backup coverage. These deterministic local checks do not prove authenticated authorship or host integration. See [test contract](local-owner-task-attestation.md).
+
+## T14 result-feedback candidate
+
+```sh
+cargo test --lib codex_results
+cargo build --bin agent_llm_mm
+LEDGER_BIN="$(pwd)/target/debug/agent_llm_mm" python3 -m unittest discover -s tests -p test_codex_result_feedback.py -v
+```
+
+The Python smoke uses a fresh private fixture, mock ledger provider, real scoped core/bridge, and synthetic public hook input. It is not native Codex hook evidence. The adapter unit tests cover secret canaries, duplicate/deep/oversized input, immutable linkage, conflicts, capacity, private paths, exact replay, bounded transport, stage consistency and uncertain/rejected delivery. Windows command preview is unsupported; platform execution and pinned-host result acceptance must be reported independently. No actual hooks or credentials are installed. See [codex-result-feedback.md](codex-result-feedback.md).
+
+## Unified task selection (synthetic only)
+
+Run `cargo test --test selection_source_reads --test unified_selection --test semantic_index --test task_resume_enhanced --test enhanced_recall` for typed SQL-size/provenance bounds, current-active versions, cross-kind ranking, query-once paging, shared output budgets, source-generation/version rechecks, future-valid boundary expiry, canonical v1 reset/v2 rebuild, typed caller-reported environment and mandatory requirement preservation. Include `task_ledger`, `experience_workflow`, `experience_use_feedback`, `embedding_cache`, `workspace_adoption`, `scoped_ledger_export`, and `database_backup` as regressions. Fixtures use synthetic vectors and canonical production SQLite URLs. This does not certify a live provider or combined owner-provenance migration. See [unified selection](unified-task-selection.md).

@@ -41,3 +41,5 @@ pub mod task_cli;
 pub mod retrieval;
 
 pub mod model_factory;
+
+pub mod unified_selection;

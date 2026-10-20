@@ -1,5 +1,9 @@
 # Windows 开发与接入指南
 
+## 部署前路径预览（部分实现）
+
+可使用 `codex-actions deployment-path-preview --target-platform windows` 并提供五类目录参数，见[完整合同](deployment-path-preview.md)。此步骤仅处理字符串，不读取或写入目标目录；unknown 不是通过。真实同步目录归属、权限及部署仍需独立确认，既有安装流程不变。
+
 ## 任务续接与 Codex 接入
 
 新增任务工具与 CLI 见[任务账本](task-ledger.md)，原生配置预览、项目默认任务选择和宿主支持边界见[Codex 适配器](codex-task-context-adapter.md)。Schema 8 需要显式迁移，先备份，不能自动替换运行中的数据库。预览不改全局配置；未取得真实宿主注入证据，不将输出成功称为接入成功。Windows 核心/任务 CLI 与 Windows hook 自动配置支持分别记录。
@@ -262,3 +266,11 @@ Synthetic Windows ACL fixtures invoke the fixed Windows PowerShell 5.1 executabl
 If the installed candidate core exits before readiness, the verifier records its exit code and fixed allowlisted startup-error categories in the summary. It scans at most 64 KiB of stderr and exports no raw stderr, paths, configuration, database contents, or credentials. An unclassified failure remains failed and requires further diagnosis; native integration success does not establish package success.
 
 The Windows verifier explicitly applies the current-user SID ACL to each newly created empty working subdirectory, including the pipe endpoint and restore directories. CPython 3.13 `mkdir(mode=0700)` installs a protected ACL with an OWNER RIGHTS (`OW`) entry instead of inheriting the parent's explicit SID ACL; that entry is intentionally outside the core's accepted trustee list. The verifier now uses its synthetic-directory ACL setup for every child rather than weakening production validation.
+
+## Windows hook preview safety correction (2026-10-20)
+
+Context preview now returns `hooks_json: null` and `configuration_candidate_available: false` on Windows/unknown targets, preserving diagnostic argv only. Action preview still rejects these targets before producing a candidate bundle. See the [pinned contract and verification scope](windows-hook-preview-assessment-2026-10-20.md). Run `cargo test --lib preview_tests`, `cargo test --lib windows_and_unknown_platforms_are_unsupported`, and `cargo test --test codex_context_adapter`; existing Windows CI includes both `--lib` and this integration target. Linux tests do not establish Windows runtime or host acceptance.
+
+### Result-feedback boundary
+
+The [T14 result-feedback candidate](codex-result-feedback.md) uses private outbox checks and platform-neutral domain logic, but its command preview deliberately rejects Windows rather than guessing shell quoting. Do not deploy its POSIX candidate on Windows or infer result delivery from other adapters' tests. Native Windows result-hook acceptance remains pending.
