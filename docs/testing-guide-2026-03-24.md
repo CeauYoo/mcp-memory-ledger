@@ -1770,3 +1770,40 @@ These used Rust 1.95.0, incremental disabled and debug information disabled, syn
 此切片已通过整合定向测试、Rustfmt 与严格 Clippy；全量及平台结果见当前状态。可单独执行 `cargo test --lib action_check`、`cargo test --lib codex_actions`，再走既有回归。新增覆盖：独立 epoch/任务版本、latest_active 与 pinned、伪 approval、状态暂停撤销、patch 多路径/移动/链接、重复事件改参、时间/版本回退、坏配置、preview 幂等及撤回 CAS 冲突。
 
 真实宿主仍需分别测正常/越界 patch、core 断线、hook 缺失/超时、stdin 和 hosted 绕行；故障放行必须记为覆盖缺口。单测不能替代固定版本实际宿主验收。详见 [合同](codex-action-checks.md)。
+
+## T16 explicit model-draft offline checks
+
+Run `cargo test --test experience_draft` and the model prompt/transport unit tests. They cover opt-in gating, scoped exact-use evidence, pending-only output, same-key no-repeat calls, incomplete versus terminal reservations, saved-proposal recovery, evidence rejection and bounded HTTP bodies. The provider JSON envelope cap is 16 MiB; draft input/output caps are 128/64 KiB. See [draft contract](experience-model-drafts.md). These are synthetic local tests, not live-model quality evidence.
+
+## Synthetic task-continuity dialogues
+
+Run `cargo test --test task_continuity_scenarios`. The JSON fixture in
+`tests/fixtures/task_continuity_scenarios.json` contains 30 distinct stories across
+six categories (five each): requirement addition/retraction, pause/resume,
+experience correction/invalidation, environment changes, workspace isolation,
+and plans/evidence insufficiency. The test target also includes one corpus
+integrity test.
+
+These are **synthetic, explicitly scripted API interpretations**, not LLM
+conversations or real-user sessions. Each turn provides prose plus its exact API
+actions and expected results; neutral history has no interpreted action. There
+are 756 turns, including six 64-turn histories and two histories exceeding 15,000
+whitespace-delimited words. Every message is under 4 KiB of UTF-8. These are word,
+turn and byte measurements, not tokenizer/token measurements or model-context
+capacity claims. Integrity assertions enforce the counts, category balance,
+unique action/status/error trajectories and message-size limits.
+
+Every story uses its own real temporary SQLite file, appends every turn as an
+event, exercises typed task/experience APIs, reopens the database, and reads back
+all stored turn text exactly and in order. Assertions cover complete requirement
+arrays, immutable initial revisions, status and checkpoint lineage, explicit
+context non-authority, byte accounting, rejected evidence and cross-workspace
+writes. Experience stories check append-only corrections and rejection or
+supersession; four also record adoption and assert read-time reuse invalidation.
+Environment checkpoints retain reported revision/environment/blockers; they do
+not prove that an external environment or artifact was actually validated.
+
+No network, credentials, model calls, new live harness, or modifications to the
+existing `tools/experience` harness are involved. Passing this target establishes
+scripted persistence and contract behavior only. Native Windows execution remains
+a separate CI result; Linux tests do not establish Windows behavior.

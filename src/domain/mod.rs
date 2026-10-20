@@ -46,3 +46,7 @@ pub mod self_model_version;
 pub mod task;
 
 pub mod experience_use;
+
+pub mod experience_draft;
+
+pub mod recall_applicability;

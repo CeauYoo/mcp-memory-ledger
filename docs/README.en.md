@@ -1,15 +1,15 @@
 # MCP Memory Ledger
 
-Task continuity: [task ledger](task-ledger.md) and [Codex context adapter](codex-task-context-adapter.md) add versioned requirements and checkpoint-based context. Host injection remains unverified; source metadata does not grant authority.
+A local-first Rust + SQLite MCP `stdio` memory service and technical MVP. It retains evidence-linked records, scoped retrieval, corrections with history, task continuity and inert experience candidates. The [Chinese README](../README.md) is the maintained front door; use the [documentation map](document-map.md), [quickstart](quickstart.md) and [tool contracts](tool-reference.md).
 
-A local-first Rust + SQLite MCP `stdio` memory service. It records evidence-linked memories, retrieves scoped records, corrects Claims with retained history, and manages inert versioned experience candidates.
+## Current restored slice
 
-The [Chinese repository README](../README.md) is the single maintained front door. Use the [documentation map](document-map.md), [quickstart](quickstart.md), [client configuration](local-mcp-integration-2026-03-26.md), [runnable workflow](runnable-memory-workflow.md), and [tool index](tool-reference.md).
+Schema 10 and 43 standalone MCP tools (36 scoped, 7 global entries denied) include explicit [model experience drafts](experience-model-drafts.md), [enhanced recall](enhanced-recall.md) with Chinese segmentation, scoped aliases and RRF, applicability declarations, optional [local Ollama vectors](local-embeddings.md), and host-configured literal/enhanced/hybrid task retrieval. Persistent derived caching is still being implemented and is not validated. The original UI stays compact without new write authority.
 
-Current runtime: 38 standalone MCP tools (31 scoped core tools), schema 8, rebuildable FTS5 with literal short-CJK fallback, bounded complete-JSON context, explicit migrations and backup/recovery. Runtime binary name: `agent_llm_mm`.
+This restored third slice is being revalidated. Baseline `8f87a813` passed Ubuntu and Windows CI, including the Ubuntu native Codex synthetic startup/resume delivery gate. That evidence applies only to that version. Its macOS `/var` fixture failure is patched in current source and awaits new native CI. See [current status](project-status.md) and [host evidence boundaries](codex-native-host-verification.md); earlier totals, including 990 tests, do not establish current results.
 
-This remains a technical MVP. Lexical retrieval is not semantic search; bytes are not model tokens; namespaces, caller budgets and feedback labels are not authentication. Experience activation changes recall eligibility, never action authority. Export is interchange, not backup. Legacy global self-governance is experimental.
+The new 30 synthetic scenarios contain 756 turns, with two histories measuring 20,478 / 19,738 whitespace-delimited words. These are neither tokens nor real-model efficacy evidence. No user-machine installation or deployment is implied.
 
-[Current status and evidence](project-status.md) distinguish exact-commit CI from actual user-client/fresh-machine installation, real-model efficacy and human release approval. [The active plan](plans/README.md) remains the only execution queue; dated reports are historical evidence.
+Ordinary recall keeps its literal contract. Optional semantic ranking is bounded and does not certify facts or applicability. JSON bytes are not model tokens; source labels do not grant authority. Draft generation requires explicit consent, reserves one durable attempt, and creates only pending candidates. A local failure does not prove the provider did not process or bill the request. Activation changes recall eligibility, never execution permissions.
 
-Bounded global identity/commitment versioning and explicit same-scope compensation: [contract](self-model-versions.md). Historical migration effective time stays unknown; this remains an experimental local MVP.
+[The active plan](plans/README.md) is the only execution queue. [Global self-model versioning](self-model-versions.md) remains experimental. Formal release, fresh-machine installation and live-model benefit require separate evidence. Runtime binary name: `agent_llm_mm`.

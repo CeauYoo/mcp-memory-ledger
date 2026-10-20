@@ -26,7 +26,8 @@ use super::{
 
 pub const CURRENT_DATABASE_SCHEMA_VERSION: i64 = CURRENT_SCHEMA_VERSION;
 
-const REQUIRED_TABLES: [&str; 26] = [
+const REQUIRED_TABLES: [&str; 27] = [
+    "recall_applicability",
     "events",
     "claims",
     "evidence_links",
@@ -55,7 +56,8 @@ const REQUIRED_TABLES: [&str; 26] = [
     "schema_migrations",
 ];
 
-const PRESERVED_DATA_TABLES: [&str; 23] = [
+const PRESERVED_DATA_TABLES: [&str; 24] = [
+    "recall_applicability",
     "events",
     "claims",
     "evidence_links",
@@ -512,6 +514,7 @@ async fn run_migration_steps(
             7 => super::self_model_versions::install(connection).await?,
             8 => super::task::install(connection).await?,
             9 => super::experience_use::install(connection).await?,
+            10 => super::recall_applicability::install(connection).await?,
             _ => {
                 return Err(AppError::Message(format!(
                     "missing migration implementation for version {version}"
@@ -1250,6 +1253,7 @@ async fn schema_structure_issues(
     super::self_model_versions::install(&mut reference).await?;
     super::task::install(&mut reference).await?;
     super::experience_use::install(&mut reference).await?;
+    super::recall_applicability::install(&mut reference).await?;
     let mut issues = Vec::new();
     for table in REQUIRED_TABLES {
         let expected = table_structure(&mut reference, table).await?;

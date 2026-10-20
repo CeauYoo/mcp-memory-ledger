@@ -5,3 +5,6 @@ pub mod openai_compatible;
 mod prompt;
 mod protocol;
 mod transport;
+
+#[cfg(test)]
+mod experience_draft_tests;

@@ -37,3 +37,7 @@ pub(crate) mod local_file_lock;
 pub(crate) mod windows_security;
 
 pub mod task_cli;
+
+pub mod retrieval;
+
+pub mod model_factory;

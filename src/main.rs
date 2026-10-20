@@ -14,6 +14,9 @@ async fn main() -> Result<()> {
     if agent_llm_mm::support::database_backup::try_run_cli(&args).await? {
         return Ok(());
     }
+    if agent_llm_mm::support::retrieval::try_run_cli(&args).await? {
+        return Ok(());
+    }
     if agent_llm_mm::support::experience_use_cli::try_run_cli(&args).await? {
         return Ok(());
     }

@@ -15,7 +15,7 @@ pub async fn try_run_cli(args: &[String]) -> anyhow::Result<bool> {
     }
     if args.len() != 4 || args[2] != "--json" {
         anyhow::bail!(
-            "usage: experience-use <record|list|derive> --json '<request JSON>'; configure the intended database explicitly"
+            "usage: experience-use <record|list|derive|generate> --json '<request JSON>'; configure the intended database explicitly"
         );
     }
     let max_bytes = if args[1] == "derive" {
@@ -28,11 +28,18 @@ pub async fn try_run_cli(args: &[String]) -> anyhow::Result<bool> {
     }
     // Decode before opening storage so malformed/unknown commands have no side effects.
     enum Request {
+        Generate(crate::domain::experience_draft::GenerateExperienceDraftRequest),
         Record(Box<RecordExperienceUseRequest>),
         Derive(Box<DeriveExperienceRequest>),
         List(ListExperienceUsesRequest),
     }
     let request = match args[1].as_str() {
+        "generate" => {
+            let request: crate::domain::experience_draft::GenerateExperienceDraftRequest =
+                serde_json::from_str(&args[3])?;
+            request.validate()?;
+            Request::Generate(request)
+        }
         "record" => Request::Record(serde_json::from_str(&args[3])?),
         "list" => Request::List(serde_json::from_str(&args[3])?),
         "derive" => Request::Derive(serde_json::from_str(&args[3])?),
@@ -41,6 +48,17 @@ pub async fn try_run_cli(args: &[String]) -> anyhow::Result<bool> {
     let config = AppConfig::load().map_err(anyhow::Error::msg)?;
     let store = open_current_database(&config.database_url).await?;
     let result = match request {
+        Request::Generate(request) => {
+            let model = crate::support::model_factory::build(&config.model_config)?;
+            serde_json::to_value(
+                crate::application::experience_draft::generate_experience_draft(
+                    &store,
+                    model.as_ref(),
+                    request,
+                )
+                .await?,
+            )?
+        }
         Request::Record(request) => {
             serde_json::to_value(experience_use::record_experience_use(&store, *request).await?)?
         }

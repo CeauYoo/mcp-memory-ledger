@@ -28,9 +28,15 @@ pub async fn try_run_cli(args: &[String]) -> anyhow::Result<bool> {
         "checkpoint" => {
             serde_json::to_value(task::record_task_checkpoint(&store, decode(&args[3])?).await?)?
         }
-        "context" => {
-            serde_json::to_value(task::build_task_resume_context(&store, decode(&args[3])?).await?)?
-        }
+        "context" => serde_json::to_value(
+            crate::support::retrieval::resume(
+                &store,
+                decode(&args[3])?,
+                &config.retrieval,
+                &config.local_embedding,
+            )
+            .await?,
+        )?,
         _ => anyhow::bail!("unknown task operation"),
     };
     println!("{}", serde_json::to_string(&result)?);

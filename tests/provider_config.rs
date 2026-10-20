@@ -349,6 +349,8 @@ async fn doctor_reports_openrouter_provider_without_exposing_api_key() {
     let temp_dir = tempdir().expect("temp dir");
     let database_url = sqlite_url(temp_dir.path().join("doctor-openrouter.sqlite"));
     let config = AppConfig {
+        local_embedding: Default::default(),
+        retrieval: Default::default(),
         transport: TransportKind::Stdio,
         database_url,
         model_provider: ModelProviderKind::OpenRouter,
@@ -406,6 +408,8 @@ async fn doctor_fails_when_openrouter_provider_config_is_missing_model() {
             .join("doctor-openrouter-missing-model.sqlite"),
     );
     let config = AppConfig {
+        local_embedding: Default::default(),
+        retrieval: Default::default(),
         transport: TransportKind::Stdio,
         database_url,
         model_provider: ModelProviderKind::OpenRouter,
@@ -430,6 +434,8 @@ async fn doctor_fails_when_openai_provider_config_is_missing_api_key() {
     let temp_dir = tempdir().expect("temp dir");
     let database_url = sqlite_url(temp_dir.path().join("doctor.sqlite"));
     let config = AppConfig {
+        local_embedding: Default::default(),
+        retrieval: Default::default(),
         transport: TransportKind::Stdio,
         database_url,
         model_provider: ModelProviderKind::OpenAiCompatible,
@@ -454,6 +460,8 @@ async fn doctor_report_does_not_contain_api_key_in_serialized_output() {
     let database_url = sqlite_url(temp_dir.path().join("doctor-redact.sqlite"));
     let secret = "sk-super-secret-key-12345";
     let config = AppConfig {
+        local_embedding: Default::default(),
+        retrieval: Default::default(),
         transport: TransportKind::Stdio,
         database_url,
         model_provider: ModelProviderKind::OpenAiCompatible,
@@ -481,6 +489,8 @@ async fn doctor_reports_provider_matrix_without_marking_future_providers_support
     let temp_dir = tempdir().expect("temp dir");
     let database_url = sqlite_url(temp_dir.path().join("doctor-matrix.sqlite"));
     let config = AppConfig {
+        local_embedding: Default::default(),
+        retrieval: Default::default(),
         transport: TransportKind::Stdio,
         database_url,
         model_provider: ModelProviderKind::Mock,
@@ -543,6 +553,8 @@ async fn provider_matrix_marks_only_supported_configurable_rows_selectable_for_r
     let temp_dir = tempdir().expect("temp dir");
     let database_url = sqlite_url(temp_dir.path().join("doctor-selectable.sqlite"));
     let config = AppConfig {
+        local_embedding: Default::default(),
+        retrieval: Default::default(),
         transport: TransportKind::Stdio,
         database_url,
         model_provider: ModelProviderKind::Mock,
@@ -771,6 +783,8 @@ fn native_provider_validation_rejects_invalid_settings_and_mismatches() {
     assert!(higher_temperature.validate("anthropic").is_err());
     assert!(
         AppConfig {
+            local_embedding: Default::default(),
+            retrieval: Default::default(),
             model_provider: ModelProviderKind::Anthropic,
             model_config: ModelConfig::OpenAiResponses(valid),
             ..AppConfig::default()

@@ -53,6 +53,8 @@ async fn support_bundle_generates_redacted_local_diagnostics() {
     let commitment_count_before = table_count(&database_url, "commitments").await;
 
     let config = AppConfig {
+        local_embedding: Default::default(),
+        retrieval: Default::default(),
         transport: TransportKind::Stdio,
         database_url: database_url.clone(),
         model_provider: ModelProviderKind::OpenAiCompatible,
@@ -266,6 +268,8 @@ async fn support_bundle_reports_openrouter_config_shape_without_provider_secrets
 
     generate_support_bundle(SupportBundleOptions {
         config: AppConfig {
+            local_embedding: Default::default(),
+            retrieval: Default::default(),
             transport: TransportKind::Stdio,
             database_url,
             model_provider: ModelProviderKind::OpenRouter,
@@ -321,6 +325,8 @@ async fn support_bundle_does_not_create_or_bootstrap_missing_database() {
     let database_path = temp_dir.path().join("missing.sqlite");
     let output_dir = temp_dir.path().join("bundle");
     let config = AppConfig {
+        local_embedding: Default::default(),
+        retrieval: Default::default(),
         database_url: sqlite_url(database_path.clone()),
         ..Default::default()
     };
@@ -412,6 +418,8 @@ async fn support_bundle_filters_operation_summaries_by_correlation_id() {
     let output_dir = temp_dir.path().join("bundle");
     generate_support_bundle(SupportBundleOptions {
         config: AppConfig {
+            local_embedding: Default::default(),
+            retrieval: Default::default(),
             database_url: database_url.clone(),
             ..Default::default()
         },
@@ -489,6 +497,8 @@ async fn support_bundle_redacts_secret_like_operation_metadata() {
     let output_dir = temp_dir.path().join("bundle");
     generate_support_bundle(SupportBundleOptions {
         config: AppConfig {
+            local_embedding: Default::default(),
+            retrieval: Default::default(),
             database_url: database_url.clone(),
             ..Default::default()
         },

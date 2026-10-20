@@ -60,6 +60,8 @@ impl Fixture {
         let a = register_workspace(&registry, root_a).unwrap();
         let b = register_workspace(&registry, root_b).unwrap();
         let config = AppConfig {
+            local_embedding: Default::default(),
+            retrieval: Default::default(),
             transport: TransportKind::Stdio,
             database_url: agent_llm_mm::support::sqlite_url::sqlite_file_url(
                 &directory.path().join("memory.sqlite"),
@@ -91,8 +93,16 @@ impl Fixture {
         .unwrap()
     }
 
-    fn bridge(&self, workspace: &WorkspaceRegistration, label: &str) -> Bridge {
-        self.bridge_binding(&workspace.id, &workspace.roots[0], label)
+    async fn bridge(&self, workspace: &WorkspaceRegistration, label: &str) -> Bridge {
+        let mut bridge = self.bridge_binding(&workspace.id, &workspace.roots[0], label);
+        if let Err(error) = bridge.initialize().await {
+            panic!(
+                "bridge initialization failed: {error}; child={:?}; stderr={}",
+                bridge.child.try_wait(),
+                String::from_utf8_lossy(&bridge.stderr.lock().unwrap())
+            );
+        }
+        bridge
     }
 
     fn bridge_binding(&self, id: &str, root: &Path, label: &str) -> Bridge {
@@ -106,6 +116,7 @@ struct Bridge {
     responses: mpsc::UnboundedReceiver<Result<Value, String>>,
     next_id: u64,
     initialized: bool,
+    stderr: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
 }
 
 impl Bridge {
@@ -151,9 +162,24 @@ impl Bridge {
             .current_dir(working_directory)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
+            .stderr(Stdio::piped())
             .spawn()
             .unwrap();
+        let mut errors = child.stderr.take().unwrap();
+        let stderr = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let capture = stderr.clone();
+        std::thread::spawn(move || {
+            use std::io::Read;
+            let mut chunk = [0u8; 1024];
+            while let Ok(n) = errors.read(&mut chunk) {
+                if n == 0 {
+                    break;
+                }
+                let mut saved = capture.lock().unwrap();
+                let available = 8192usize.saturating_sub(saved.len());
+                saved.extend_from_slice(&chunk[..n.min(available)]);
+            }
+        });
         let stdin = child.stdin.take();
         let stdout = child.stdout.take().unwrap();
         let (sender, responses) = mpsc::unbounded_channel();
@@ -173,6 +199,7 @@ impl Bridge {
             responses,
             next_id: 1,
             initialized: false,
+            stderr,
         }
     }
 
@@ -290,9 +317,9 @@ fn ingest(summary: &str) -> Value {
 async fn clients_share_core_without_sharing_project_scopes_or_global_tools() {
     let fixture = Fixture::new().await;
     let core = fixture.start().await;
-    let mut a = fixture.bridge(&fixture.a, "client-a");
-    let mut a_second = fixture.bridge(&fixture.a, "client-a-second");
-    let mut b = fixture.bridge(&fixture.b, "client-b");
+    let mut a = fixture.bridge(&fixture.a, "client-a").await;
+    let mut a_second = fixture.bridge(&fixture.a, "client-a-second").await;
+    let mut b = fixture.bridge(&fixture.b, "client-b").await;
     let tools = a.tools().await;
     let expected = [
         "create_task",
@@ -303,6 +330,7 @@ async fn clients_share_core_without_sharing_project_scopes_or_global_tools() {
         "build_task_resume_context",
         "ingest_interaction",
         "recall_memory",
+        "recall_memory_enhanced",
         "build_task_context",
         "search_memory",
         "get_memory",
@@ -312,6 +340,7 @@ async fn clients_share_core_without_sharing_project_scopes_or_global_tools() {
         "record_episode",
         "record_experience_use",
         "derive_experience_from_use",
+        "generate_experience_draft",
         "list_experience_uses",
         "get_episode_detail",
         "list_episode_details",
@@ -440,8 +469,8 @@ async fn clients_share_core_without_sharing_project_scopes_or_global_tools() {
 async fn personal_permissions_change_without_reconnecting_and_never_expand_other_sessions() {
     let fixture = Fixture::new().await;
     let core = fixture.start().await;
-    let mut a = fixture.bridge(&fixture.a, "personal-a");
-    let mut b = fixture.bridge(&fixture.b, "personal-b");
+    let mut a = fixture.bridge(&fixture.a, "personal-a").await;
+    let mut b = fixture.bridge(&fixture.b, "personal-b").await;
     let recall = json!({"namespace":"user/synthetic-personal", "query":"synthetic"});
     denied(&a.call("recall_memory", recall.clone()).await);
     set_personal_grant(
@@ -516,8 +545,8 @@ async fn unknown_or_mismatched_workspace_bindings_cannot_initialize() {
         assert!(bridge.initialize().await.is_err());
         assert!(!bridge.close().await.success());
     }
-    let mut valid = fixture.bridge(&fixture.a, "still-valid");
-    assert_eq!(valid.tools().await.len(), 34);
+    let mut valid = fixture.bridge(&fixture.a, "still-valid").await;
+    assert_eq!(valid.tools().await.len(), 36);
     assert!(valid.close().await.success());
     core.stop().await;
 }
@@ -561,8 +590,8 @@ async fn only_one_core_can_own_a_socket_or_database() {
         .is_err(),
         "another database must not bypass ownership of the endpoint"
     );
-    let mut bridge = fixture.bridge(&fixture.a, "original-core");
-    assert_eq!(bridge.tools().await.len(), 34);
+    let mut bridge = fixture.bridge(&fixture.a, "original-core").await;
+    assert_eq!(bridge.tools().await.len(), 36);
     assert!(bridge.close().await.success());
     core.stop().await;
     let restarted = fixture.start().await;
@@ -573,13 +602,13 @@ async fn only_one_core_can_own_a_socket_or_database() {
 async fn bridge_eof_preserves_core_and_memory_survives_reconnect_and_core_restart() {
     let fixture = Fixture::new().await;
     let core = fixture.start().await;
-    let mut first = fixture.bridge(&fixture.a, "first-session");
+    let mut first = fixture.bridge(&fixture.a, "first-session").await;
     let written = first
         .call("ingest_interaction", ingest("synthetic reconnect evidence"))
         .await;
     let event_id = content(&written)["event_id"].as_str().unwrap().to_owned();
     assert!(first.close().await.success());
-    let mut reconnected = fixture.bridge(&fixture.a, "second-session");
+    let mut reconnected = fixture.bridge(&fixture.a, "second-session").await;
     let get = reconnected
         .call("get_memory", json!({"id":format!("event:{event_id}")}))
         .await;
@@ -590,7 +619,7 @@ async fn bridge_eof_preserves_core_and_memory_survives_reconnect_and_core_restar
     assert!(reconnected.close().await.success());
     core.stop().await;
     let restarted = fixture.start().await;
-    let mut after_restart = fixture.bridge(&fixture.a, "after-core-restart");
+    let mut after_restart = fixture.bridge(&fixture.a, "after-core-restart").await;
     let recall = after_restart
         .call("recall_memory", json!({"query":"reconnect"}))
         .await;
@@ -603,8 +632,8 @@ async fn bridge_eof_preserves_core_and_memory_survives_reconnect_and_core_restar
 async fn scoped_correction_preserves_sources_and_history_without_cross_scope_reference_writes() {
     let fixture = Fixture::new().await;
     let core = fixture.start().await;
-    let mut a = fixture.bridge(&fixture.a, "correction-a");
-    let mut b = fixture.bridge(&fixture.b, "correction-b");
+    let mut a = fixture.bridge(&fixture.a, "correction-a").await;
+    let mut b = fixture.bridge(&fixture.b, "correction-b").await;
     let initial = json!({
         "event":{"owner":"World", "kind":"Observation", "summary":"synthetic source for status"},
         "claim_drafts":[{"owner":"World", "subject":"synthetic.status", "predicate":"is", "object":"old", "mode":"Observed"}]
@@ -711,8 +740,8 @@ async fn core_refuses_implicit_ungated_dashboard_and_daemon_configuration() {
 async fn legacy_episode_labels_are_denied_while_rich_episodes_and_exports_remain_scoped() {
     let fixture = Fixture::new().await;
     let core = fixture.start().await;
-    let mut a = fixture.bridge(&fixture.a, "episode-a");
-    let mut b = fixture.bridge(&fixture.b, "episode-b");
+    let mut a = fixture.bridge(&fixture.a, "episode-a").await;
+    let mut b = fixture.bridge(&fixture.b, "episode-b").await;
     let empty_a = a.call("export_memory", json!({})).await;
     let empty_b = b.call("export_memory", json!({})).await;
     let mut legacy = ingest("legacy label must not write");
@@ -828,7 +857,7 @@ async fn stopping_core_drains_admitted_transaction_before_releasing_database_loc
     use sqlx::{Connection, SqliteConnection};
     let fixture = Fixture::new().await;
     let core = fixture.start().await;
-    let mut client = fixture.bridge(&fixture.a, "shutdown-test");
+    let mut client = fixture.bridge(&fixture.a, "shutdown-test").await;
     client.initialize().await.unwrap();
     let mut writer = SqliteConnection::connect(&fixture.config.database_url)
         .await
@@ -937,8 +966,8 @@ async fn cancellation_is_connection_local_and_admitted_writes_are_not_rolled_bac
     use sqlx::{Connection, SqliteConnection};
     let fixture = Fixture::new().await;
     let core = fixture.start().await;
-    let mut a = fixture.bridge(&fixture.a, "cancel-a");
-    let mut b = fixture.bridge(&fixture.b, "cancel-b");
+    let mut a = fixture.bridge(&fixture.a, "cancel-a").await;
+    let mut b = fixture.bridge(&fixture.b, "cancel-b").await;
     a.initialize().await.unwrap();
     b.initialize().await.unwrap();
     let mut writer = SqliteConnection::connect(&fixture.config.database_url)
@@ -1018,8 +1047,8 @@ async fn bridge_without_a_core_fails_closed_without_changing_files() {
 async fn disable_and_unbind_revoke_live_sessions_before_receipt_replay() {
     let fixture = Fixture::new().await;
     let core = fixture.start().await;
-    let mut a = fixture.bridge(&fixture.a, "lifecycle-a");
-    let mut b = fixture.bridge(&fixture.b, "lifecycle-b");
+    let mut a = fixture.bridge(&fixture.a, "lifecycle-a").await;
+    let mut b = fixture.bridge(&fixture.b, "lifecycle-b").await;
     let mut write = ingest("synthetic lifecycle receipt");
     write["request_id"] = json!("synthetic-lifecycle-replay");
     let original = a.call("ingest_interaction", write.clone()).await;
@@ -1027,7 +1056,7 @@ async fn disable_and_unbind_revoke_live_sessions_before_receipt_replay() {
     set_workspace_active(&fixture.registry, &fixture.a.id, false).unwrap();
     denied(&a.request("tools/list", json!({})).await.unwrap());
     denied(&a.call("ingest_interaction", write.clone()).await);
-    assert_eq!(b.tools().await.len(), 34);
+    assert_eq!(b.tools().await.len(), 36);
     set_workspace_active(&fixture.registry, &fixture.a.id, true).unwrap();
     let replay = a.call("ingest_interaction", write.clone()).await;
     assert_eq!(content(&replay)["event_id"], content(&original)["event_id"]);
@@ -1055,8 +1084,8 @@ async fn disable_and_unbind_revoke_live_sessions_before_receipt_replay() {
 async fn task_tools_use_live_scope_binding_and_revoke_before_receipt_replay() {
     let fixture = Fixture::new().await;
     let core = fixture.start().await;
-    let mut a = fixture.bridge(&fixture.a, "task-client-a");
-    let mut b = fixture.bridge(&fixture.b, "task-client-b");
+    let mut a = fixture.bridge(&fixture.a, "task-client-a").await;
+    let mut b = fixture.bridge(&fixture.b, "task-client-b").await;
     let request = json!({"task_id":"scoped-task","request_id":"scoped-task-create","title":"Synthetic task continuity","source":{"kind":"caller_reported","reference":null},"reason":"Test session-bound task creation","requirements":[{"requirement_id":"keep-scope","kind":"prohibition","text":"Do not leave the selected workspace","state":"reported","source":{"kind":"caller_reported","reference":null},"replaces":null}]});
     let created = a.call("create_task", request.clone()).await;
     assert_eq!(content(&created)["record"]["version"], 1);
@@ -1110,7 +1139,7 @@ async fn task_tools_use_live_scope_binding_and_revoke_before_receipt_replay() {
 async fn native_context_adapter_reads_live_task_and_stops_output_after_pause_or_revocation() {
     let fixture = Fixture::new().await;
     let core = fixture.start().await;
-    let mut bridge = fixture.bridge(&fixture.a, "adapter-task-seed");
+    let mut bridge = fixture.bridge(&fixture.a, "adapter-task-seed").await;
     let created = bridge.call("create_task", json!({
         "task_id":"adapter-task", "request_id":"adapter-task-create",
         "title":"Synthetic adapter continuity", "reason":"Exercise real native transport",

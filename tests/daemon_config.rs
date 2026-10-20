@@ -21,6 +21,8 @@ fn daemon_defaults_to_disabled() {
 #[test]
 fn daemon_config_rejects_zero_polling_interval() {
     let config = AppConfig {
+        local_embedding: Default::default(),
+        retrieval: Default::default(),
         daemon: DaemonConfig {
             enabled: true,
             poll_interval_ms: 0,
@@ -37,6 +39,8 @@ fn daemon_config_rejects_zero_polling_interval() {
 async fn doctor_reports_daemon_config_without_starting_daemon() {
     let temp_dir = tempdir().expect("temp dir");
     let config = AppConfig {
+        local_embedding: Default::default(),
+        retrieval: Default::default(),
         database_url: sqlite_url(temp_dir.path().join("daemon-config-doctor.sqlite")),
         ..Default::default()
     };
@@ -51,6 +55,8 @@ async fn doctor_reports_observe_only_daemon_diagnostics_without_semantic_writes(
     let temp_dir = tempdir().expect("temp dir");
     let database_url = sqlite_url(temp_dir.path().join("daemon-observe-only.sqlite"));
     let config = AppConfig {
+        local_embedding: Default::default(),
+        retrieval: Default::default(),
         transport: TransportKind::Stdio,
         database_url: database_url.clone(),
         daemon: DaemonConfig {
@@ -149,6 +155,8 @@ async fn doctor_observe_only_daemon_diagnostics_count_local_operation_candidates
     }
 
     let report = agent_llm_mm::run_doctor(AppConfig {
+        local_embedding: Default::default(),
+        retrieval: Default::default(),
         database_url,
         daemon: DaemonConfig {
             enabled: true,
@@ -172,6 +180,8 @@ async fn doctor_observe_only_daemon_diagnostics_explain_read_only_boundary() {
     let database_url = sqlite_url(temp_dir.path().join("daemon-boundary-diagnostics.sqlite"));
 
     let report = agent_llm_mm::run_doctor(AppConfig {
+        local_embedding: Default::default(),
+        retrieval: Default::default(),
         database_url,
         daemon: DaemonConfig {
             enabled: true,
@@ -249,6 +259,8 @@ async fn doctor_observe_only_candidate_reads_are_bounded_and_do_not_claim_daemon
     }
 
     let report = agent_llm_mm::run_doctor(AppConfig {
+        local_embedding: Default::default(),
+        retrieval: Default::default(),
         database_url,
         daemon: DaemonConfig {
             enabled: true,

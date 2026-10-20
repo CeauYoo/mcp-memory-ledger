@@ -33,3 +33,11 @@ mod task;
 mod task_workspace_reads;
 
 mod experience_use;
+
+mod experience_draft;
+
+mod recall_applicability;
+
+mod enhanced_reads;
+
+mod embedding_cache;

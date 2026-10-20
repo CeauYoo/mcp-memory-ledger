@@ -593,6 +593,8 @@ async fn doctor_read_only_reports_missing_database_without_bootstrapping() {
         database_path.to_string_lossy().replace('\\', "/")
     );
     let config = AppConfig {
+        local_embedding: Default::default(),
+        retrieval: Default::default(),
         transport: TransportKind::Stdio,
         database_url: database_url.clone(),
         model_provider: ModelProviderKind::Mock,
@@ -622,6 +624,8 @@ async fn doctor_allow_bootstrap_explicitly_initializes_missing_database() {
     let temp_dir = tempdir().expect("temp dir");
     let database_path = temp_dir.path().join("doctor-bootstrap.sqlite");
     let config = AppConfig {
+        local_embedding: Default::default(),
+        retrieval: Default::default(),
         database_url: sqlite_url(&database_path),
         ..Default::default()
     };
@@ -656,6 +660,8 @@ async fn doctor_reports_self_revision_runtime_coverage() {
             .replace('\\', "/")
     );
     let config = AppConfig {
+        local_embedding: Default::default(),
+        retrieval: Default::default(),
         database_url,
         ..Default::default()
     };
@@ -698,6 +704,8 @@ async fn doctor_reports_dashboard_config_without_starting_dashboard() {
             .replace('\\', "/")
     );
     let config = AppConfig {
+        local_embedding: Default::default(),
+        retrieval: Default::default(),
         transport: TransportKind::Stdio,
         database_url,
         model_provider: ModelProviderKind::Mock,
@@ -831,6 +839,8 @@ async fn doctor_read_only_does_not_create_missing_parent_directories() {
         database_path.to_string_lossy().replace('\\', "/")
     );
     let config = AppConfig {
+        local_embedding: Default::default(),
+        retrieval: Default::default(),
         transport: TransportKind::Stdio,
         database_url: database_url.clone(),
         model_provider: ModelProviderKind::Mock,
@@ -852,6 +862,8 @@ async fn doctor_read_only_does_not_create_missing_parent_directories() {
 #[tokio::test]
 async fn serve_command_fails_fast_for_malformed_database_url() {
     let config = AppConfig {
+        local_embedding: Default::default(),
+        retrieval: Default::default(),
         transport: TransportKind::Stdio,
         database_url: "postgres://not-a-sqlite-url".to_string(),
         model_provider: ModelProviderKind::Mock,

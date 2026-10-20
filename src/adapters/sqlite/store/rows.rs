@@ -62,7 +62,7 @@ pub(super) fn map_sqlite<T>(result: Result<T, sqlx::Error>) -> Result<T, AppErro
     result.map_err(|error| AppError::Message(error.to_string()))
 }
 
-pub(super) fn stored_claim_from_row(
+pub(in crate::adapters::sqlite) fn stored_claim_from_row(
     row: &sqlx::sqlite::SqliteRow,
 ) -> Result<StoredClaim, AppError> {
     let claim = ClaimDraft::new(
@@ -89,7 +89,7 @@ pub(super) fn stored_claim_from_row(
 }
 
 #[allow(dead_code)]
-pub(super) fn stored_event_from_row(
+pub(in crate::adapters::sqlite) fn stored_event_from_row(
     row: &sqlx::sqlite::SqliteRow,
 ) -> Result<StoredEvent, AppError> {
     let mut event = Event::new_with_namespace(
@@ -155,7 +155,7 @@ fn parse_optional_timestamp(value: Option<String>) -> Result<Option<DateTime<Utc
     value.as_deref().map(parse_timestamp).transpose()
 }
 
-pub(super) fn owner_as_str(owner: Owner) -> &'static str {
+pub(in crate::adapters::sqlite) fn owner_as_str(owner: Owner) -> &'static str {
     match owner {
         Owner::Self_ => "self",
         Owner::User => "user",

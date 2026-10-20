@@ -18,6 +18,7 @@ const WRITES: &[&str] = &[
     "record_episode",
     "record_experience_use",
     "derive_experience_from_use",
+    "generate_experience_draft",
     "propose_experience_candidate",
     "set_experience_candidate_status",
     "revise_experience_candidate",
@@ -56,6 +57,12 @@ fn fixture(name: &str) -> Map<String, Value> {
         | "get_task"
         | "build_task_resume_context" => json!({"task_id":"synthetic"}),
         "list_tasks" => json!({}),
+        "generate_experience_draft" => {
+            json!({"request_id":"request", "use_id":"use", "episode_id":"episode", "candidate_id":"candidate", "allow_model_generation":true})
+        }
+        "recall_memory_enhanced" => {
+            json!({"query":"synthetic", "limit":8, "max_bytes":4096, "hybrid":false})
+        }
         "list_experience_uses" => json!({"task_id":"synthetic"}),
         "derive_experience_from_use" => json!({
             "request_id":"synthetic-request", "use_id":"synthetic-use",
@@ -155,12 +162,12 @@ fn with_scope(name: &str, scope: &str) -> Map<String, Value> {
 }
 
 #[test]
-fn explicit_inventory_covers_all_41_existing_tools_and_defaults_are_materialized() {
-    assert_eq!(allowed_tool_names().len() + DENIED.len(), 41);
+fn explicit_inventory_covers_all_43_existing_tools_and_defaults_are_materialized() {
+    assert_eq!(allowed_tool_names().len() + DENIED.len(), 43);
     let mut unique = allowed_tool_names().to_vec();
     unique.sort_unstable();
     unique.dedup();
-    assert_eq!(unique.len(), 34);
+    assert_eq!(unique.len(), 36);
     for name in allowed_tool_names() {
         let args = fixture(name);
         let before = args.clone();

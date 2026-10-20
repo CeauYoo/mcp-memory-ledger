@@ -2,12 +2,12 @@
 
 ## Task continuity tools
 
-Schema 8 adds `create_task`, `revise_task`, `get_task`, `list_tasks`, `record_task_checkpoint`, and `build_task_resume_context`. Standalone has 41 tools; a bound core session permits 34 and denies the same 7 global tools. The six task tools require the current project scope and do not provide personal/global task access. See [task contract](task-ledger.md) for DTOs, reported-source limits, immutable history, CAS, receipts and full-context rules.
+Schema 8 adds `create_task`, `revise_task`, `get_task`, `list_tasks`, `record_task_checkpoint`, and `build_task_resume_context`. Standalone has 43 tools; a bound core session permits 36 and denies the same 7 global tools. The six task tools require the current project scope and do not provide personal/global task access. See [task contract](task-ledger.md) for DTOs, reported-source limits, immutable history, CAS, receipts and full-context rules.
 
 
-当前注册 **41 个工具**。本页按用途导航；精确 required/optional 字段与枚举以正在运行的 `tools/list` schema 和 [DTO](../src/interfaces/mcp/dto.rs) / [server 注册](../src/interfaces/mcp/server.rs)为准。CLI 命令和 MCP 工具是不同入口。
+当前注册 **43 个工具**。本页按用途导航；精确 required/optional 字段与枚举以正在运行的 `tools/list` schema 和 [DTO](../src/interfaces/mcp/dto.rs) / [server 注册](../src/interfaces/mcp/server.rs)为准。CLI 命令和 MCP 工具是不同入口。
 
-## 1. 日常记忆与任务上下文（6）
+## 1. 日常记忆与任务上下文（7）
 
 | 工具 | 用途与容易混淆的边界 |
 | --- | --- |
@@ -15,12 +15,13 @@ Schema 8 adds `create_task`, `revise_task`, `get_task`, `list_tasks`, `record_ta
 | `search_memory` | scoped 过滤/浏览，不是全文 query；默认 Event，可显式 Claim/Episode/Reflection 或 union |
 | `get_memory` | exact namespace + id；省略类型保持 Event，Claim/Episode/Reflection 需显式类型 |
 | `recall_memory` | active Claim + 历史 Event 字面检索；最多 8 个 OR terms、512 UTF-8 query bytes、limit 1..100 |
+| `recall_memory_enhanced` | 保留原始查询，中文分词/同域单跳别名/RRF；可选有界本地向量，返回适用性及省略诊断；不改变普通 recall 合同 |
 | `build_task_context` | 完整记录/来源/元数据/可选 caller receipt 共用 JSON byte cap；有界 Episode 与可选诊断 |
 | `supersede_memory` | 明确的同域 Claim 更正；旧 Claim 留作 Superseded，事务/CAS/可选 request_id，不改身份或承诺 |
 
 Event/Claim 支持 canonical/raw ID；Episode/Reflection ID 为 opaque persisted reference。get_memory 未命中/跨 scope 返回 null；scoped 浏览/历史返回空结果，不扩大查询。更正写入遇到缺失或越界目标/证据会拒绝。旧 Episode membership projection 与丰富 Episode detail 不同。
 
-普通 recall 为 ASCII 大小写不敏感的 OR 字面匹配，CJK literal；三字符以上利用 FTS5 trigram，短词精确 fallback。不是中文分词、拼写纠错、同义词或 embeddings。完整语义见[召回合同](memory-feedback-experience.md)，上下文见[diagnostics](context-diagnostics.md)。
+普通 recall 为 ASCII 大小写不敏感的 OR 字面匹配，CJK literal；三字符以上利用 FTS5 trigram，短词精确 fallback。该普通入口不是中文分词、拼写纠错、同义词或 embeddings；增强入口另见[合同](enhanced-recall.md)。完整语义见[召回合同](memory-feedback-experience.md)，上下文见[diagnostics](context-diagnostics.md)。
 
 ## 2. 反馈 → 更正候选（6）
 
@@ -89,6 +90,18 @@ observations 与同 scope 的 source_event_refs 不可空。内容是来源关�
 
 Decision is proposed/adopted/rejected. Conditions contain condition and assessment (caller_reported_satisfied/caller_reported_not_satisfied/unknown); adoption requires explicit satisfied reports. Verification is passed/failed/inconclusive/not_performed and remains a report, never authenticated evidence. Task/candidate references and action/outcome Event references must be scoped. Unknown properties are rejected. The server exposes the authoritative schemas.
 
-CLI equivalents: `experience-use record --json '<request JSON>'` and `experience-use list --json '<request JSON>'`. They open the configured current database without bootstrap/migration. Full database backups retain these observations; scoped export is not a backup and does not export them. New interface tests are present but not executed in this implementation environment. No tool changes trust, candidate activation, identity, permissions, or executes reported actions.
+CLI equivalents: `experience-use record --json '<request JSON>'` and `experience-use list --json '<request JSON>'`. They open the configured current database without bootstrap/migration. Full database backups retain these observations; scoped export is not a backup and does not export them. Current restored-slice tests are being revalidated; earlier slice results are not transferred. No tool changes trust, candidate activation, identity, permissions, or executes reported actions.
 
 - `derive_experience_from_use`: explicit caller-content composition, requiring namespace, request_id, use_id, episode_id, candidate_id, episode_content, and candidate_content (maximum serialized request 65536 bytes). CLI: `experience-use derive --json '<request JSON>'`. Episode Event sources must be a subset of the selected use's action/outcome references; the candidate references exactly that Episode. A full-request hash reservation and deterministic sub-request keys support retries after partial progress. The response's reservation_id, stage, episode, candidate, and retryable_error describe actual completion; this is not a cross-step atomic transaction. It creates only a pending candidate through existing workflows and never activates it.
+
+## 显式模型草稿
+
+`generate_experience_draft` 必填 namespace、request_id、use_id、episode_id、candidate_id；必须显式传 `allow_model_generation:true`。服务只取所选不可变 use 及其同域行动/结果 Event。模型输入 128 KiB、完整严格 JSON 提案 64 KiB；HTTP provider envelope 另限 16 MiB。
+
+先提交持久预约再调用模型；同 key 不重复调用，改 payload 拒绝。返回 reservation_id、replayed、status 及可选 derivation。`incomplete_or_in_flight` 表示尚无终态；`known_failed` 仅表示本地调用返回错误，不证明远端未生成或未计费；`rejected` 为无效提案。保存的提案只恢复派生写入，最终 `pending_candidate_created` 仍须另行显式激活。见[完整失败/重放合同](experience-model-drafts.md)。
+
+## 增强检索与宿主选择
+
+`recall_memory_enhanced` 是只读、逐调用范围授权的独立入口。Schema 10 适用性声明通过库级显式 API 写入，不由模型或宿主自动生成；适用条件仍是声明，未自动认证。向量只覆盖有界候选窗口，失败保留字面结果；[Ollama](local-embeddings.md) 默认关闭、显式同域白名单与本地声明，不借用聊天凭据。
+
+T12 由宿主配置 `retrieval.task_context_mode = "literal" | "enhanced" | "hybrid"`，MCP 请求不能覆盖；必需任务要求先按精确版本读取，可选检索共用 deadline，超时保留必需内容并报告缺项。持久派生缓存仍在实现/验证中，不提前标记通过。见[增强召回合同](enhanced-recall.md)。

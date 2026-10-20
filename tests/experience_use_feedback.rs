@@ -354,10 +354,13 @@ async fn schema8_migration_preserves_old_payload_and_receipt_bytes() {
     .fetch_all(&f.pool)
     .await
     .unwrap();
-    sqlx::raw_sql("DROP TABLE experience_use_events;DROP TABLE experience_uses;DELETE FROM schema_migrations WHERE version=9;PRAGMA user_version=8;").execute(&f.pool).await.unwrap();
+    sqlx::raw_sql("DROP TABLE recall_applicability;DROP TABLE experience_use_events;DROP TABLE experience_uses;DELETE FROM schema_migrations WHERE version>=9;PRAGMA user_version=8;").execute(&f.pool).await.unwrap();
     assert!(open_current_database(&f.url).await.is_err());
     let migrated = migrate_database(&f.url).await.unwrap();
-    assert_eq!(migrated.schema_version, Some(9));
+    assert_eq!(
+        migrated.schema_version,
+        Some(agent_llm_mm::adapters::sqlite::CURRENT_DATABASE_SCHEMA_VERSION)
+    );
     assert!(migrated.backup_path.is_some());
     let after:Vec<(String,String)>=sqlx::query_as("SELECT request_summary_json,response_summary_json FROM operation_log ORDER BY operation_id").fetch_all(&f.pool).await.unwrap();
     assert_eq!(before, after);
@@ -396,9 +399,10 @@ async fn full_backup_restores_observations_edges_and_derivation_receipts() {
     experience_use::derive_experience_from_use(&f.store, derive())
         .await
         .unwrap();
-    let original = f._dir.path().join("use.sqlite");
-    let backup = f._dir.path().join("backup.sqlite");
-    let restored = f._dir.path().join("restored.sqlite");
+    let root = std::fs::canonicalize(f._dir.path()).unwrap();
+    let original = root.join("use.sqlite");
+    let backup = root.join("backup.sqlite");
+    let restored = root.join("restored.sqlite");
     agent_llm_mm::support::database_backup::transfer_database("backup", &original, &backup)
         .await
         .unwrap();

@@ -362,7 +362,7 @@ async fn context_snapshot_truth_and_size_are_explicit() {
 async fn schema7_requires_explicit_migration_and_schema8_preserves_records() {
     let f = Fixture::new().await;
     let pool = SqlitePool::connect(&f.url).await.unwrap();
-    sqlx::raw_sql("DROP TABLE experience_use_events;DROP TABLE experience_uses;DROP TABLE task_checkpoint_sources;DROP TABLE task_checkpoints;DROP TABLE task_requirements;DROP TABLE task_revisions;DROP TABLE task_heads;DELETE FROM schema_migrations WHERE version>=8;PRAGMA user_version=7;").execute(&pool).await.unwrap();
+    sqlx::raw_sql("DROP TABLE recall_applicability;DROP TABLE experience_use_events;DROP TABLE experience_uses;DROP TABLE task_checkpoint_sources;DROP TABLE task_checkpoints;DROP TABLE task_requirements;DROP TABLE task_revisions;DROP TABLE task_heads;DELETE FROM schema_migrations WHERE version>=8;PRAGMA user_version=7;").execute(&pool).await.unwrap();
     assert!(open_current_database(&f.url).await.is_err());
     let report = migrate_database(&f.url).await.unwrap();
     assert_eq!(report.schema_version, Some(CURRENT_DATABASE_SCHEMA_VERSION));
@@ -605,4 +605,35 @@ async fn persisted_corruption_is_storage_error_but_invalid_request_is_param_erro
         task::get_task(&f.store, request).await.unwrap_err(),
         agent_llm_mm::error::AppError::InvalidParams(_)
     ));
+}
+
+#[tokio::test]
+async fn optional_recall_deadline_preserves_mandatory_requirements() {
+    let f = Fixture::new().await;
+    f.create().await;
+    let result = task::build_task_resume_context_with_recall(
+        &f.store,
+        TaskContextRequest {
+            namespace: "project/alpha".into(),
+            task_id: "task-one".into(),
+            max_bytes: 16384,
+        },
+        |_input| async {
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+            Ok(serde_json::json!({"unexpected":"late"}))
+        },
+        100,
+    )
+    .await;
+    // The fixture identity is asserted by the standard create helper below.
+    let result = result.unwrap();
+    assert!(!result.mandatory_requirements.is_empty());
+    assert!(result.related_memory.is_none());
+    assert!(
+        result
+            .diagnostics
+            .iter()
+            .any(|d| d.contains("deadline_exceeded"))
+    );
+    assert!(result.serialized_bytes <= result.max_bytes);
 }

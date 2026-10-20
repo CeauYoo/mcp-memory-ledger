@@ -2,6 +2,7 @@ use async_trait::async_trait;
 
 use crate::{
     domain::{
+        experience_draft::{ExperienceDraftInput, ExperienceDraftProposal},
         self_revision::{SelfRevisionProposal, SelfRevisionRequest},
         snapshot::SelfSnapshot,
     },
@@ -45,4 +46,14 @@ pub trait ModelPort {
         &self,
         request: SelfRevisionRequest,
     ) -> Result<SelfRevisionProposal, AppError>;
+
+    /// Generate inert, reviewable content only. Models must opt in explicitly.
+    async fn propose_experience_draft(
+        &self,
+        _input: ExperienceDraftInput,
+    ) -> Result<ExperienceDraftProposal, AppError> {
+        Err(AppError::Message(
+            "experience draft generation is unsupported by this model".into(),
+        ))
+    }
 }

@@ -415,6 +415,8 @@ fn remote_team_security_gates_block_remote_writes_until_all_prerequisites_exist(
 async fn doctor_exposes_remote_team_inventory_and_security_gates_as_machine_readable_json() {
     let temp_dir = tempdir().expect("temp dir");
     let report = run_doctor(agent_llm_mm::support::config::AppConfig {
+        local_embedding: Default::default(),
+        retrieval: Default::default(),
         database_url: format!(
             "sqlite://{}",
             temp_dir
@@ -452,6 +454,8 @@ async fn doctor_exposes_remote_team_inventory_and_security_gates_as_machine_read
 async fn doctor_memory_layer_exposes_read_only_classification_diagnostics() {
     let temp_dir = tempdir().expect("temp dir");
     let report = run_doctor(agent_llm_mm::support::config::AppConfig {
+        local_embedding: Default::default(),
+        retrieval: Default::default(),
         database_url: format!(
             "sqlite://{}",
             temp_dir
@@ -516,6 +520,8 @@ async fn doctor_memory_layer_exposes_read_only_classification_diagnostics() {
 async fn doctor_exposes_read_only_system_layer_report_with_architecture_blockers() {
     let temp_dir = tempdir().expect("temp dir");
     let report = run_doctor(agent_llm_mm::support::config::AppConfig {
+        local_embedding: Default::default(),
+        retrieval: Default::default(),
         database_url: format!(
             "sqlite://{}",
             temp_dir

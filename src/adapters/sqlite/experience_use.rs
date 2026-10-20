@@ -73,7 +73,7 @@ async fn event(c: &mut SqliteConnection, ns: &str, r: &str) -> Result<String, Ap
     }
     Ok(e.event_id().into())
 }
-async fn load(
+pub(super) async fn load(
     c: &mut SqliteConnection,
     ns: &str,
     id: &str,

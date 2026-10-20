@@ -134,6 +134,15 @@ impl LedgerExportStore for SqliteStore {
                 .fetch_one(&mut *tx)
                 .await,
         )?;
+        let applicability: i64 = db(sqlx::query_scalar(
+            "SELECT count(*) FROM recall_applicability WHERE namespace=?",
+        )
+        .bind(namespace.as_str())
+        .fetch_one(&mut *tx)
+        .await)?;
+        if applicability > 0 {
+            return Err(AppError::InvalidParams("scoped export cannot preserve recall applicability authority yet; use a full database backup".into()));
+        }
         let mut result = LedgerExport::empty(namespace.clone(), version);
         let mut budget = Budget::new(&request);
         let event_rows = rows(

@@ -1,5 +1,7 @@
 # Native Codex host verification
 
+当前证据：已发布基线 `8f87a813` 的 Ubuntu CI 已通过下述 startup/resume 合成 gate，使用真实 Codex 0.159.2 和本机模型协议 fixture。仅该版本获此证据；当前恢复第三片须重新验证。未验证模型理解、真实模型效果、fork/compact 或动作授权，也未修改用户机器。
+
 The Ubuntu CI step uses official Codex **0.159.2**, pinned to the published full-package SHA256. It preserves the bundled sandbox resources. [Release and asset digests](https://github.com/openai/codex/releases/expanded_assets/rust-v0.159.2).
 
 `scripts/probe-codex-native-host.py` creates a fresh private HOME, project, registry, and SQLite database. The ledger uses its mock provider. Only the generated native adapter hook is reviewed by exact command, source, definition hash, and binary hash, then trusted through the same public `config/batchWrite` operation used by the [official TUI](https://github.com/openai/codex/blob/rust-v0.159.2/codex-rs/tui/src/hooks_rpc.rs). No real user configuration or project trust is changed.
@@ -14,4 +16,4 @@ python3 scripts/probe-codex-native-host.py \
 
 Paths must be absolute and the summary path must not exist. The script emits only booleans, counts, failure categories, and the ledger binary digest. Raw provider requests and RPC events are examined in memory, never included in the uploaded summary. Do not upload temporary HOME files. The child environment is allowlisted and does not inherit credentials. No sandbox-disable or project-trust exceptions are permitted.
 
-Exit 0 requires all four startup/resume request/event checks. An environment failure exits 2 and must not be relabeled as successful injection. Cloud development execution was blocked at local-core socket creation (`environment_permission_denied`, zero fixture requests); exact hook trust was separately verified by an isolated marker-only probe. The full-chain script is an integration candidate until the Ubuntu CI run succeeds. Public schema validation and Python syntax checks alone do not close that gap.
+Exit 0 requires all four startup/resume request/event checks. An environment failure exits 2 and must not be relabeled as successful injection. Cloud development execution was blocked at local-core socket creation (`environment_permission_denied`, zero fixture requests); exact hook trust was separately verified by an isolated marker-only probe. That cloud-environment failure remains a historical observation. The later Ubuntu CI gate passed for `8f87a813`; it does not transfer to the restored third slice or any later commit. Public schema validation and Python syntax checks alone never establish host delivery.

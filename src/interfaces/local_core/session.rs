@@ -540,6 +540,8 @@ mod tests {
             let registry = directory.join("registry.json");
             let workspace = register_workspace(&registry, &root).unwrap();
             let config = AppConfig {
+                local_embedding: Default::default(),
+                retrieval: Default::default(),
                 database_url: crate::support::sqlite_url::sqlite_file_url(
                     &directory.join("synthetic.sqlite"),
                 ),

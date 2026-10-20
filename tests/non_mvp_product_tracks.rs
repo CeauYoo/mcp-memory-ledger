@@ -73,6 +73,8 @@ fn release_evidence_index_preserves_blocked_product_wording_gate_status() {
 #[test]
 fn provider_certification_preflight_keeps_openrouter_live_certification_blocked_without_evidence() {
     let config = AppConfig {
+        local_embedding: Default::default(),
+        retrieval: Default::default(),
         model_provider: ModelProviderKind::OpenRouter,
         model_config: ModelConfig::OpenRouter(OpenAiCompatibleConfig {
             base_url: "https://user:password@openrouter.example.test/api/v1?token=query-secret"
@@ -115,6 +117,8 @@ fn provider_certification_preflight_keeps_openrouter_live_certification_blocked_
 #[test]
 fn provider_certification_preflight_redacts_path_secret_fragments() {
     let config = AppConfig {
+        local_embedding: Default::default(),
+        retrieval: Default::default(),
         model_provider: ModelProviderKind::OpenAiCompatible,
         model_config: ModelConfig::OpenAiCompatible(OpenAiCompatibleConfig {
             base_url: "https://provider.example.test/api/sk-path-secret/v1".to_string(),
@@ -178,6 +182,8 @@ fn provider_certification_preflight_rejects_placeholder_live_evidence_files() {
 
     let summary = summarize_provider_certification(ProviderCertificationOptions {
         config: AppConfig {
+            local_embedding: Default::default(),
+            retrieval: Default::default(),
             model_provider: ModelProviderKind::OpenRouter,
             model_config: ModelConfig::OpenRouter(OpenAiCompatibleConfig {
                 base_url: "https://openrouter.example.test/api/v1".to_string(),

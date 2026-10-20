@@ -103,6 +103,8 @@ fn stub_evidence_runner_generates_non_live_provider_evidence_without_certifying_
 fn stub_evidence_serialization_redacts_secrets_and_url_sensitive_parts() {
     let temp_dir = tempdir().expect("temp dir");
     let config = AppConfig {
+        local_embedding: Default::default(),
+        retrieval: Default::default(),
         model_provider: ModelProviderKind::OpenAiCompatible,
         model_config: ModelConfig::OpenAiCompatible(OpenAiCompatibleConfig {
             base_url: "https://url-user:url-password@provider.example.test/api/sk-path-secret/v1?token=query-secret".to_string(),
@@ -498,6 +500,8 @@ fn live_evidence_serialization_redacts_provider_secrets_and_payloads() {
         server.port()
     );
     let config = AppConfig {
+        local_embedding: Default::default(),
+        retrieval: Default::default(),
         model_provider: ModelProviderKind::OpenAiCompatible,
         model_config: ModelConfig::OpenAiCompatible(OpenAiCompatibleConfig {
             base_url: secret_base_url,
@@ -553,6 +557,8 @@ fn live_provider_errors_do_not_serialize_raw_response_payloads() {
     .to_string();
     let server = FailingChatServer::spawn(500, raw_error_payload);
     let config = AppConfig {
+        local_embedding: Default::default(),
+        retrieval: Default::default(),
         model_provider: ModelProviderKind::OpenAiCompatible,
         model_config: ModelConfig::OpenAiCompatible(OpenAiCompatibleConfig {
             base_url: server.base_url(),
@@ -725,6 +731,8 @@ fn openrouter_config() -> AppConfig {
 
 fn openrouter_config_with_base_url(base_url: impl Into<String>) -> AppConfig {
     AppConfig {
+        local_embedding: Default::default(),
+        retrieval: Default::default(),
         model_provider: ModelProviderKind::OpenRouter,
         model_config: ModelConfig::OpenRouter(OpenAiCompatibleConfig {
             base_url: base_url.into(),
@@ -738,6 +746,8 @@ fn openrouter_config_with_base_url(base_url: impl Into<String>) -> AppConfig {
 
 fn invalid_openrouter_config() -> AppConfig {
     AppConfig {
+        local_embedding: Default::default(),
+        retrieval: Default::default(),
         model_provider: ModelProviderKind::OpenRouter,
         model_config: ModelConfig::OpenRouter(OpenAiCompatibleConfig {
             base_url: "https://openrouter.example.test/api/v1?token=query-secret".to_string(),
@@ -1025,6 +1035,8 @@ fn native_stub_evidence_stays_offline_and_unsafe_urls_fail_before_network() {
             temperature: None,
         };
         let config = AppConfig {
+            local_embedding: Default::default(),
+            retrieval: Default::default(),
             model_provider: kind,
             model_config: match kind {
                 ModelProviderKind::OpenAiResponses => ModelConfig::OpenAiResponses(native),
@@ -1090,6 +1102,8 @@ fn native_certification_uses_native_paths_caps_and_usage_without_live_claims() {
             temperature: None,
         };
         let config = AppConfig {
+            local_embedding: Default::default(),
+            retrieval: Default::default(),
             model_provider: kind,
             model_config: if kind == ModelProviderKind::OpenAiResponses {
                 ModelConfig::OpenAiResponses(native)

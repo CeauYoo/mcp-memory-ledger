@@ -2,6 +2,9 @@
 pub async fn remove_v7_objects(connection: &mut sqlx::SqliteConnection) {
     // A fixture downgraded from current schema must remove all later additions too.
     for table in [
+        "recall_applicability",
+        "experience_use_events",
+        "experience_uses",
         "task_checkpoint_sources",
         "task_checkpoints",
         "task_requirements",

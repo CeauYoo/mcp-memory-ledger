@@ -57,6 +57,15 @@ pub(crate) async fn inventory(
         ));
         return Ok(report);
     }
+    let applicability: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM recall_applicability WHERE namespace=?")
+            .bind(namespace)
+            .fetch_one(&mut *conn)
+            .await
+            .map_err(db)?;
+    if applicability > 0 {
+        report.block("recall applicability authority closure is not supported by adoption; use full database backup");
+    }
     // Tasks and their receipts have no legacy adoption closure contract yet.
     let task_count: i64 = sqlx::query_scalar("SELECT count(*) FROM task_heads")
         .fetch_one(&mut *conn)

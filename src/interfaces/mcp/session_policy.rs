@@ -68,6 +68,7 @@ const ALLOWED_TOOL_NAMES: &[&str] = &[
     "build_task_resume_context",
     "ingest_interaction",
     "recall_memory",
+    "recall_memory_enhanced",
     "build_task_context",
     "search_memory",
     "get_memory",
@@ -77,6 +78,7 @@ const ALLOWED_TOOL_NAMES: &[&str] = &[
     "record_episode",
     "record_experience_use",
     "derive_experience_from_use",
+    "generate_experience_draft",
     "list_experience_uses",
     "get_episode_detail",
     "list_episode_details",
@@ -219,6 +221,17 @@ fn rule(name: &str) -> Result<ToolRule, PolicyError> {
                 "summary",
             ],
         ),
+        "generate_experience_draft" => (
+            Write,
+            &[
+                "namespace",
+                "request_id",
+                "use_id",
+                "episode_id",
+                "candidate_id",
+                "allow_model_generation",
+            ],
+        ),
         "derive_experience_from_use" => (
             Write,
             &[
@@ -253,6 +266,10 @@ fn rule(name: &str) -> Result<ToolRule, PolicyError> {
                 "limitations",
                 "related_use_id",
             ],
+        ),
+        "recall_memory_enhanced" => (
+            Read,
+            &["namespace", "query", "limit", "max_bytes", "hybrid"],
         ),
         "list_experience_uses" => (Read, &["namespace", "task_id", "limit", "after_id"]),
         "record_episode" => (Write, &["namespace", "request_id", "episode_id", "content"]),

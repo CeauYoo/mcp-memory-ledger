@@ -101,15 +101,32 @@ pub async fn execute<D: MemoryReadStore + TextMemoryStore + Sync>(
     deps: &D,
     input: RecallMemoryInput,
 ) -> Result<RecallMemoryResult, AppError> {
+    execute_route(deps, input, false).await
+}
+/// Explicit enhanced callers retain an independent authoritative exact route.
+pub async fn execute_exact<D: MemoryReadStore + TextMemoryStore + Sync>(
+    deps: &D,
+    input: RecallMemoryInput,
+) -> Result<RecallMemoryResult, AppError> {
+    execute_route(deps, input, true).await
+}
+async fn execute_route<D: MemoryReadStore + TextMemoryStore + Sync>(
+    deps: &D,
+    input: RecallMemoryInput,
+    exact: bool,
+) -> Result<RecallMemoryResult, AppError> {
     let terms = input.terms()?;
     let scope = MemoryScope::for_namespace(input.namespace.clone());
-    let page = deps
-        .recall_text(TextMemoryQuery {
-            scope: scope.clone(),
-            terms: terms.clone(),
-            limit: input.limit,
-        })
-        .await?;
+    let query = TextMemoryQuery {
+        scope: scope.clone(),
+        terms: terms.clone(),
+        limit: input.limit,
+    };
+    let page = if exact {
+        deps.recall_text_exact(query).await?
+    } else {
+        deps.recall_text(query).await?
+    };
     let retrieved_count = page.hits.len();
     let mut records = Vec::new();
     for hit in page.hits {

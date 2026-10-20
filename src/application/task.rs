@@ -84,6 +84,39 @@ pub async fn build_task_resume_context<
     store: &S,
     r: TaskContextRequest,
 ) -> Result<TaskResumeContext, AppError> {
+    build_task_resume_context_with_recall(
+        store,
+        r,
+        |input| async move {
+            let value = super::build_task_context::execute(store, input).await?;
+            serde_json::to_value(value).map_err(|e| AppError::Message(e.to_string()))
+        },
+        2000,
+    )
+    .await
+}
+
+/// Host-selected optional retrieval callback. Mandatory task loading and final
+/// version recheck remain shared; request/MCP payloads cannot choose this policy.
+pub async fn build_task_resume_context_with_recall<S, F, Fut>(
+    store: &S,
+    r: TaskContextRequest,
+    recall: F,
+    optional_deadline_ms: u64,
+) -> Result<TaskResumeContext, AppError>
+where
+    S: TaskStore
+        + MemoryReadStore
+        + TextMemoryStore
+        + ExperienceStore
+        + crate::ports::experience_use_store::ExperienceUseStore
+        + Sync,
+    F: FnOnce(super::build_task_context::BuildTaskContextInput) -> Fut,
+    Fut: std::future::Future<Output = Result<serde_json::Value, AppError>>,
+{
+    if !(100..=5000).contains(&optional_deadline_ms) {
+        return invalid("optional recall deadline must be 100..5000 milliseconds");
+    }
     let namespace = scope(&r.namespace)?;
     identifier(&r.task_id, "task_id")?;
     if !(1024..=262144).contains(&r.max_bytes) {
@@ -144,19 +177,24 @@ pub async fn build_task_resume_context<
             context.can_resume = false;
         }
     }
+    let deadline =
+        tokio::time::Instant::now() + std::time::Duration::from_millis(optional_deadline_ms);
     // Derived reuse eligibility is computed anew, never a persisted trusted cache.
-    match super::experience_use::list_experience_uses(
-        store,
-        crate::domain::experience_use::ListExperienceUsesRequest {
-            namespace: r.namespace.clone(),
-            task_id: r.task_id.clone(),
-            limit: 100,
-            after_id: None,
-        },
+    match tokio::time::timeout_at(
+        deadline,
+        super::experience_use::list_experience_uses(
+            store,
+            crate::domain::experience_use::ListExperienceUsesRequest {
+                namespace: r.namespace.clone(),
+                task_id: r.task_id.clone(),
+                limit: 100,
+                after_id: None,
+            },
+        ),
     )
     .await
     {
-        Ok(uses) => {
+        Ok(Ok(uses)) => {
             if uses.iter().any(|u| {
                 !u.currently_reusable
                     && u.record.observation.decision
@@ -170,7 +208,7 @@ pub async fn build_task_resume_context<
                 context.diagnostics.push("experience_use_invalidation_scan_bounded_paginate_history_for_remaining_records".into());
             }
         }
-        Err(_) => context.diagnostics.push(
+        _ => context.diagnostics.push(
             "experience_use_invalidation_status_unavailable_do_not_assume_prior_reuse_valid".into(),
         ),
     }
@@ -183,39 +221,40 @@ pub async fn build_task_resume_context<
             .push("related_memory_and_experience_reads_are_not_one_atomic_snapshot".into());
         let budget = (r.max_bytes - base - 1024) / 2;
         if budget >= 1024 {
-            match super::build_task_context::execute(
-                store,
-                super::build_task_context::BuildTaskContextInput {
+            match tokio::time::timeout_at(
+                deadline,
+                recall(super::build_task_context::BuildTaskContextInput {
                     namespace,
                     query: snapshot.task.title.clone(),
                     limit: 8,
                     max_bytes: budget,
-                },
+                }),
             )
             .await
             {
-                Ok(memory) => {
-                    context.related_memory = Some(
-                        serde_json::to_value(memory)
-                            .map_err(|e| AppError::Message(e.to_string()))?,
-                    )
-                }
-                Err(_) => context
+                Ok(Ok(memory)) => context.related_memory = Some(memory),
+                Ok(Err(_)) => context
                     .diagnostics
                     .push("optional_related_memory_unavailable".into()),
+                Err(_) => context
+                    .diagnostics
+                    .push("optional_recall_deadline_exceeded_mandatory_retained".into()),
             }
-            match super::experience::recall_candidates(
-                store,
-                RecallCandidatesRequest {
-                    namespace: r.namespace.clone(),
-                    query: snapshot.task.title,
-                    limit: 8,
-                    max_bytes: budget.min(65536),
-                },
+            match tokio::time::timeout_at(
+                deadline,
+                super::experience::recall_candidates(
+                    store,
+                    RecallCandidatesRequest {
+                        namespace: r.namespace.clone(),
+                        query: snapshot.task.title,
+                        limit: 8,
+                        max_bytes: budget.min(65536),
+                    },
+                ),
             )
             .await
             {
-                Ok(experiences) => {
+                Ok(Ok(experiences)) => {
                     if experiences.truncated {
                         context
                             .diagnostics
@@ -223,9 +262,12 @@ pub async fn build_task_resume_context<
                     }
                     context.experiences = experiences.candidates;
                 }
-                Err(_) => context
+                Ok(Err(_)) => context
                     .diagnostics
                     .push("optional_experiences_unavailable".into()),
+                Err(_) => context
+                    .diagnostics
+                    .push("optional_experiences_deadline_exceeded_mandatory_retained".into()),
             }
         }
         // Optional experience is a read-time suggestion, never an applicability proof.
@@ -235,17 +277,20 @@ pub async fn build_task_resume_context<
         );
         let mut revalidated = Vec::new();
         for selected in std::mem::take(&mut context.experiences) {
-            let current = super::experience::get_candidate(
-                store,
-                crate::domain::experience::GetCandidateRequest {
-                    namespace: r.namespace.clone(),
-                    candidate_id: selected.candidate_id.clone(),
-                    version: None,
-                },
+            let current = tokio::time::timeout_at(
+                deadline,
+                super::experience::get_candidate(
+                    store,
+                    crate::domain::experience::GetCandidateRequest {
+                        namespace: r.namespace.clone(),
+                        candidate_id: selected.candidate_id.clone(),
+                        version: None,
+                    },
+                ),
             )
             .await;
             match current {
-                Ok(Some(current))
+                Ok(Ok(Some(current)))
                     if current.version == selected.version
                         && current.status
                             == crate::domain::experience::ExperienceStatus::Active =>
@@ -258,21 +303,26 @@ pub async fn build_task_resume_context<
             }
         }
         context.experiences = revalidated;
-        let latest = get_task_snapshot(store, &r.namespace, &r.task_id)
-            .await?
-            .ok_or_else(|| {
-                AppError::InvalidParams("task disappeared during context selection".into())
-            })?;
-        context.task_version_after_selection = Some(latest.task.version);
-        if latest.task.version != context.task_version
-            || latest.checkpoint.as_ref().map(|c| c.sequence)
-                != context.checkpoint.as_ref().map(|c| c.sequence)
+        match tokio::time::timeout_at(deadline, get_task_snapshot(store, &r.namespace, &r.task_id))
+            .await
         {
-            context.complete = false;
-            context.can_resume = false;
-            context
-                .diagnostics
-                .push("stale_task_or_checkpoint_changed_during_selection_rebuild_context".into());
+            Ok(Ok(Some(latest))) => {
+                context.task_version_after_selection = Some(latest.task.version);
+                if latest.task.version != context.task_version
+                    || latest.checkpoint.as_ref().map(|c| c.sequence)
+                        != context.checkpoint.as_ref().map(|c| c.sequence)
+                {
+                    context.complete = false;
+                    context.can_resume = false;
+                    context.diagnostics.push(
+                        "stale_task_or_checkpoint_changed_during_selection_rebuild_context".into(),
+                    );
+                }
+            }
+            _ => {
+                context.can_resume = false;
+                context.diagnostics.push("selection_recheck_unavailable_mandatory_snapshot_retained_recheck_before_resume".into());
+            }
         }
     } else {
         context

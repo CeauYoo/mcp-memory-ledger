@@ -4,7 +4,7 @@ use sqlx::sqlite::SqlitePool;
 mod operation_log;
 mod ports;
 mod reads;
-mod rows;
+pub(super) mod rows;
 mod schema_compat;
 mod transactions;
 

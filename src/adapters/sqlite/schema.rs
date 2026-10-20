@@ -1,7 +1,7 @@
 pub(super) const OWNER_NAMESPACE_SCOPE_CONSTRAINT_NAME: &str = "owner_namespace_scope";
-pub(super) const CURRENT_SCHEMA_VERSION: i64 = 9;
+pub(super) const CURRENT_SCHEMA_VERSION: i64 = 10;
 
-pub(super) const SCHEMA_MIGRATIONS: [(i64, &str); 9] = [
+pub(super) const SCHEMA_MIGRATIONS: [(i64, &str); 10] = [
     (1, "baseline_schema"),
     (2, "owner_namespace_scope"),
     (3, "reflection_audit_columns"),
@@ -11,6 +11,7 @@ pub(super) const SCHEMA_MIGRATIONS: [(i64, &str); 9] = [
     (7, "versioned_self_model"),
     (8, "workspace_task_ledger"),
     (9, "task_experience_use_feedback"),
+    (10, "recall_applicability_authority"),
 ];
 
 const OWNER_NAMESPACE_SCOPE_CONSTRAINT_SQL: &str = r#"    CONSTRAINT owner_namespace_scope CHECK (

@@ -5,7 +5,10 @@ use super::{
     transport::{Authentication, Transport},
 };
 use crate::{
-    domain::self_revision::{SelfRevisionProposal, SelfRevisionRequest},
+    domain::{
+        experience_draft::{ExperienceDraftInput, ExperienceDraftProposal},
+        self_revision::{SelfRevisionProposal, SelfRevisionRequest},
+    },
     error::AppError,
     ports::{ModelDecision, ModelDecisionRequest, ModelPort},
     support::config::NativeModelConfig,
@@ -98,5 +101,13 @@ impl ModelPort for NativeModel {
             self.generate(prompt::self_revision(request)?).await?,
             self.protocol.provider(),
         )
+    }
+
+    async fn propose_experience_draft(
+        &self,
+        input: ExperienceDraftInput,
+    ) -> Result<ExperienceDraftProposal, AppError> {
+        let text = self.generate(prompt::experience_draft(&input)?).await?;
+        prompt::experience_draft_proposal(&text, self.protocol.provider(), &input)
     }
 }

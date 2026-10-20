@@ -36,3 +36,8 @@ env = { AGENT_LLM_MM_CONFIG = "/absolute/path/ledger-demo.toml" }
 
 # Optional deny-only action checks are previewed separately; no hook is enabled here.
 # See docs/codex-action-checks.md. Native sandbox/approval settings remain unchanged.
+
+# Optional embeddings belong in the server TOML [local_embedding] table,
+# not in this client registration. Disabled by default; requires exact namespace
+# opt-in, local_only_declared, loopback endpoint, and pinned model profile.
+# See examples/agent-llm-mm.example.toml and docs/local-embeddings.md.

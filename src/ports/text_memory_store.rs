@@ -97,7 +97,19 @@ pub struct TextClaimStatusDiagnostics {
 
 #[async_trait]
 pub trait TextMemoryStore {
+    async fn recall_applicability(
+        &self,
+        _namespace: &str,
+        _reference: &str,
+    ) -> Result<Option<crate::domain::recall_applicability::RecallApplicability>, AppError> {
+        Ok(None)
+    }
+
     async fn recall_text(&self, query: TextMemoryQuery) -> Result<TextMemoryPage, AppError>;
+    /// Authoritative exact scan route. Stores without indexes may reuse literal recall.
+    async fn recall_text_exact(&self, query: TextMemoryQuery) -> Result<TextMemoryPage, AppError> {
+        self.recall_text(query).await
+    }
 
     /// Optional read-only context diagnostics. Raw recall does not invoke this method.
     /// Implementations must scope before sampling and expose incomplete scans honestly.

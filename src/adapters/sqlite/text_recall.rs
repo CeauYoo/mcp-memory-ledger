@@ -20,6 +20,63 @@ use std::collections::BTreeSet;
 
 #[async_trait]
 impl TextMemoryStore for SqliteStore {
+    async fn recall_text_exact(&self, query: TextMemoryQuery) -> Result<TextMemoryPage, AppError> {
+        query.validate()?;
+        let mut tx = self.pool.begin().await.map_err(sqlite_error)?;
+        let [claims, events] = select_groups(&mut tx, &query, false, true).await?;
+        let mut oversized = 0i64;
+        for (table, id) in [("claims", "claim_id"), ("events", "event_id")] {
+            let active = if table == "claims" {
+                " AND status='active'"
+            } else {
+                ""
+            };
+            let sql = format!(
+                "SELECT count(*) FROM {table} WHERE owner=? AND namespace=?{active} AND length(CAST({id} AS BLOB))>256"
+            );
+            oversized += sqlx::query_scalar::<_, i64>(&sql)
+                .bind(owner_name(query.scope.owner().expect("scope")))
+                .bind(query.scope.namespace().expect("scope").as_str())
+                .fetch_one(&mut *tx)
+                .await
+                .map_err(sqlite_error)?;
+        }
+        let available = claims.len() + events.len();
+        let mut hits = Vec::new();
+        let mut claims = claims.into_iter();
+        let mut events = events.into_iter();
+        loop {
+            let a = claims.next();
+            let b = events.next();
+            if a.is_none() && b.is_none() {
+                break;
+            }
+            hits.extend(a);
+            hits.extend(b);
+        }
+        hits.truncate(query.limit);
+        tx.rollback().await.map_err(sqlite_error)?;
+        Ok(TextMemoryPage {
+            hits,
+            has_more: available > query.limit || oversized > 0,
+            strategy: "authoritative_scoped_exact_scan",
+            index_warning: (oversized > 0)
+                .then(|| format!("oversized_scope_identifiers_omitted:{oversized}")),
+        })
+    }
+
+    async fn recall_applicability(
+        &self,
+        namespace: &str,
+        reference: &str,
+    ) -> Result<Option<crate::domain::recall_applicability::RecallApplicability>, AppError> {
+        crate::domain::experience::validate_namespace(namespace)?;
+        let mut tx = self.pool.begin().await.map_err(sqlite_error)?;
+        let result = super::recall_applicability::load(&mut tx, namespace, reference).await?;
+        tx.rollback().await.map_err(sqlite_error)?;
+        Ok(result)
+    }
+
     async fn recall_text(&self, query: TextMemoryQuery) -> Result<TextMemoryPage, AppError> {
         query.validate()?;
         let mut transaction = self.pool.begin().await.map_err(sqlite_error)?;
@@ -32,7 +89,7 @@ impl TextMemoryStore for SqliteStore {
         let mut warning = (!structure.is_empty())
             .then(|| format!("derived_index_needs_rebuild: {}", structure.join(", ")));
         let use_index = warning.is_none() && !long_terms.is_empty();
-        let groups = match select_groups(&mut transaction, &query, use_index).await {
+        let groups = match select_groups(&mut transaction, &query, use_index, false).await {
             Ok(groups) => groups,
             Err(error) if use_index => {
                 // Corrupt/unavailable derived data must not make the authoritative ledger
@@ -40,7 +97,7 @@ impl TextMemoryStore for SqliteStore {
                 warning = Some(format!(
                     "derived_index_query_failed; explicit rebuild recommended: {error}"
                 ));
-                select_groups(&mut transaction, &query, false).await?
+                select_groups(&mut transaction, &query, false, false).await?
             }
             Err(error) => return Err(error),
         };
@@ -270,10 +327,11 @@ async fn select_groups(
     connection: &mut SqliteConnection,
     query: &TextMemoryQuery,
     indexed: bool,
+    bounded: bool,
 ) -> Result<[Vec<TextMemoryHit>; 2], AppError> {
     let mut groups = [Vec::new(), Vec::new()];
     for (group, hits) in groups.iter_mut().enumerate() {
-        let mut sql = selection_query(query, group, indexed, false);
+        let mut sql = selection_query(query, group, indexed, false, bounded);
         for row in sql
             .build()
             .fetch_all(&mut *connection)
@@ -299,6 +357,7 @@ fn selection_query(
     group: usize,
     indexed: bool,
     explain: bool,
+    bounded: bool,
 ) -> QueryBuilder<'_, Sqlite> {
     let owner = match query.scope.owner().expect("validated scope") {
         Owner::Self_ => "self",
@@ -372,6 +431,11 @@ fn selection_query(
     scope(&mut sql, owner, namespace, group == 0);
     if indexed {
         sql.push(format!(" AND {id} IN (SELECT record_id FROM candidates)"));
+    }
+    if bounded {
+        sql.push(format!(
+            " AND typeof({id})='text' AND length(CAST({id} AS BLOB))<=256"
+        ));
     }
     sql.push(" AND matched_terms > 0 ORDER BY matched_terms DESC, ");
     // Persisted UTC nanosecond keys keep offsets equivalent and unknown legacy
@@ -583,7 +647,7 @@ mod tests {
             limit: 20,
         };
         for group in 0..2 {
-            let mut explain = selection_query(&query, group, true, true);
+            let mut explain = selection_query(&query, group, true, true, false);
             let statement = explain.sql().to_string();
             let rows = explain.build().fetch_all(&store.pool).await.unwrap();
             let plan: Vec<String> = rows.iter().map(|row| row.get("detail")).collect();

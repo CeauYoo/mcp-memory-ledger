@@ -2,6 +2,8 @@
 
 Status: native Rust adapter implemented for the public Codex lifecycle JSON contract inspected on 2026-10-16. This is a technical-demo/MVP feature. No user machine deployment or global configuration edit is performed. It does not authorize or intercept tool execution (T09 onward is outside this batch).
 
+当前验证：`8f87a813` 的 Ubuntu 原生 Codex startup/resume 合成 gate 已通过，当前恢复第三片仍在复验。仅证明该版本向真实宿主及本机协议 fixture 的送达，不证明模型理解、动作授权、fork/compact 或用户部署。详见[探针合同](codex-native-host-verification.md)。
+
 ## Protocol and evidence
 
 The adapter reads only `session_id`, `cwd`, `hook_event_name`, and `source`. It never reads transcript files or imports the user-prompt field as requirements. Recognized events are SessionStart (`startup`, `resume`, `clear`, `compact`, `fork`) and UserPromptSubmit. Unknown events degrade to manual context rather than guessing a protocol. Host payloads do not authenticate their producer or include a trustworthy host version.
@@ -12,7 +14,8 @@ Capability evidence must remain separated:
 
 - Documentation/schema support: checked for the contract above.
 - Real host configuration parsing: isolated 0.159.2 `initialize` and `hooks/list` succeeded; handler was listed with `additionalContextLimit: 0`, no configuration errors, and `trustStatus: untrusted`.
-- Real lifecycle execution/injection: **blocked, not passed**. `thread/start` failed before any model request: `fs sandbox helper failed ... error building bubblewrap command: app-server socket directory must be a user-owned directory with mode 0700`. No trust bypass or sandbox relaxation was attempted. Startup, resume, fork, and compact injection remain unverified.
+- Historical cloud lifecycle probe: `thread/start` was blocked before any model request by the sandbox/socket environment. No trust bypass or sandbox relaxation was attempted.
+- Version-specific lifecycle delivery: the later Ubuntu CI synthetic startup/resume gate passed for `8f87a813`, using official Codex 0.159.2, a separately reviewed/trusted hook and local Responses fixture. Both hook context and fixture request contained the required current task state. Fork/compact and the restored third slice remain unverified.
 - User-machine installation: not performed.
 
 The `capabilities` subcommand only probes the installed CLI's public version with bounded output/time. That executable might differ from the invoking host. It never labels version discovery as working injection. Future validation must use a naturally supported isolated environment and independently trusted hook definitions. A hook-completed `context` entry can demonstrate that one host run accepted context; it does not establish model adoption or prove future sessions.
@@ -46,7 +49,7 @@ Each supported lifecycle event fetches the current bounded context through the e
 
 Receipts in the adapter database contain IDs, version, digest, event/source and time, not prompt/transcript/full context. `core_built` is recorded before stdout; `output_written` requires successful write and flush. A write failure leaves the built receipt and never appends a second JSON output. If receipt persistence fails after stdout, stderr states that the receipt is unconfirmed. A core request timeout is not blindly retried.
 
-`host_delivered`, `model_claimed`, and `result_verified` are distinct protocol levels. There is intentionally no general setter or ordinary CLI/API to promote a receipt into those levels. The database constrains writable stages to built/output. The current bridge cannot provide trusted host acceptance, so status reports delivery unverified and adoption/effect unknown. This is a same-OS-user cooperative boundary; someone who can directly modify the database can change local data. The adapter does not assert authenticated authorization.
+`host_delivered`, `model_claimed`, and `result_verified` are distinct protocol levels. There is intentionally no general setter or ordinary CLI/API to promote a receipt into those levels. The database constrains writable stages to built/output. The bridge itself cannot provide trusted host acceptance, so its ordinary status reports delivery unverified and adoption/effect unknown. The separately observed `8f87a813` synthetic host gate does not promote ordinary adapter receipts. This is a same-OS-user cooperative boundary; someone who can directly modify the database can change local data. The adapter does not assert authenticated authorization.
 
 The independent adapter database has explicit schema version 1 and explicit initialization; hook runs never initialize/migrate it. It is **not** included in the main ledger's backup/export. Preserve it separately when moving sessions. Initialization never overwrites a file. Receipts currently have no automatic retention policy; operators should monitor the file size. No secrets should be placed in task context.
 
@@ -56,11 +59,11 @@ The adapter adds separate `adapter_artifact_observations` without changing the c
 
 ## Verification
 
-Run `cargo test --test codex_context_adapter` and the task-ledger/core integration tests through the normal serialized build workflow. These tests are synthetic and do not establish host delivery. The opt-in `scripts/probe-codex-context-host.py` checks public schema/config parsing in an isolated temporary home, does not trust hooks automatically, does not request turns or model calls, and records exact host errors. Actual injection acceptance remains blocked until a real host produces the required evidence.
+Run `cargo test --test codex_context_adapter` and the task-ledger/core integration tests through the normal serialized build workflow. These tests are synthetic and do not establish host delivery. The opt-in `scripts/probe-codex-context-host.py` checks public schema/config parsing in an isolated temporary home, does not trust hooks automatically, does not request turns or model calls, and records exact host errors. The separate native-host gate supplied startup/resume delivery evidence for `8f87a813` only; this lightweight schema probe alone cannot establish it.
 
 ### Future real-host acceptance procedure (design only)
 
-The two current gaps are independent: the environment blocked thread creation, and the synthetic hook remains **untrusted**. Even if thread creation succeeds elsewhere, an untrusted/skipped hook is not an injection pass. The supplied probe deliberately never grants trust and therefore cannot by itself complete injection acceptance.
+The two historical lightweight-probe gaps were independent: the environment blocked thread creation, and that probe’s synthetic hook remained **untrusted**. Even if thread creation succeeds elsewhere, an untrusted/skipped hook is not an injection pass. The supplied probe deliberately never grants trust and therefore cannot by itself complete injection acceptance.
 
 For a later authorized run on a supported machine, retain the exact synthetic home/config produced by the probe, and use only a fixed, officially installed Codex version. Through the CLI's documented `/hooks` interface:
 
@@ -68,6 +71,10 @@ For a later authorized run on a supported machine, retain the exact synthetic ho
 2. Open `/hooks`, select the handler from that synthetic `hooks.json`, inspect the complete generated command (only the fixed synthetic context marker), and approve/trust **that exact definition** through the native review UI. Do not trust unrelated hooks, alter global/user-real settings, write trust hashes manually, or use a trust-bypass flag. Editing the command invalidates its reviewed hash and requires review again.
 3. Using the same synthetic home, call public `initialize`, `initialized`, `hooks/list`, and `thread/start` via `codex app-server --stdio`. Confirm the selected definition's `trustStatus` is `trusted`, with the expected command/hash and zero config errors. Persist no approval beyond this isolated test home.
 4. Require an actual public `hook/completed` notification with `status: completed`, `eventName: sessionStart`, and an `entries` item with `kind: context` containing the exact synthetic marker. Record the host version, event, session ID and evidence. A config-list entry, successful bridge stdout, or a normal thread-start response is insufficient.
-5. Separately exercise resume/fork with the public thread APIs and verify their actual lifecycle sources. Compaction generally needs a populated turn/history; do not manufacture a success without the requisite public, no-inference test path. If it requires a model call, stop at that missing authorization/evidence rather than sending one. These results remain per-event/per-run, not evidence of model understanding or tool-action enforcement.
+5. Separately exercise resume/fork with the public thread APIs and verify their actual lifecycle sources. Compaction generally needs a populated turn/history; do not manufacture a success without the requisite public, no-inference test path. If it requires a model call, stop at that missing authorization/evidence rather than sending one. These results remain per-event/per-run, not evidence of model understanding or tool-action enforcement. The subsequent `8f87a813` gate covered startup/resume only.
 
 This procedure is not currently automated by the probe. A headless CI job must not silently bypass review merely to obtain green status; use the approved native review flow for the exact synthetic definition or report the trust-dependent acceptance as not performed. Delete the synthetic test environment through the operator's normal cleanup after retaining non-sensitive evidence; it does not change the real user's configuration.
+
+## Host retrieval mode (restored slice, revalidation pending)
+
+The core host configuration, not an MCP caller override, selects `retrieval.task_context_mode` as `literal` (default), `enhanced` or `hybrid`. Mandatory requirements are read by exact task ID/version before optional retrieval. One optional deadline covers recall and final checks; timeout preserves mandatory context and reports omissions, and a missing final version check requires rechecking before resumption. See [enhanced recall](enhanced-recall.md). This new path does not inherit the earlier `8f87a813` host gate result.

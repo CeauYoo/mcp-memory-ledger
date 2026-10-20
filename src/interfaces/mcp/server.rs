@@ -1189,7 +1189,13 @@ impl Server {
             "build_task_resume_context",
             namespace,
             None,
-            crate::application::task::build_task_resume_context(&self.runtime.store, params).await,
+            crate::support::retrieval::resume(
+                &self.runtime.store,
+                params,
+                &self.runtime.retrieval,
+                &self.runtime.embedding,
+            )
+            .await,
         )
         .await?;
         structured(result)
@@ -1525,6 +1531,71 @@ impl Server {
         structured(result)
     }
 
+    #[tool(description = "Enhanced scoped recall with Chinese tokenization and configured aliases. Optional hybrid requires host-enabled local embeddings. Ranking is not truth or authority.", input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<crate::support::retrieval::EnhancedRecallRequest>>() )]
+    async fn recall_memory_enhanced(
+        &self,
+        raw_params: JsonObject,
+    ) -> Result<CallToolResult, McpError> {
+        let params = map_tool_error(
+            &self.runtime,
+            "recall_memory_enhanced",
+            None,
+            None,
+            decode_tool_params::<crate::support::retrieval::EnhancedRecallRequest>(raw_params),
+        )
+        .await?;
+        let namespace = Some(params.namespace.clone());
+        let result = map_tool_error(
+            &self.runtime,
+            "recall_memory_enhanced",
+            namespace,
+            None,
+            crate::support::retrieval::recall(
+                &self.runtime.store,
+                params,
+                &self.runtime.retrieval,
+                &self.runtime.embedding,
+            )
+            .await,
+        )
+        .await?;
+        structured(result)
+    }
+
+    #[tool(description = "Explicitly generate an evidence-bounded pending experience draft. Requires allow_model_generation=true and request_id; no activation or execution authority. An incomplete attempt must be reconciled before a new request.",
+        input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<crate::domain::experience_draft::GenerateExperienceDraftRequest>>()
+    )]
+    async fn generate_experience_draft(
+        &self,
+        raw_params: JsonObject,
+    ) -> Result<CallToolResult, McpError> {
+        let params = map_tool_error(
+            &self.runtime,
+            "generate_experience_draft",
+            None,
+            None,
+            decode_tool_params::<crate::domain::experience_draft::GenerateExperienceDraftRequest>(
+                raw_params,
+            ),
+        )
+        .await?;
+        let namespace = Some(params.namespace.clone());
+        let result = map_tool_error(
+            &self.runtime,
+            "generate_experience_draft",
+            namespace,
+            None,
+            crate::application::experience_draft::generate_experience_draft(
+                &self.runtime.store,
+                &self.runtime,
+                params,
+            )
+            .await,
+        )
+        .await?;
+        structured(result)
+    }
+
     #[tool(description = "List scoped experience-use reports with bounded pagination. Reported adoption and outcomes are not authenticated host or model evidence.",
         input_schema = rmcp::handler::server::tool::cached_schema_for_type::<Parameters<crate::domain::experience_use::ListExperienceUsesRequest>>()
     )]
@@ -1846,7 +1917,7 @@ mod audit_contract_tests {
     #[test]
     fn every_advertised_tool_has_an_explicit_audit_owner() {
         let tools = Server::tool_router().list_all();
-        assert_eq!(tools.len(), 41);
+        assert_eq!(tools.len(), 43);
         let mut counts = [0; 3];
         for tool in tools {
             match tool_audit_contract(&tool.name).expect("advertised tool needs an audit contract")
@@ -1862,7 +1933,7 @@ mod audit_contract_tests {
                 }
             }
         }
-        assert_eq!(counts, [11, 29, 1]);
+        assert_eq!(counts, [11, 31, 1]);
         assert_eq!(tool_audit_contract("untrusted caller tool name"), None);
     }
 

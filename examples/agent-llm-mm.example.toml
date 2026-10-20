@@ -84,3 +84,26 @@ max_concurrent_tasks = 1
 # Optional codex-actions policy is a separate operator-managed JSON candidate.
 # No action permissions are loaded from this model/application configuration.
 # See docs/codex-action-checks.md; no host hooks are installed by this example.
+
+# Optional local embedding profile; disabled unless explicitly enabled.
+# Verify the service never forwards cloud requests before declaring local-only.
+# [local_embedding]
+# enabled = false
+# cache_enabled = false # optional derived vector cache; explicit rebuild installs it
+# local_only_declared = false
+# namespace_allowlist = ["project/your-project"]
+# endpoint = "http://127.0.0.1:11434"
+# timeout_ms = 5000
+# [local_embedding.profile]
+# model = "your-installed-embedding-model:tag"
+# model_digest = "replace-with-64-hex-installed-model-digest"
+# dimensions = 768
+# document_prefix = ""
+# query_prefix = ""
+# See docs/local-embeddings.md; no API keys or remote fallback.
+
+# Optional host-owned task recall; existing installations default to literal.
+# [retrieval]
+# task_context_mode = "enhanced" # literal | enhanced | hybrid
+# optional_deadline_ms = 2000
+# Hybrid additionally requires explicit local_embedding configuration above.

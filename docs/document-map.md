@@ -1,6 +1,10 @@
 # 文档导航
 
-- [任务账本与 schema 8](task-ledger.md)
+本批恢复与精确验证：[2026-10-19 记录](restored-feature-validation-2026-10-19.md)。
+
+- [当前状态与恢复验证](project-status.md)
+- [任务账本](task-ledger.md) · [Schema 10 增强召回](enhanced-recall.md)
+- [显式模型草稿](experience-model-drafts.md) · [可选本地 Ollama](local-embeddings.md)
 - [Codex 任务上下文适配器](codex-task-context-adapter.md)
 
 [统一 README](../README.md)是项目首页。本页按读者目标组织阅读路径，避免把阶段日志当成当前教程。
@@ -11,16 +15,19 @@
 2. [可运行工作流](runnable-memory-workflow.md)：可复制 MCP 参数和离线端到端脚本。
 3. [MCP 客户端接入](local-mcp-integration-2026-03-26.md)：绝对 binary/config/database 路径、stdio 和排错。
 4. [数据库操作](database-operations.md)：init/migrate/doctor、备份/恢复与索引维护。
-5. [可选本机核心与固定桥](local-workspace-core.md)：进行中的macOS/Linux新入口、workspace/个人授权与[独立桥配置](../examples/codex-workspace-bridge.toml)/[一次全局配置](../examples/codex-workspace-bridge-global.toml)；Windows仍使用旧stdio。
+5. [可选本机核心与固定桥](local-workspace-core.md)：macOS/Linux/Windows 本机核心、workspace/个人授权与[独立桥配置](../examples/codex-workspace-bridge.toml)/[一次全局配置](../examples/codex-workspace-bridge-global.toml)；各平台验证范围分别记账。
 
 平台细节：[macOS](development-macos.md) / [Windows](development-windows.md)。语言摘要：[中文兼容入口](README.zh-CN.md) / [English](README.en.md) / [日本語](README.ja.md)。
 
 ## 我想知道每个工具的合同
 
-从[原standalone的32工具索引](tool-reference.md)开始；新核心工作空间25允许/7拒绝，权限与未测边界见[验收矩阵](workspace-core-acceptance.md)。再按需读专页：
+从[43 个 standalone 工具索引](tool-reference.md)开始；核心工作空间 36 允许 / 7 拒绝，权限与未测边界见[验收矩阵](workspace-core-acceptance.md)。再按需读专页：
 
 | 主题 | 权威合同 |
 | --- | --- |
+| T16 明确 opt-in、单次模型尝试与 pending 候选 | [模型草稿](experience-model-drafts.md) |
+| P4 中文/别名/RRF、Schema 10 适用性、T12 宿主模式 | [增强召回](enhanced-recall.md) |
+| 可选本地向量与服务身份边界 | [Ollama 合同](local-embeddings.md) |
 | 反馈纠错、FTS/短中文、丰富 Episode/经验版本 | [Feedback & experience](memory-feedback-experience.md) |
 | 完整 JSON byte cap、来源 Episode、诊断的缺失/省略 | [Task context](context-diagnostics.md) |
 | caller-owned 检索/反思/重试预算 | [Operation budget](caller-operation-budget.md) |

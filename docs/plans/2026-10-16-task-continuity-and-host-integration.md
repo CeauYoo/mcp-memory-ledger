@@ -1,14 +1,17 @@
 # MCP Memory Ledger 前沿调研与后续任务规划
 
-## 当前实现进度（2026-10-16）
+## 当前实现进度（2026-10-19）
 
-- P0 文档已发布；T01–T08 首批任务核心、原生适配和只读界面已实现。`20d4037` 的 Ubuntu CI 已通过；macOS / Windows 同源 artifact fixture 路径规范化失败的测试路径修补已合入并通过本地对应测试，原生复验仍待完成，不能记为三平台全绿。
-- T09–T11 deny-only patch 检查、policy epoch、最新任务重读、配置预览/撤回候选已合入源码；默认不检查通用 shell，也不提供安装/apply。云端定向回归已通过，最终全量与真实宿主覆盖证据待完成。
-- P3 Schema 9 已合入经验采用/结果来源记录、当前资格与失效重查，以及显式可恢复 use → Episode → pending 候选组合。T13 记录核心已实现，T12/T14/T15 为上述部分支持；调用方报告不等于独立核验、因果或执行授权。
-- P5 原 owner-only 界面已加入三语言任务/经验摘要；任务与经验分别读取，历史采用不等于当前可复用或自动生效。已新增含任务项目发现与紧凑选择，浏览不改变宿主绑定；定向 API 及 Node 合同通过，最终整合/浏览器验收待完成。
-- T16 模型草稿、P4 检索和真实宿主探针仍在推进，不预记完成。宿主接受/注入、Windows hook 预览、实际安装与部署仍须独立证据和相应批准。
+第三片源码已恢复，正在重新验证：
 
-后续整合版本不继承首批 CI 结果。合同与证据见[当前状态](../project-status.md)、[动作检查](../codex-action-checks.md)、[经验反馈](../experience-use-feedback.md)和[首批验证](../task-continuity-validation-2026-10-16.md)。下文保留完整计划，不是已完成清单。
+- T16：显式模型草稿、同范围证据、持久化单次尝试和 pending 候选恢复；不自动激活或学习。见[草稿合同](../experience-model-drafts.md)。
+- P4 / Schema 10：中文分词、同域别名、RRF、适用性声明与可选本地 Ollama；T12 由宿主选择 literal/enhanced/hybrid 续接检索模式。见[增强召回](../enhanced-recall.md)和[本地向量](../local-embeddings.md)。持久派生缓存仍在实现中，尚未验收。
+- 当前工具为 43 个 standalone、36 个 scoped、7 个全局入口拒绝；范围与撤销检查保持不变。原界面不新增冗长文字或写权限。
+- 新增 30 组合成场景共 756 轮，其中两段历史为 20,478 / 19,738 个 whitespace words；这不是 token 数、真实对话或模型效果证据。旧 578 轮及此前未保存切片的结果不用于本次验收。
+
+已发布基线 `8f87a813` 的 Ubuntu / Windows CI 全部成功，Ubuntu 原生 Codex startup/resume 合成 gate 已通过；只证明该版本的宿主送达路径，不证明模型理解或动作授权。macOS 当时在 `/var` fixture 路径检查失败，当前源码已补修，仍待新提交原生复验。见[宿主探针范围](../codex-native-host-verification.md)。当前恢复代码不继承旧 CI、旧 990 项等结果；未操作用户机器、安装或部署。
+
+T09–T11 deny-only patch、独立 policy epoch、预览/撤回候选及 P3 经验反馈保持既有有界合同；通用 shell、Windows hook 预览和实际安装不因合入代码视为完成。下文保留完整批准计划，不是已完成清单；本计划仍是唯一执行队列。
 
 日期：2026-10-16  
 状态：**active / 用户已批准实施 / implementation approved**。规划已发布并进入分阶段实现，当前进度以上文为准。

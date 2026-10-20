@@ -280,6 +280,8 @@ async fn serve_validation_refuses_missing_database_without_creating_it() {
     let temp = tempdir().expect("tempdir");
     let database_path = temp.path().join("serve-missing.sqlite");
     let config = AppConfig {
+        local_embedding: Default::default(),
+        retrieval: Default::default(),
         database_url: sqlite_url(&database_path),
         ..Default::default()
     };
@@ -344,6 +346,7 @@ async fn ledger_rows_match_declared_versions_after_migration() {
             (7, "versioned_self_model".to_string()),
             (8, "workspace_task_ledger".to_string()),
             (9, "task_experience_use_feedback".to_string()),
+            (10, "recall_applicability_authority".to_string()),
         ]
     );
     connection.close().await.expect("close migrated");
@@ -414,6 +417,8 @@ async fn current_version_rejects_weakened_schema_without_writing_or_repairing() 
         assert_eq!(fs::read(&path).expect("after"), before);
         assert!(backup_files(temp.path(), "weakened.sqlite").is_empty());
         let config = AppConfig {
+            local_embedding: Default::default(),
+            retrieval: Default::default(),
             database_url: url,
             ..Default::default()
         };
@@ -745,6 +750,8 @@ async fn doctor_reports_broken_derived_index_without_mutating_and_rebuild_recove
     connection.close().await.unwrap();
     let before = fs::read(&path).unwrap();
     let report = agent_llm_mm::run_doctor(AppConfig {
+        local_embedding: Default::default(),
+        retrieval: Default::default(),
         database_url: url.clone(),
         ..Default::default()
     })
@@ -759,6 +766,8 @@ async fn doctor_reports_broken_derived_index_without_mutating_and_rebuild_recove
         .unwrap();
     assert!(store.rebuild_retrieval_index().await.unwrap().is_usable());
     let healthy = agent_llm_mm::run_doctor(AppConfig {
+        local_embedding: Default::default(),
+        retrieval: Default::default(),
         database_url: url,
         ..Default::default()
     })

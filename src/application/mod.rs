@@ -24,3 +24,7 @@ pub mod get_self_model_versions;
 pub mod task;
 
 pub mod experience_use;
+
+pub mod experience_draft;
+
+pub mod recall_memory_enhanced;

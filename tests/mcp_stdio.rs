@@ -49,6 +49,7 @@ async fn server_exposes_expected_tools_over_stdio() {
             "decide_with_snapshot".to_string(),
             "derive_experience_from_use".to_string(),
             "export_memory".to_string(),
+            "generate_experience_draft".to_string(),
             "get_episode_detail".to_string(),
             "get_evidence_relation".to_string(),
             "get_experience_candidate".to_string(),
@@ -70,6 +71,7 @@ async fn server_exposes_expected_tools_over_stdio() {
             "rebuild_retrieval_index".to_string(),
             "recall_experience_candidates".to_string(),
             "recall_memory".to_string(),
+            "recall_memory_enhanced".to_string(),
             "record_episode".to_string(),
             "record_experience_use".to_string(),
             "record_task_checkpoint".to_string(),
@@ -5227,7 +5229,7 @@ required = true
         .expect("client");
 
     let tools = client.list_all_tools().await.expect("list tools");
-    assert_eq!(tools.len(), 41);
+    assert_eq!(tools.len(), 43);
     for name in [
         "create_task",
         "revise_task",
@@ -5319,7 +5321,7 @@ max_concurrent_tasks = 1
             .await
             .unwrap();
     let tools = client.list_all_tools().await.unwrap();
-    assert_eq!(tools.len(), 41);
+    assert_eq!(tools.len(), 43);
     for name in [
         "create_task",
         "revise_task",
@@ -5701,6 +5703,8 @@ async fn doctor_counts_runtime_suppressed_auto_reflection_without_manual_seed() 
     let (database_url, _database_dir) = drive_suppressed_auto_reflection_over_stdio().await;
 
     let report = agent_llm_mm::run_doctor(AppConfig {
+        local_embedding: Default::default(),
+        retrieval: Default::default(),
         database_url,
         daemon: DaemonConfig {
             enabled: true,

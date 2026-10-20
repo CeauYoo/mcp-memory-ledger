@@ -37,6 +37,8 @@ use crate::{
 #[derive(Clone)]
 pub(super) struct Runtime {
     pub(super) store: SqliteStore,
+    pub(super) retrieval: crate::support::retrieval::RetrievalConfig,
+    pub(super) embedding: crate::adapters::local_embedding::LocalEmbeddingConfig,
     model: RuntimeModel,
     pub(super) scoped_session: bool,
     pub(super) audit_enabled: bool,
@@ -60,6 +62,8 @@ impl Runtime {
 
         let runtime = Self {
             store,
+            retrieval: config.retrieval.clone(),
+            embedding: config.local_embedding.clone(),
             model: build_runtime_model(config)?,
             scoped_session: false,
             audit_enabled: true,
@@ -380,6 +384,17 @@ impl CommitmentStore for Runtime {
 
 #[async_trait]
 impl ModelPort for Runtime {
+    async fn propose_experience_draft(
+        &self,
+        input: crate::domain::experience_draft::ExperienceDraftInput,
+    ) -> Result<crate::domain::experience_draft::ExperienceDraftProposal, AppError> {
+        match &self.model {
+            RuntimeModel::Mock(model) => model.propose_experience_draft(input).await,
+            RuntimeModel::OpenAiCompatible(model) => model.propose_experience_draft(input).await,
+            RuntimeModel::Native(model) => model.propose_experience_draft(input).await,
+        }
+    }
+
     async fn decide(&self, request: ModelDecisionRequest) -> Result<ModelDecision, AppError> {
         match &self.model {
             RuntimeModel::Mock(model) => model.decide(request).await,

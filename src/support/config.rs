@@ -198,6 +198,8 @@ pub struct AppConfig {
     pub model_config: ModelConfig,
     pub dashboard: DashboardConfig,
     pub daemon: DaemonConfig,
+    pub retrieval: crate::support::retrieval::RetrievalConfig,
+    pub local_embedding: crate::adapters::local_embedding::LocalEmbeddingConfig,
 }
 
 impl Default for AppConfig {
@@ -209,6 +211,8 @@ impl Default for AppConfig {
             model_config: ModelConfig::Mock,
             dashboard: DashboardConfig::default(),
             daemon: DaemonConfig::default(),
+            local_embedding: Default::default(),
+            retrieval: Default::default(),
         }
     }
 }
@@ -306,6 +310,12 @@ impl AppConfig {
 
         let mut config = Self::default();
 
+        if let Some(retrieval) = file_config.retrieval {
+            config.retrieval = retrieval;
+        }
+        if let Some(embedding) = file_config.local_embedding {
+            config.local_embedding = embedding;
+        }
         if let Some(transport) = file_config.transport {
             config.transport = transport;
         }
@@ -376,6 +386,13 @@ impl AppConfig {
 
     pub fn validate(&self) -> Result<(), String> {
         self.validate_model_config()?;
+        self.local_embedding.validate()?;
+        self.retrieval.validate()?;
+        if self.retrieval.task_context_mode == crate::support::retrieval::TaskContextMode::Hybrid
+            && !self.local_embedding.enabled
+        {
+            return Err("hybrid task context requires enabled local_embedding".into());
+        }
         self.dashboard.validate()?;
         self.daemon.validate()?;
         Ok(())
@@ -556,6 +573,8 @@ struct FileConfig {
     dashboard: Option<FileDashboardConfig>,
     model: Option<FileModelConfig>,
     daemon: Option<FileDaemonConfig>,
+    retrieval: Option<crate::support::retrieval::RetrievalConfig>,
+    local_embedding: Option<crate::adapters::local_embedding::LocalEmbeddingConfig>,
 }
 
 #[derive(Debug, Deserialize, Default)]
